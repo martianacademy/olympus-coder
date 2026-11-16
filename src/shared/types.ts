@@ -563,6 +563,8 @@ export interface Settings {
   uiMode: UiMode;
   profile: UserProfile;
   sharedRoot: string;
+  /** These settings took the one-time ~/.agents → ~/.olympus switch (sharedMigration.ts). */
+  migratedFromAgents?: boolean;
   defaultAgent: AgentId;
   injectSharedContext: boolean;
   theme: ThemeSettings;

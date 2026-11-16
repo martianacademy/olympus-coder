@@ -34,6 +34,8 @@ export interface MigrationResult {
   ran: boolean;
   /** Why nothing happened: 'override' | 'not-legacy' | 'done-before' | 'no-legacy-folder'. */
   skipped?: string;
+  /** An earlier copy whose switch never reached these settings, moved aside to this folder before copying again. */
+  staleSetAside?: string;
   from?: string;
   to?: string;
   copied: string[];
@@ -55,9 +57,9 @@ export interface MigrationInput<A extends CustomAgentLike> {
   home: string;
   env?: NodeJS.ProcessEnv;
   /** The saved settings.json values (not merged with defaults). */
-  saved: { sharedRoot?: string; customAgents?: A[] };
+  saved: { sharedRoot?: string; customAgents?: A[]; migratedFromAgents?: boolean };
   /** Saves the new root (and rewritten custom agents); called before the marker is written. */
-  save: (patch: { sharedRoot: string; customAgents?: A[] }) => void;
+  save: (patch: { sharedRoot: string; customAgents?: A[]; migratedFromAgents: true }) => void;
   log?: (line: string) => void;
   /** Tests: fail on this item to check that a partial copy keeps the old root. */
   failOn?: string;
@@ -148,6 +150,31 @@ export function rewriteAgentPaths<A extends CustomAgentLike>(agents: A[], oldRoo
   return { agents: out, changed };
 }
 
+/**
+ * Moves what an earlier, never-applied migration copied (marker `copied` minus `merged`, i.e. not what ~/.olympus
+ * already had, like the Olympus CLI's own folders) plus its marker into `<target>/.stale-migration-<time>/`.
+ * Nothing is deleted.
+ */
+function setAsideStaleCopy(target: string): string {
+  const marker = join(target, MIGRATION_MARKER);
+  let info: { copied?: string[]; merged?: string[] } = {};
+  try {
+    info = JSON.parse(readFileSync(marker, 'utf8'));
+  } catch {
+    /* unreadable marker: set aside only the marker */
+  }
+  const dest = join(target, `.stale-migration-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  mkdirSync(dest, { recursive: true });
+  const merged = new Set(info.merged ?? []);
+  for (const item of info.copied ?? []) {
+    if (merged.has(item) || !OWN_ITEMS.includes(item)) continue;
+    const p = join(target, item);
+    if (existsSync(p) || isLink(p)) renameSync(p, join(dest, item));
+  }
+  renameSync(marker, join(dest, MIGRATION_MARKER));
+  return dest;
+}
+
 export function migrateLegacySharedRoot<A extends CustomAgentLike>(input: MigrationInput<A>): MigrationResult {
   const env = input.env ?? process.env;
   const log = input.log ?? ((l: string) => console.log(`[migrate] ${l}`));
@@ -156,8 +183,21 @@ export function migrateLegacySharedRoot<A extends CustomAgentLike>(input: Migrat
   const legacy = legacySharedRoot(input.home);
   const target = join(input.home, OLYMPUS_DIR);
   if (!input.saved.sharedRoot || trimSlash(input.saved.sharedRoot) !== legacy) return { ...result, skipped: 'not-legacy' };
-  if (existsSync(join(target, MIGRATION_MARKER))) return { ...result, skipped: 'done-before' };
   if (!existsSync(legacy)) return { ...result, skipped: 'no-legacy-folder' };
+  if (existsSync(join(target, MIGRATION_MARKER))) {
+    // These settings took the switch before: the user chose ~/.agents again on purpose.
+    if (input.saved.migratedFromAgents) return { ...result, skipped: 'done-before' };
+    // A copy was made but its switch never reached these settings (another Olympus process saved over them, or a
+    // copy made for a different settings file): it is older than ~/.agents now. Set it aside and copy again.
+    try {
+      result.staleSetAside = setAsideStaleCopy(target);
+      log(`an earlier copy in ${target} never took effect; moved it to ${result.staleSetAside} and copying again`);
+    } catch (e: any) {
+      result.error = String(e?.message ?? e);
+      log(`could not set aside the earlier copy in ${target}, staying on ${legacy}: ${result.error}`);
+      return { ...result, skipped: 'stale-copy' };
+    }
+  }
 
   result.from = legacy;
   result.to = target;
@@ -199,7 +239,7 @@ export function migrateLegacySharedRoot<A extends CustomAgentLike>(input: Migrat
 
     const rewritten = rewriteAgentPaths(input.saved.customAgents ?? [], legacy, target);
     result.customAgentsRewritten = rewritten.changed;
-    input.save({ sharedRoot: target, ...(rewritten.changed ? { customAgents: rewritten.agents } : {}) });
+    input.save({ sharedRoot: target, migratedFromAgents: true, ...(rewritten.changed ? { customAgents: rewritten.agents } : {}) });
     result.ran = true;
   } catch (e: any) {
     rmSync(staging, { recursive: true, force: true });

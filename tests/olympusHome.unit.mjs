@@ -171,11 +171,36 @@ await test('migration: copies only Olympus items, rewrites media + agent paths, 
   const marker = JSON.parse(readFileSync(join(O, '.migrated-from-agents.json'), 'utf8'));
   assert.equal(marker.from, L);
   assert.equal(marker.threadFilesRewritten, 1);
-  // A second run (even with the old root saved again) does nothing.
+  assert.equal(saved.migratedFromAgents, true, 'the settings remember the switch');
+  // A second run on settings that took the switch (the user chose ~/.agents again on purpose) does nothing.
   let again = false;
-  const r2 = M.migrateLegacySharedRoot({ home, env: {}, saved: { sharedRoot: L }, save: () => (again = true), log: () => {} });
+  const r2 = M.migrateLegacySharedRoot({ home, env: {}, saved: { sharedRoot: L, migratedFromAgents: true }, save: () => (again = true), log: () => {} });
   assert.equal(r2.skipped, 'done-before');
   assert.equal(again, false);
+});
+
+await test('migration: an earlier copy whose switch never reached the settings is set aside and copied again', () => {
+  const home = join(TMP, 'h-stale');
+  const L = seedLegacy(home);
+  const O = join(home, '.olympus');
+  put(join(O, 'agents', 'olympus-cli', 'keep.txt'), 'cli'); // ~/.olympus had this before the first run
+  const r1 = M.migrateLegacySharedRoot({ home, env: {}, saved: { sharedRoot: L, customAgents: agentsList(L) }, save: () => {}, log: () => {} });
+  assert.equal(r1.ran, true);
+  assert.deepEqual(r1.merged, ['agents']);
+  // ~/.agents moves on (newer project data) while the settings still say ~/.agents (the switch was lost).
+  put(join(L, 'projects.json'), '[{"id":"p1","path":"/new/place"}]');
+  const before = snapshot(L);
+  let saved;
+  const r2 = M.migrateLegacySharedRoot({ home, env: {}, saved: { sharedRoot: L, customAgents: agentsList(L) }, save: (p) => (saved = p), log: () => {} });
+  assert.equal(r2.error, undefined);
+  assert.equal(r2.ran, true, 'copied again');
+  assert.ok(r2.staleSetAside && existsSync(join(r2.staleSetAside, 'projects.json')) && existsSync(join(r2.staleSetAside, '.migrated-from-agents.json')), 'old copy kept aside');
+  assert.ok(!existsSync(join(r2.staleSetAside, 'agents')), 'what ~/.olympus had before is not moved');
+  assert.equal(readFileSync(join(O, 'projects.json'), 'utf8'), '[{"id":"p1","path":"/new/place"}]', 'fresh data');
+  assert.equal(readFileSync(join(O, 'agents', 'olympus-cli', 'keep.txt'), 'utf8'), 'cli');
+  assert.equal(saved.sharedRoot, O);
+  assert.equal(saved.migratedFromAgents, true);
+  assert.equal(snapshot(L), before, '~/.agents must not change');
 });
 
 await test('migration: override env vars and non-default roots are left alone', () => {
