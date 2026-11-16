@@ -16,7 +16,8 @@
   width: 100%;
   height: auto;
   min-height: 1lh;
-  max-height: 240px;
+  /* Never more than about a third of the screen on its own; drag the composer's top edge for more or less. */
+  max-height: min(240px, 35vh);
   padding: 0;
   margin: 0;
   overflow-y: auto;
@@ -273,4 +274,37 @@
   .attach-chip {
     width: 132px;
   }
+}
+
+/* Drag handle on the composer's top edge: a thin line that shows on hover. */
+.composer-resize {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 72px;
+  height: 10px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.composer-resize::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 18px;
+  right: 18px;
+  height: 3px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.composer:hover .composer-resize::after,
+.composer-resize:active::after,
+.composer-resize.sized::after { opacity: 1; }
+@media (pointer: coarse) {
+  /* Touch: always visible and a bigger target. */
+  .composer-resize { top: -9px; height: 18px; width: 96px; }
+  .composer-resize::after { top: 7px; opacity: 1; }
 }

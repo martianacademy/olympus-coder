@@ -32,6 +32,8 @@ export interface AppSyncParams {
   previewCtxRef: RefObject<{ projectId?: string; workbench: boolean }>;
   mainRef: RefObject<HTMLElement | null>;
   onMenuCommand: (cmd: string) => void;
+  /** A chat was deleted anywhere (this window, the main process, a phone): leave it if it is open. */
+  onThreadDeleted: (d: DeskEvents['thread:deleted']) => void;
 }
 
 /**
@@ -75,6 +77,8 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
   modeRef.current = mode;
   const menuRef = useRef(params.onMenuCommand);
   menuRef.current = params.onMenuCommand;
+  const deletedRef = useRef(params.onThreadDeleted);
+  deletedRef.current = params.onThreadDeleted;
   const tasksShown = useRef<Set<string>>(new Set());
   const bumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -189,6 +193,12 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
             });
           }
           if (m.id === activeIdRef.current) setActive((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove } : t));
+          break;
+        }
+        case 'thread:deleted': {
+          const d = payload as DeskEvents['thread:deleted'];
+          deletedRef.current(d);
+          setThreads((all) => (all[d.projectId]?.some((x) => x.id === d.id) ? { ...all, [d.projectId]: all[d.projectId].filter((x) => x.id !== d.id) } : all));
           break;
         }
         case 'session:state':

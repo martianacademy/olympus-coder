@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { PromptQueueView, QueuedPromptView } from '@shared/promptQueue';
 import { promptQueueApi } from '../promptQueueApi';
+import { addDraftFiles, getDraft, setDraftText } from '../drafts';
 import { AttachmentChips } from './Attachments';
 import { DeliveryTicks } from './DeliveryTicks';
 
@@ -37,56 +38,87 @@ function QueuedRow({ threadId, q, sendNowTitle }: { threadId: string; q: QueuedP
   return (
     <div className="queued-msg" data-testid="queued-msg" data-reason={q.reason}>
       {q.attachments?.length ? <AttachmentChips files={q.attachments} /> : null}
-      {editing !== null ? (
-        <textarea
-          autoFocus
-          value={editing}
-          data-testid="queued-edit-input"
-          onChange={(e) => setEditing(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setEditing(null);
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              const text = editing;
-              setEditing(null);
-              act(() => promptQueueApi.edit(threadId, q.id, text));
-            }
-          }}
-        />
-      ) : (
-        <div className="msg-user">{q.text}</div>
+      <div className="msg-user">{q.text}</div>
+      {editing !== null && (
+        // The composer already has a draft: edit the queued message in a roomy window instead.
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setEditing(null)}>
+          <div className="modal queued-edit-modal" role="dialog" aria-label="Edit queued message" data-testid="queued-edit-dialog">
+            <div className="modal-head row">
+              <span>Edit queued message</span>
+            </div>
+            <div className="modal-body col">
+              <textarea
+                autoFocus
+                value={editing}
+                data-testid="queued-edit-input"
+                onChange={(e) => setEditing(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditing(null);
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && editing.trim()) {
+                    e.preventDefault();
+                    const text = editing;
+                    setEditing(null);
+                    act(() => promptQueueApi.edit(threadId, q.id, text));
+                  }
+                }}
+              />
+              <div className="row queued-edit-actions">
+                <span className="small muted grow">⌘↵ to save · Esc to cancel</span>
+                <button className="btn ghost small" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn primary small"
+                  disabled={!editing.trim()}
+                  data-testid="queued-edit-save"
+                  onClick={() => {
+                    const text = editing;
+                    setEditing(null);
+                    act(() => promptQueueApi.edit(threadId, q.id, text));
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       <div className="queued-foot">
-        {editing !== null ? (
-          <>
-            <button className="link-btn" onClick={() => setEditing(null)}>
-              Cancel
-            </button>
-            <button
-              className="link-btn send-now"
-              disabled={!editing.trim()}
-              onClick={() => {
-                const text = editing;
-                setEditing(null);
-                act(() => promptQueueApi.edit(threadId, q.id, text));
-              }}
-            >
-              Save
-            </button>
-          </>
-        ) : (
+        {
           <>
             <button className="link-btn send-now" disabled={busy} title={sendNowTitle} onClick={() => act(() => promptQueueApi.sendNow(threadId, q.id))} data-testid="queued-send-now">
               Send now
             </button>
-            <button className="link-btn" disabled={busy} title="Change this message before it goes out" onClick={() => setEditing(q.text)} data-testid="queued-edit">
+            <button
+              className="link-btn"
+              disabled={busy}
+              title="Change this message before it goes out"
+              onClick={() => {
+                // An empty composer: take the message back into it (with its files) to edit and send again there.
+                const draft = getDraft(threadId);
+                if (draft.text.trim() || draft.files.length) return setEditing(q.text);
+                act(async () => {
+                  const removed = await promptQueueApi.remove(threadId, q.id);
+                  if (!removed) return; // already on its way to the agent
+                  setDraftText(threadId, q.text);
+                  if (q.attachments?.length) addDraftFiles(threadId, q.attachments);
+                  requestAnimationFrame(() => {
+                    const box = document.querySelector<HTMLTextAreaElement>('textarea[data-testid="composer"]');
+                    box?.focus();
+                    box?.setSelectionRange(box.value.length, box.value.length);
+                  });
+                });
+              }}
+              data-testid="queued-edit"
+            >
               Edit
             </button>
             <button className="link-btn" disabled={busy} title="Remove this message; it won't be sent" onClick={() => act(() => promptQueueApi.remove(threadId, q.id))} data-testid="queued-remove">
               Remove
             </button>
           </>
-        )}
+        }
         <DeliveryTicks ticks={q.ticks} label={q.label} />
       </div>
     </div>

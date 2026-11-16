@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentDefaults: {},
   remote: { enabled: false, port: 47816 },
   notifyAgentsWhenWorkEnds: false,
+  checkForUpdates: true,
 };
 
 let settings: Settings | null = null;
@@ -354,13 +355,19 @@ export function flushThreads(): void {
   }
 }
 
+/** Told about every chat deleted anywhere in the main process (sidebar, delete_subsession, cleanup), once each. */
+let threadDeleted: (t: ThreadMeta) => void = () => {};
+export const onThreadDeleted = (fn: (t: ThreadMeta) => void) => (threadDeleted = fn);
+
 export function deleteThread(t: Thread): void {
+  const existed = threadCache.has(t.id) || existsSync(threadFile(t));
   threadCache.delete(t.id);
   clearTimeout(saveTimers.get(t.id));
   saveTimers.delete(t.id);
   bumpGen(t.id); // a pending async write must not bring the file back
   rmSync(threadFile(t), { force: true });
   removeChatMedia(sharedRoot(), t.id);
+  if (existed) threadDeleted(threadMeta(t));
 }
 
 /**

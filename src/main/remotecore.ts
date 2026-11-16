@@ -46,6 +46,9 @@ export const DENIED = new Set([
   'clipboard.write',
   'clipboard.readMessage',
   'files.reveal',
+  'files.editors',
+  'files.openIn',
+  'files.openDefault',
   'projects.reveal',
   'memory.reveal',
   'memory.openGlobal',
@@ -76,6 +79,8 @@ export const EVENTS = new Set([
   'schedules:changed',
   'catalog:progress',
   'agents:changed',
+  'thread:deleted',
+  'update:available',
   // ACP config slice (src/shared/acpConfig.ts AcpConfigEvents).
   'mcp:status',
   'auth:info',

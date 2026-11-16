@@ -1,5 +1,6 @@
 import { clearDraft } from './drafts';
 import type {
+  UpdateInfo,
   LearnedNote,
   ProjectStats,
   RemoteStatus,
@@ -133,6 +134,9 @@ export const api = {
     rename: (pid: string, from: string, to: string) => call<void>('files.rename', pid, from, to),
     trash: (pid: string, rel: string) => call<void>('files.trash', pid, rel),
     reveal: (pid: string, rel: string) => call<void>('files.reveal', pid, rel),
+    editors: () => call<{ id: string; name: string }[]>('files.editors'),
+    openIn: (pid: string, rel: string, editorId: string) => call<void>('files.openIn', pid, rel, editorId),
+    openDefault: (pid: string, rel: string) => call<void>('files.openDefault', pid, rel),
   },
 
   git: {
@@ -208,6 +212,8 @@ export const api = {
   openGlobalInstructions: () => call<void>('memory.openGlobal'),
   revealShared: () => call<void>('shared.reveal'),
   openExternal: (url: string) => call<void>('system.openExternal', url),
+  currentUpdate: () => call<UpdateInfo | null>('updates.current'),
+  skipUpdate: (version: string) => call<void>('updates.skip', version),
   preview: (ref: string, projectId?: string) => call<FilePreview>('preview.open', ref, projectId),
   previewSaveAs: (ref: string, projectId?: string) => call<{ saved: boolean; path?: string }>('preview.saveAs', ref, projectId),
   previewRaw: (ref: string, projectId?: string) =>

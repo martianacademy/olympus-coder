@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Check, MessageSquarePlus } from 'lucide-react';
+import type { AttachmentView } from '@shared/types';
 import { api } from '../api';
 import { addDraftFiles, getDraft } from '../drafts';
 
@@ -85,6 +86,18 @@ export async function addToMessage(ref: string, opts: { name?: string; mime?: st
     t.note(e instanceof Error ? e.message : String(e));
     return false;
   }
+}
+
+/**
+ * Puts files that are already saved (e.g. a marked-up copy from the annotation editor) into the active composer's
+ * draft and focuses it. False when no composer is on screen.
+ */
+export function addFilesToMessage(list: AttachmentView[]): boolean {
+  const t = current();
+  if (!t) return false;
+  addDraftFiles(t.key, list);
+  focusComposer();
+  return true;
 }
 
 /** Small icon button for chat files; hidden when no composer is on screen. */

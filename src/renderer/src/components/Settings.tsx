@@ -132,6 +132,17 @@ export function SettingsModal(props: {
                   </span>
                 </div>
                 <div className="field">
+                  <div className="row">
+                    <button
+                      className={`switch ${state.settings.checkForUpdates !== false ? 'on' : ''}`}
+                      onClick={() => void update({ checkForUpdates: state.settings.checkForUpdates === false })}
+                      data-testid="check-updates-toggle"
+                    />
+                    <label>Check for updates</label>
+                  </div>
+                  <span className="small muted">Once a day, Olympus asks GitHub for the latest release and shows a notice when one is out. Nothing is downloaded.</span>
+                </div>
+                <div className="field">
                   <label>Onboarding</label>
                   <div>
                     <button className="btn" onClick={() => void update({ onboarded: false })}>

@@ -287,7 +287,7 @@ While they run:
 When they finish:
 - A sub-session's report is a claim, not proof. Check the parts that matter yourself (read the diff, run the build or tests) before telling the user it is done.
 - Save any durable architectural facts or bug fixes into Shared Memory (\`${mem}/\`), then give the user one concise summary.
-- One-off, specific sub-sessions: once you have checked the result and saved what matters to Shared Memory, remove them with \`delete_subsession\` so the sidebar and Tasks panel stay clean. Keep a sub-session only while you still expect to message it (a phase-2 follow-up, a fix round).`,
+- Sub-sessions are disposable by default: once one finished and you read its final report (wait_for_subsessions or get_subsession), it is deleted when your turn ends. Messaging it first keeps it for that round. Spawn with \`keep: true\` only when you expect to message it later (a phase-2 follow-up, a fix round), and remove kept ones with \`delete_subsession\` when done. Quota-stopped ones stay so you can switch their agent.`,
     );
   } else if (role === 'worker') {
     out.push(

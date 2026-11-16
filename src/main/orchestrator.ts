@@ -41,6 +41,7 @@ import { createThread, deleteThread, findThread, getProject, getSettings, listTh
 import { openTerminal, readTerminal, terminalProject } from './terminals';
 import { acpMcp, mcpStatus } from './acpConfigService';
 import { lastTaskIndex, outcomeLine, resultItem } from './subtaskOutcome';
+import { DisposableTracker } from './disposableSubsessions';
 
 /**
  * Orchestration: the main session's agent spawns and steers sub-sessions through the `olympus` MCP server.
@@ -59,7 +60,10 @@ export function initOrchestrator(fn: Emit) {
     const t = findThread(threadId);
     if (!t) return;
     // A sub-session finished, or the main session itself went idle: either may complete the picture.
-    setTimeout(() => maybeWake(t.spawnedBy ?? t.id), 400);
+    setTimeout(() => {
+      maybeWake(t.spawnedBy ?? t.id);
+      void cleanupDisposable(t.id);
+    }, 400);
   });
 }
 
@@ -71,6 +75,33 @@ const starting = new Set<string>();
 const cancelled = new Set<string>();
 
 const isActive = (id: string) => starting.has(id) || runState(id).running;
+
+/** Disposable sub-sessions whose final report the parent has read (src/main/disposableSubsessions.ts). */
+const disposables = new DisposableTracker();
+
+/** The parent read these finished reports: once its turn is over (now, if it has none running), they go. */
+function reportsRead(parent: Thread, views: SubTaskView[]) {
+  for (const v of views) if (!LIVE_STATES.has(v.status)) disposables.markRead({ id: v.meta.id, disposable: v.meta.disposable, status: v.status, key: doneKey(v) });
+  if (disposables.size && !isActive(parent.id)) setTimeout(() => void cleanupDisposable(parent.id), 400);
+}
+
+/** Deletes the parent's finished, read, disposable sub-sessions; only between the parent's turns. */
+async function cleanupDisposable(parentId: string) {
+  if (!disposables.size || isActive(parentId)) return;
+  const parent = findThread(parentId);
+  if (!parent || !canOrchestrate(parent)) return;
+  const due = disposables.due(
+    childrenOf(parent, true).map((k) => {
+      const v = summarize(k);
+      return { id: k.id, disposable: k.disposable, status: v.status, key: doneKey(v), active: isActive(k.id) };
+    }),
+  );
+  for (const id of due) {
+    disposables.forget(id);
+    cancelled.delete(id);
+    await deleteChat(id).catch(() => {});
+  }
+}
 
 /**
  * Waking the orchestrator: whenever a main session is idle and one or more of its sub-sessions have finished since
@@ -218,7 +249,8 @@ const fmtDur = (ms: number) => {
 };
 
 export function describe(v: SubTaskView, full: boolean, replyMax = 8000): string {
-  const lines = [`### ${v.meta.title} — ${v.status}`, `id: ${v.meta.id} · agent: ${agentName(v.meta.agentId)}`];
+  const kind = v.meta.spawnedBy ? ` · ${v.meta.disposable ? 'disposable' : 'kept'}` : '';
+  const lines = [`### ${v.meta.title} — ${v.status}`, `id: ${v.meta.id} · agent: ${agentName(v.meta.agentId)}${kind}`];
   const dur = v.startedAt ? fmtDur((v.endedAt ?? Date.now()) - v.startedAt) : undefined;
   lines.push([dur && `time: ${dur}`, `${v.toolCount} tool calls`, v.filesTouched.length ? `files changed: ${v.filesTouched.join(', ')}` : 'no file edits'].filter(Boolean).join(' · '));
   if (v.activity) lines.push(`now: ${v.activity}`);
@@ -357,7 +389,16 @@ async function spawn(parent: Thread, args: any): Promise<string> {
   const cfg = extractConfigRequest(args);
   await assertAgentQuotaAvailable(agentId, cfg.model);
 
-  const child = createThread(parent.projectId, agentId, { title, parentId: parent.id, spawnedBy: parent.id, task, mode: parent.mode ?? 'code', ...(parent.autoApprove ? { autoApprove: true } : {}) });
+  const keep = args?.keep === true || args?.keep === 'true';
+  const child = createThread(parent.projectId, agentId, {
+    title,
+    parentId: parent.id,
+    spawnedBy: parent.id,
+    task,
+    mode: parent.mode ?? 'code',
+    ...(keep ? {} : { disposable: true }),
+    ...(parent.autoApprove ? { autoApprove: true } : {}),
+  });
   starting.add(child.id);
   let appliedNote = '';
   try {
@@ -383,7 +424,8 @@ async function spawn(parent: Thread, args: any): Promise<string> {
   emit('thread:meta', threadMeta(child));
   void sendPrompt(child.id, task, [], { fromAgent: parent.agentId }).catch(() => {});
   starting.delete(child.id);
-  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}. The user can watch it in the Tasks panel. Call wait_for_subsessions to get its report.`;
+  const life = keep ? 'Kept until you delete it.' : 'Disposable: deleted automatically after you read its final report and your turn ends.';
+  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}. The user can watch it in the Tasks panel. ${life} Call wait_for_subsessions to get its report.`;
 }
 
 async function waitFor(parent: Thread, args: any, closed: () => boolean): Promise<string> {
@@ -393,6 +435,7 @@ async function waitFor(parent: Thread, args: any, closed: () => boolean): Promis
   if (!targets.length) {
     const all = childrenOf(parent, true).map((c) => summarize(c, 8000));
     for (const v of all) if (!LIVE_STATES.has(v.status)) seen.add(doneKey(v));
+    reportsRead(parent, all);
     return all.length ? `No sub-sessions are running. Latest state:\n\n${all.map((v) => describe(v, true)).join('\n\n')}` : 'This session has no sub-sessions.';
   }
   const deadline = Date.now() + timeout;
@@ -409,6 +452,7 @@ async function waitFor(parent: Thread, args: any, closed: () => boolean): Promis
   }
   const views = targets.map((t) => summarize(findThread(t.id) ?? t, 8000));
   for (const v of views) if (!LIVE_STATES.has(v.status)) seen.add(doneKey(v));
+  reportsRead(parent, views);
   const still = views.filter((v) => ['running', 'starting', 'waiting-permission'].includes(v.status));
   const blocked = views.filter((v) => v.status === 'quota-exceeded' || v.status === 'needs-login');
   const head = blocked.length && still.length
@@ -424,6 +468,7 @@ async function message(parent: Thread, args: any): Promise<string> {
   const text = String(args?.text ?? '').trim();
   if (!text) throw new ToolError('"text" is required.');
   if (isActive(c.id)) throw new ToolError(`"${c.title}" is still running. Wait for it, or cancel it first.`);
+  disposables.reset(c.id);
   const requestedAgent = typeof args?.agent === 'string' && args.agent.trim() ? args.agent.trim() : undefined;
   const cfg = extractConfigRequest(args);
   if (requestedAgent || hasConfigOverrides(cfg)) {
@@ -453,6 +498,7 @@ async function removeSubsession(parent: Thread, args: any): Promise<string> {
   const title = c.title;
   await deleteChat(c.id);
   cancelled.delete(c.id);
+  disposables.forget(c.id);
   return `Deleted sub-session "${title}" (${c.id}). Its chat is gone from the sidebar and Tasks panel, and it no longer counts toward this session's limit.`;
 }
 
@@ -555,7 +601,7 @@ export function toolsFor(t: Thread) {
       name: 'spawn_subsession',
       title: 'Spawn sub-session',
       description:
-        'Start a sub-session: another agent that does one task in parallel and reports back. It sees only your task text, so include goal, scope, known facts, definition of done, how to verify and what to report. Returns its id at once.',
+        'Start a sub-session: another agent that does one task in parallel and reports back. It sees only your task text, so include goal, scope, known facts, definition of done, how to verify and what to report.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -563,6 +609,7 @@ export function toolsFor(t: Thread) {
           task: { type: 'string', description: 'The complete task brief.' },
           agent: agent(`CLI agent; default ${t.agentId}`),
           ...configProps,
+          keep: { type: 'boolean', description: 'Keep after its report (default: auto-delete).' },
         },
         required: ['title', 'task'],
         additionalProperties: false,
@@ -634,7 +681,7 @@ export function toolsFor(t: Thread) {
       name: 'delete_subsession',
       title: 'Delete sub-session',
       description:
-        'Delete a finished sub-session this session spawned: its chat leaves the sidebar and Tasks panel, its agent session is closed (the agent keeps its own saved copy) and it frees a slot of the per-session limit. Use it for one-off tasks once you have checked the report and saved anything durable to Shared Memory; keep sub-sessions you may still message. Refuses a running one.',
+        'Delete a finished sub-session this session spawned: its chat leaves the sidebar and Tasks panel, its agent session is closed (the agent keeps its own saved copy) and it frees a slot of the per-session limit. Disposable sub-sessions go by themselves after you read their report; use this for kept ones (keep: true) you no longer need. Refuses a running one.',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
     },
   ];
@@ -693,6 +740,7 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
       case 'configure_subsession': {
         if (!canOrchestrate(t)) throw new ToolError('configure_subsession is available only to main orchestrator sessions.');
         const c = ownChild(t, args?.id);
+        disposables.reset(c.id);
         text = await reconfigureSubsession(t, c, args, { isActive, clearCancelled: (id) => cancelled.delete(id) });
         break;
       }
@@ -703,6 +751,7 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         const c = ownChild(t, args?.id);
         const v = summarize(c, 8000);
         if (!LIVE_STATES.has(v.status)) seen.add(doneKey(v));
+        reportsRead(t, [v]);
         text = `${describe(v, true)}\n\ntask:\n${c.task ?? ''}\n\nrecent steps:\n${steps(c) || '(none yet)'}`;
         break;
       }

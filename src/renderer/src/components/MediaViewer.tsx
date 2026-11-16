@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Check, ChevronLeft, ChevronRight, Download, FolderOpen, Loader2, MessageSquarePlus, PanelRight, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Download, FolderOpen, Loader2, MessageSquarePlus, PanelRight, PenLine, X } from 'lucide-react';
 import type { FilePreview } from '@shared/types';
 import { api } from '../api';
 import { OpenFileContext, RefBaseContext } from '../fileLinks';
@@ -9,6 +9,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { PreviewBody, usePdfUrl } from './FilePreview';
 import { downloadFileRef } from './InlineFilePreviews';
 import { addToMessage, useCanAddToMessage } from './AddToMessage';
+import { openAnnotator } from './Annotator';
 import '../mediaViewer.css';
 
 /**
@@ -293,6 +294,21 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
             }}
           >
             <MessageSquarePlus size={16} />
+          </button>
+        )}
+        {hasFile && canAdd && data && (kind === 'image' || kind === 'video') && (
+          <button
+            type="button"
+            className="mv-btn"
+            title={kind === 'video' ? 'Mark up frames & add to message' : 'Mark up & add to message'}
+            aria-label={kind === 'video' ? 'Mark up frames and add to message' : 'Mark up and add to message'}
+            data-testid="viewer-annotate"
+            onClick={() => {
+              closeViewer({ restoreFocus: false });
+              openAnnotator({ path: data.path, name, mime: kind === 'video' ? data.mime || 'video/mp4' : data.mime || 'image/png' }, { composer: true });
+            }}
+          >
+            <PenLine size={16} />
           </button>
         )}
         <button

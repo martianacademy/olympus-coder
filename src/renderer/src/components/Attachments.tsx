@@ -13,6 +13,7 @@ import {
   Loader2,
   Maximize2,
   Paperclip,
+  PenLine,
   Play,
   X,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import { addDraftFiles, removeDraftFile, setDraftText, updateDraftFilePreview, u
 import { downloadFileRef } from './InlineFilePreviews';
 import { viewerAttrs, viewerKindOf } from './MediaViewer';
 import { AddToMessageButton, useComposerTarget } from './AddToMessage';
+import { canAnnotate, openAnnotator } from './Annotator';
 
 const fmtSize = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -182,6 +184,8 @@ export function useAttachments(draftKey: string) {
     error,
     dragging,
     remove: (path: string) => removeDraftFile(draftKey, path),
+    /** "Mark up" on an image / video card: the marked copy joins this draft next to the original. */
+    annotate: (a: AttachmentView) => openAnnotator({ path: a.path, name: a.name, mime: a.mime }, { draftKey }),
     addRawFiles: (list: File[]) => void addFiles(draftKey, list),
     pick: async () => {
       const targetKey = draftKey;
@@ -329,6 +333,7 @@ export function AttachmentChips({
   onOpen,
   inlinePlay,
   addable,
+  onAnnotate,
 }: {
   files: AttachmentView[];
   onRemove?: (path: string) => void;
@@ -338,6 +343,8 @@ export function AttachmentChips({
   inlinePlay?: boolean;
   /** Sent messages: an "Add to message" action puts the same file into the composer's draft. */
   addable?: boolean;
+  /** Draft cards: a "Mark up" action on images and videos (`Annotator.tsx`). */
+  onAnnotate?: (a: AttachmentView) => void;
 }) {
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [playing, setPlaying] = useState<ReadonlySet<string>>(new Set());
@@ -354,7 +361,7 @@ export function AttachmentChips({
           <div
             key={a.path}
             className={`attach-chip ${a.preview ? 'has-preview' : 'no-preview'} ${isVid ? 'is-video' : ''} ${onOpen ? 'is-clickable' : ''}`}
-            title={isPlaying ? undefined : `${a.name} (${fmtSize(a.size)})\n${playable ? 'Click to play' : 'Click to preview'} · ${a.path}`}
+            title={isPlaying ? undefined : `${a.name} (${fmtSize(a.size)})\n${playable ? 'Click to play' : 'Click to preview'} · ${a.path}${a.note ? `\n\n${a.note}` : ''}`}
             onClick={(e) => {
               if (playable) setPlaying((s) => new Set(s).add(a.path));
               else onOpen?.(a, e.currentTarget);
@@ -400,6 +407,21 @@ export function AttachmentChips({
               >
                 {justSaved ? <Check size={12} aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
               </button>
+              {onAnnotate && canAnnotate(a.mime) && (
+                <button
+                  type="button"
+                  className="attach-dl attach-mark"
+                  title={isVid ? 'Mark up frames' : 'Mark up'}
+                  aria-label={`Mark up ${a.name}`}
+                  data-testid="attach-annotate"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAnnotate(a);
+                  }}
+                >
+                  <PenLine size={12} aria-hidden="true" />
+                </button>
+              )}
               {addable && <AddToMessageButton path={a.path} name={a.name} mime={a.mime} className="attach-dl attach-add" />}
               {onRemove && (
                 <button
@@ -418,7 +440,10 @@ export function AttachmentChips({
             </div>
             <div className="attach-meta">
               <span className="ellipsis attach-name">{a.name}</span>
-              <span className="attach-sub">{fmtSize(a.size)}</span>
+              <span className="attach-sub">
+                {fmtSize(a.size)}
+                {a.note ? <span className="attach-marked" data-testid="attach-marked"> · marked</span> : null}
+              </span>
             </div>
           </div>
         );

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
-import { ChevronDown, ChevronRight, File, FilePlus, Folder, FolderOpen, FolderPlus, PanelLeft, Pencil, RefreshCw, Save, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, FilePlus, Folder, FolderOpen, FolderPlus, MoreHorizontal, PanelLeft, Pencil, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import type { FileEntry } from '@shared/types';
 import { api } from '../api';
 import { keys } from '../platform';
 import { useAgentFileWrites, useReportEditorBuffers } from '../editorBuffers';
 import { CodeEditor, WrapToggle, formatTextOnSave } from './Editor';
+import { ExplorerMenu, type ExplorerMenuTarget } from './ExplorerMenu';
 import '../acpClient.css';
 
 interface OpenFile {
@@ -66,6 +67,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
   const [showTree, setShowTree] = useState(true);
   const [creating, setCreating] = useState<{ dir: string; isDir: boolean } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [menu, setMenu] = useState<(ExplorerMenuTarget & { entry?: FileEntry }) | null>(null);
   const [error, setError] = useState('');
   const filesRef = useRef(files);
   filesRef.current = files;
@@ -269,6 +271,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               className={`tree-row ${active === e.path ? 'active' : ''} ${mark ? `git-${mark === '?' ? 'new' : mark === 'D' ? 'del' : 'mod'}` : ''}`}
               style={{ paddingLeft: 8 + depth * 12 }}
               onClick={() => (e.dir ? toggle(e.path) : void open(e.path))}
+              onContextMenu={(ev) => (ev.preventDefault(), setMenu({ rel: e.path, dir: e.dir, x: ev.clientX, y: ev.clientY, entry: e }))}
               title={e.path}
             >
               {e.dir ? open_ ? <ChevronDown size={13} className="muted" /> : <ChevronRight size={13} className="muted" /> : <span style={{ width: 13 }} />}
@@ -292,6 +295,18 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
                 <button className="btn ghost icon" title="Move to Trash" onClick={(ev) => (ev.stopPropagation(), void trash(e))}>
                   <Trash2 size={12} />
                 </button>
+                <button
+                  className="btn ghost icon"
+                  title="More: open in an editor, reveal, copy path"
+                  data-testid="tree-row-more"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    const r = ev.currentTarget.getBoundingClientRect();
+                    setMenu({ rel: e.path, dir: e.dir, x: r.right - 4, y: r.bottom + 4, entry: e });
+                  }}
+                >
+                  <MoreHorizontal size={13} />
+                </button>
               </span>
             </div>
             {e.dir && open_ && renderDir(e.path, depth + 1)}
@@ -308,7 +323,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
       {showTree && (
         <div className="explorer">
           <div className="panel-toolbar">
-            <span className="small muted" style={{ fontWeight: 600 }}>
+            <span className="small muted explorer-title" style={{ fontWeight: 600 }}>
               EXPLORER
             </span>
             <div className="spacer" />
@@ -318,11 +333,32 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
             <button className="btn ghost icon" title="New folder" onClick={() => setCreating({ dir: '', isDir: true })}>
               <FolderPlus size={14} />
             </button>
-            <button className="btn ghost icon" title="Refresh" onClick={refreshTree}>
+            <button className="btn ghost icon" title="Refresh" onClick={refreshTree} data-testid="explorer-refresh">
               <RefreshCw size={13} />
+            </button>
+            <button
+              className="btn ghost icon"
+              title="Open the project folder in an editor or the file manager"
+              data-testid="explorer-more"
+              onClick={(ev) => {
+                const r = ev.currentTarget.getBoundingClientRect();
+                setMenu({ rel: '', dir: true, x: r.left, y: r.bottom + 4 });
+              }}
+            >
+              <MoreHorizontal size={14} />
             </button>
           </div>
           <div className="tree">{renderDir('', 0)}</div>
+          {menu && (
+            <ExplorerMenu
+              projectId={projectId}
+              target={menu}
+              onClose={() => setMenu(null)}
+              onError={setError}
+              onRename={menu.entry ? () => setRenaming(menu.entry!.path) : undefined}
+              onTrash={menu.entry ? () => void trash(menu.entry!) : undefined}
+            />
+          )}
         </div>
       )}
       <div className="editor-area">

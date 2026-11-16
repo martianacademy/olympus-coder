@@ -123,6 +123,8 @@ export function toBlocks(list: AttachmentView[], caps: PromptCaps): any[] {
   for (const a of list) {
     const uri = pathToFileURL(a.path).href;
     const kind = promptBlockKind(a, caps);
+    // A marked-up image's legend (what each mark means) goes right before the image it describes.
+    if (typeof a.note === 'string' && a.note.trim()) blocks.push({ type: 'text', text: a.note.trim() });
     try {
       if (kind === 'image') {
         blocks.push({ type: 'image', mimeType: a.mime, data: readFileSync(a.path).toString('base64'), uri });

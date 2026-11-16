@@ -98,6 +98,7 @@ export default function App() {
   useEffect(() => remoteWatch('thread', active?.id), [active?.id]);
   const lastStatus = useRef<string | undefined>(undefined);
   const menuHandler = useRef<(cmd: string) => void>(() => {});
+  const threadGone = useRef<(d: { id: string; projectId: string; parentId?: string }) => void>(() => {});
 
   const locked = Boolean(state?.lock.locked);
   const settings = state?.settings;
@@ -130,6 +131,7 @@ export default function App() {
     previewCtxRef: previewCtx,
     mainRef,
     onMenuCommand: (cmd) => menuHandler.current(cmd),
+    onThreadDeleted: (d) => threadGone.current(d),
   });
 
   const loadAgents = useCallback(async () => {
@@ -178,6 +180,19 @@ export default function App() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // The open chat was deleted (here, by an agent's delete_subsession, or from a phone): show its parent, else the
+  // project's newest chat, else nothing.
+  threadGone.current = (d) => {
+    if (activeId.current !== d.id) return;
+    const list = (threads[d.projectId] ?? []).filter((t) => t.id !== d.id);
+    const next = list.find((t) => t.id === d.parentId) ?? list.find((t) => !t.parentId) ?? list[0];
+    activeId.current = null;
+    if (next) return void openThread(next.id);
+    setActive(null);
+    setSession(null);
+    if (modeRef.current === 'chat') setPage('home');
+  };
 
   const allThreads = useMemo(() => Object.values(threads).flat().sort((a, b) => b.updatedAt - a.updatedAt), [threads]);
   const currentProjectId =
@@ -274,11 +289,7 @@ export default function App() {
   /** After DeleteChatDialog removed the chat (and, if the user ticked it, the agent's saved session). */
   async function afterDelete(t: ThreadMeta) {
     setDeleting(null);
-    if (active?.id === t.id) {
-      setActive(null);
-      setSession(null);
-      if (mode === 'chat') setPage('home');
-    }
+    // The main process's `thread:deleted` event already moved away from the chat if it was open (threadGone).
     await loadThreads(t.projectId);
   }
 

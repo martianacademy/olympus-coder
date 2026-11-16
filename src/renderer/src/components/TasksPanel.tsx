@@ -58,6 +58,8 @@ export function useTasks(threadId: string | undefined): TasksData {
       onEvent((channel, payload) => {
         if (channel === 'thread:meta') {
           if (payload.parentId === threadId || ids.current.has(payload.id)) soon();
+        } else if (channel === 'thread:deleted') {
+          if (payload.parentId === threadId || ids.current.has(payload.id)) soon();
         } else if (channel === 'session:state' || channel === 'thread:item') {
           if (ids.current.has(payload.threadId)) soon();
         }

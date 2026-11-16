@@ -11,6 +11,7 @@ import * as catalog from './catalog';
 import { addCustomAgent, removeCustomAgent, type CustomAgentInput } from './customAgents';
 import { agentEnv, loadLoginShellPath, userShell } from './env';
 import * as files from './files';
+import { listEditors, openDefault, openInEditor } from './openWith';
 import * as git from './git';
 import * as lock from './lock';
 import { openInDefaultApp, openPreview, readPreviewRaw, revealInFinder, savePreviewAs } from './preview';
@@ -31,6 +32,7 @@ import * as skills from './skills';
 import { forgetPty, killAllPtys, killPty, ptyBuffer, resizePty, startPty, writePty } from './pty';
 import * as schedules from './schedules';
 import * as store from './store';
+import { currentUpdate, skipUpdate, startUpdateChecker, updateSettingChanged } from './updates';
 import * as acpSessions from './acpSessionService';
 import * as acpConfig from './acpConfigService';
 import type { AcpConfigEvents, ProviderInput } from '@shared/acpConfig';
@@ -84,6 +86,8 @@ const emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) =>
   win?.webContents.send('desk:event', channel, payload);
 };
 agents.setEmitter(emit);
+// Every deletion in main (sidebar, delete_subsession, disposable sub-sessions) tells the window and the phone.
+store.onThreadDeleted((t) => emit('thread:deleted', { id: t.id, projectId: t.projectId, ...(t.parentId ? { parentId: t.parentId } : {}) }));
 initOrchestrator(emit);
 setTerminalEmitter(emit);
 /** The ACP client features' events (live agent terminals, files agents wrote): same channel and lock rule as `emit`. */
@@ -142,6 +146,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     const s = store.updateSettings(patch);
     if (patch.theme) nativeTheme.themeSource = s.theme.mode;
     if (patch.sharedRoot) mkdirSync(patch.sharedRoot, { recursive: true });
+    if ('checkForUpdates' in patch) updateSettingChanged();
     return s;
   },
 
@@ -256,6 +261,10 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'files.rename': (projectId: string, from: string, to: string) => files.renameEntry(projectId, from, to),
   'files.trash': (projectId: string, rel: string) => files.trashEntry(projectId, rel),
   'files.reveal': (projectId: string, rel: string) => files.revealEntry(projectId, rel),
+  /** "Open with" in the explorer: installed code editors, and opening a project path in one / the default app. */
+  'files.editors': () => listEditors(),
+  'files.openIn': (projectId: string, rel: string, editorId: string) => openInEditor(projectId, rel, editorId),
+  'files.openDefault': (projectId: string, rel: string) => openDefault(projectId, rel),
 
   /** A window's unsaved editor files for a project (the full list; empty = none), read by agents' `fs/read_text_file`. */
   'editor.reportBuffers': (clientId: string, projectId: string, list: EditorBufferReport[]) => reportEditorBuffers(clientId, projectOrThrow(projectId).path, list),
@@ -528,6 +537,9 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'memory.writeProjectInstructions': (projectId: string, text: string) => writeProjectInstructions(projectOrThrow(projectId), text),
   'preview.openDefault': (path: string) => openInDefaultApp(path),
   'preview.reveal': (path: string) => revealInFinder(path),
+  /** A newer release than this app (src/main/updates.ts), or null; "Not now" skips that version. */
+  'updates.current': () => currentUpdate(),
+  'updates.skip': (version: string) => skipUpdate(String(version)),
   'system.openExternal': (url: string) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
   },
@@ -657,6 +669,7 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = store.getSettings().theme.mode;
   lock.startLockWatchers();
   schedules.startScheduler(emit);
+  startUpdateChecker(emit);
   // Plan limits of every ready agent, without a chat: at start, every 5 minutes and right after each reset time.
   agents.limitsService.start(4000);
   buildMenu();

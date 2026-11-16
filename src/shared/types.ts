@@ -136,6 +136,11 @@ export interface AttachmentView {
   mime: string;
   size: number;
   preview?: string;
+  /**
+   * Text the agent receives with this file, right before it (e.g. the legend of a marked-up image: what each mark
+   * and pin means). Shown on the card's tooltip.
+   */
+  note?: string;
 }
 
 export interface ToolContentView {
@@ -348,6 +353,8 @@ export interface ThreadMeta {
   parentId?: string;
   /** Set on a sub-session the main session's agent started with spawn_subsession (same id as parentId). */
   spawnedBy?: string;
+  /** A spawned sub-session that is deleted once it finished, its report was read and the parent's turn ended. */
+  disposable?: boolean;
   /** Set on a native sub-agent spawned by a CLI agent itself (Claude Agent/Task, Codex collab, Antigravity invoke_subagent/swarm). */
   nativeSubagent?: boolean;
   /** Role or sub-agent type reported by the CLI agent (e.g. "Explore", "Plan", "Codebase Researcher", "swarm"). */
@@ -577,6 +584,10 @@ export interface Settings {
   /** Send a message into an agent's chat when its terminal command or sub-sessions finish. Off: agents check
    *  their own pending work (read_terminal, wait_for_subsessions, set_timer). */
   notifyAgentsWhenWorkEnds?: boolean;
+  /** Look for a newer Olympus Coder release on GitHub at startup and once a day (nothing is downloaded). */
+  checkForUpdates?: boolean;
+  /** A release version the user dismissed in the update notice: not shown again. */
+  skippedUpdate?: string;
 }
 
 export interface ConnectorDef {
@@ -766,6 +777,19 @@ export interface DeskEvents {
   'catalog:progress': { id: string; phase: 'download' | 'verify' | 'extract' | 'done' | 'error'; received?: number; total?: number; error?: string };
   /** An agent was added or removed outside the Settings screen (e.g. by an agent's add_agent tool). */
   'agents:changed': { defs: AgentDef[]; statuses: AgentStatus[] };
+  /** A chat was deleted (from the sidebar, by delete_subsession, or a disposable sub-session cleaned up). */
+  'thread:deleted': { id: string; projectId: string; parentId?: string };
+  /** A newer release than this app exists (null: none, or it was skipped / checking is off). */
+  'update:available': UpdateInfo | null;
+}
+
+/** A newer Olympus Coder release found on GitHub (src/main/updates.ts). */
+export interface UpdateInfo {
+  version: string;
+  /** The release page ("What's new"). */
+  pageUrl: string;
+  /** The installer for this platform and CPU, or the release page when there is none. */
+  downloadUrl: string;
 }
 
 // ---------- code mode: files, git, terminals ----------

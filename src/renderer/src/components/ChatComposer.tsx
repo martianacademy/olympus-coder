@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { AgentDef, AgentStatus, SessionView } from '@shared/types';
 import { api } from '../api';
+import { useComposerResize } from '../composerResize';
 import { useDraft } from '../drafts';
 import { useOpenFile } from '../fileLinks';
 import { setExpandSteps, useExpandSteps } from '../prefs';
@@ -58,6 +59,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const openFile = useOpenFile();
   const expandSteps = useExpandSteps();
   const ta = useRef<HTMLTextAreaElement>(null);
+  const resize = useComposerResize(ta);
   const att = useAttachments(threadId);
   const running = session?.status === 'running';
   const needsLogin = session?.status === 'needs-login' || props.agentStatus?.state === 'needs-login';
@@ -167,12 +169,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       )}
       <QueuedMessages threadId={threadId} queue={queue} />
       <div className={`composer ${att.dragging ? 'dragging' : ''}`} {...att.dropProps}>
+        <div
+          className={`composer-resize ${resize.sized ? 'sized' : ''}`}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize message box"
+          title="Drag to resize · double-click to reset"
+          onPointerDown={resize.onPointerDown}
+          onDoubleClick={resize.reset}
+          data-testid="composer-resize"
+        />
         {slash.menu}
-        <AttachmentChips files={att.files} onRemove={att.remove} onOpen={(a) => openFile(a.path)} />
+        <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a) => openFile(a.path)} />
         <div className="growable-textarea" data-replicated-value={text}>
           <textarea
             ref={ta}
             rows={1}
+            style={resize.style}
             spellCheck={false}
             value={text}
             placeholder={running ? (narrow ? 'Queue a message…' : `Message ${agentDef?.name ?? 'Agent'} — it gets it when this reply ends…`) : `Message ${agentDef?.name ?? 'Agent'}…`}
