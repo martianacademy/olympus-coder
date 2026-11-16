@@ -1,4 +1,5 @@
 import { PhoneSettings } from './settings/PhoneSettings';
+import { UpdateSettings } from './settings/UpdateSettings';
 import { ThemeEditor } from './settings/AppearanceSettings';
 import { useState } from 'react';
 import { Bot, Brain, FolderOpen, Loader2, Lock, LogIn, LogOut, Palette, Plug, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Trash2, Wrench, X } from 'lucide-react';
@@ -131,17 +132,7 @@ export function SettingsModal(props: {
                     pending work and can set timers. The Tasks panel updates either way.
                   </span>
                 </div>
-                <div className="field">
-                  <div className="row">
-                    <button
-                      className={`switch ${state.settings.checkForUpdates !== false ? 'on' : ''}`}
-                      onClick={() => void update({ checkForUpdates: state.settings.checkForUpdates === false })}
-                      data-testid="check-updates-toggle"
-                    />
-                    <label>Check for updates</label>
-                  </div>
-                  <span className="small muted">Once a day, Olympus asks GitHub for the latest release and shows a notice when one is out. Nothing is downloaded.</span>
-                </div>
+                <UpdateSettings settings={state.settings} platform={state.platform} update={update} />
                 <div className="field">
                   <label>Onboarding</label>
                   <div>

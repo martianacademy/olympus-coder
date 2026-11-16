@@ -586,7 +586,14 @@ export interface Settings {
   /** Send a message into an agent's chat when its terminal command or sub-sessions finish. Off: agents check
    *  their own pending work (read_terminal, wait_for_subsessions, set_timer). */
   notifyAgentsWhenWorkEnds?: boolean;
-  /** Look for a newer Olympus Coder release on GitHub at startup and once a day (nothing is downloaded). */
+  /** How new releases arrive (src/main/updates.ts): 'notify' shows a notice, 'auto' also downloads and checks the
+   *  update in the background and installs it on restart, 'off' never asks GitHub. Default 'notify'. */
+  updateMode?: UpdateMode;
+  /** Auto mode, macOS: download only while the Mac is on Wi-Fi. Default off. */
+  updateWifiOnly?: boolean;
+  /** Auto mode: install a downloaded update when the user quits Olympus. Default on. */
+  updateInstallOnQuit?: boolean;
+  /** @deprecated Replaced by `updateMode` (false → 'off'); only read once to migrate. */
   checkForUpdates?: boolean;
   /** A release version the user dismissed in the update notice: not shown again. */
   skippedUpdate?: string;
@@ -783,6 +790,8 @@ export interface DeskEvents {
   'thread:deleted': { id: string; projectId: string; parentId?: string };
   /** A newer release than this app exists (null: none, or it was skipped / checking is off). */
   'update:available': UpdateInfo | null;
+  /** An update check finished (Settings → General shows the result). */
+  'update:checked': UpdateCheck;
 }
 
 /** A newer Olympus Coder release found on GitHub (src/main/updates.ts). */
@@ -792,6 +801,20 @@ export interface UpdateInfo {
   pageUrl: string;
   /** The installer for this platform and CPU, or the release page when there is none. */
   downloadUrl: string;
+  /** Auto mode: downloading (with progress) or downloaded, checked and ready to install on restart. */
+  state?: 'downloading' | 'ready';
+  received?: number;
+  total?: number;
+  /** Why the automatic update stopped and only the notice is left (bad checksum, no permission…). */
+  problem?: string;
+}
+
+export type UpdateMode = 'notify' | 'auto' | 'off';
+
+/** The last update check, shown next to "Check now" in Settings. */
+export interface UpdateCheck {
+  at: number;
+  text: string;
 }
 
 // ---------- code mode: files, git, terminals ----------

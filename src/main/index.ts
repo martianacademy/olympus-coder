@@ -32,7 +32,7 @@ import * as skills from './skills';
 import { forgetPty, killAllPtys, killPty, ptyBuffer, resizePty, startPty, writePty } from './pty';
 import * as schedules from './schedules';
 import * as store from './store';
-import { currentUpdate, skipUpdate, startUpdateChecker, updateSettingChanged } from './updates';
+import { cancelDownload, checkNow, currentUpdate, installAndRestart, lastUpdateCheck, onAppWillQuit, skipUpdate, startUpdateChecker, updateSettingChanged } from './updates';
 import * as acpSessions from './acpSessionService';
 import * as acpConfig from './acpConfigService';
 import type { AcpConfigEvents, ProviderInput } from '@shared/acpConfig';
@@ -146,7 +146,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     const s = store.updateSettings(patch);
     if (patch.theme) nativeTheme.themeSource = s.theme.mode;
     if (patch.sharedRoot) mkdirSync(patch.sharedRoot, { recursive: true });
-    if ('checkForUpdates' in patch) updateSettingChanged();
+    if ('updateMode' in patch || 'updateWifiOnly' in patch) updateSettingChanged();
     return s;
   },
 
@@ -540,6 +540,11 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   /** A newer release than this app (src/main/updates.ts), or null; "Not now" skips that version. */
   'updates.current': () => currentUpdate(),
   'updates.skip': (version: string) => skipUpdate(String(version)),
+  'updates.check': () => checkNow(),
+  'updates.lastCheck': () => lastUpdateCheck(),
+  'updates.cancel': () => cancelDownload(),
+  /** "Restart to update": quits (the running-work warning still asks); a helper swaps the app and relaunches it. */
+  'updates.install': () => installAndRestart(),
   'system.openExternal': (url: string) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
   },
@@ -752,6 +757,14 @@ app.on('before-quit', (e) => {
   stopOrchestrator();
   killAllPtys();
   acpTerminals.killAll();
+});
+// The quit is certain now: a downloaded update is installed by a detached helper once this process has exited.
+app.on('will-quit', () => {
+  try {
+    onAppWillQuit();
+  } catch (e) {
+    console.error('[updates] could not start the install helper:', e);
+  }
 });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

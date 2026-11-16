@@ -62,8 +62,18 @@ export const DEFAULT_SETTINGS: Settings = {
   agentDefaults: {},
   remote: { enabled: false, port: 47816 },
   notifyAgentsWhenWorkEnds: false,
-  checkForUpdates: true,
+  updateMode: 'notify',
+  updateWifiOnly: false,
+  updateInstallOnQuit: true,
 };
+
+/** Settings saved before `updateMode` existed: "Check for updates" off becomes 'off'. Returns true when changed. */
+export function migrateUpdateMode(saved: Partial<Settings>): boolean {
+  if (!('checkForUpdates' in saved)) return false;
+  if (!saved.updateMode) saved.updateMode = saved.checkForUpdates === false ? 'off' : 'notify';
+  delete saved.checkForUpdates;
+  return true;
+}
 
 let settings: Settings | null = null;
 
@@ -79,6 +89,7 @@ export function getSettings(): Settings {
         writeJson(settingsFile(), saved);
       },
     });
+    if (migrateUpdateMode(saved)) writeJson(settingsFile(), saved);
     settings = {
       ...DEFAULT_SETTINGS,
       ...saved,

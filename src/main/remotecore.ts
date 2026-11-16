@@ -59,6 +59,10 @@ export const DENIED = new Set([
   'preview.saveAs',
   'system.openExternal',
   'app.restart',
+  // Updates are downloaded and installed on the Mac only; a phone just sees the notice.
+  'updates.check',
+  'updates.cancel',
+  'updates.install',
 ]);
 
 /**
@@ -120,6 +124,10 @@ export async function remoteCall(method: string, args: unknown): Promise<{ ok: b
       const patch = (list[0] && typeof list[0] === 'object' ? { ...(list[0] as Partial<Settings>) } : {}) as Partial<Settings>;
       // Prevent mutating `remote` security config via `settings.update`.
       delete patch.remote;
+      // …and how updates arrive (downloads / installs on the Mac).
+      delete patch.updateMode;
+      delete patch.updateWifiOnly;
+      delete patch.updateInstallOnQuit;
       const value = await handlers['settings.update'](patch);
       return { ok: true, value: value ?? null };
     }

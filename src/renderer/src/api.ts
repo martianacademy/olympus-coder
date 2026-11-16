@@ -1,5 +1,6 @@
 import { clearDraft } from './drafts';
 import type {
+  UpdateCheck,
   UpdateInfo,
   LearnedNote,
   ProjectStats,
@@ -214,6 +215,10 @@ export const api = {
   openExternal: (url: string) => call<void>('system.openExternal', url),
   currentUpdate: () => call<UpdateInfo | null>('updates.current'),
   skipUpdate: (version: string) => call<void>('updates.skip', version),
+  checkUpdates: () => call<UpdateCheck>('updates.check'),
+  lastUpdateCheck: () => call<UpdateCheck | null>('updates.lastCheck'),
+  cancelUpdateDownload: () => call<void>('updates.cancel'),
+  installUpdate: () => call<void>('updates.install'),
   preview: (ref: string, projectId?: string) => call<FilePreview>('preview.open', ref, projectId),
   previewSaveAs: (ref: string, projectId?: string) => call<{ saved: boolean; path?: string }>('preview.saveAs', ref, projectId),
   previewRaw: (ref: string, projectId?: string) =>
