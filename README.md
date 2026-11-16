@@ -3,7 +3,7 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — with shared project memory, multi-agent orchestration, a built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.2.0</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+    <code>v0.2.1</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
   </p>
 </div>
 
@@ -14,7 +14,7 @@
   <img src="docs/screenshots/hero-code-mode.png" alt="Olympus Coder — Code Mode workspace with Antigravity, collapsible step timeline, inline diff, and CodeMirror 6 editor" width="100%" />
 </picture>
 
-> **Status:** v0.2.0, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
+> **Status:** v0.2.1, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
 
 ## Download
 
@@ -22,7 +22,7 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | [`Olympus.Coder-0.2.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.2.0-arm64.dmg) |
+| macOS, Apple silicon | [`Olympus.Coder-0.2.1-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.2.1-arm64.dmg) |
 | macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
 | Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
 | Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |
@@ -62,7 +62,7 @@ Settings → Appearance adds **Steps & tool output size** (Smaller, Default, Lar
 <img src="docs/screenshots/appearance-steps.png" alt="Settings, Appearance, Chat and Reading: chat width, thinking style, and Steps and tool output size set to Larger with a live preview" width="100%" />
 
 **You only found out about a new version by checking GitHub.**
-Olympus checks GitHub Releases shortly after it starts and once a day, and shows a small notice with **What's new** and a **Download** link for the right installer for your machine. Closing the notice skips that version. Turn it off in Settings → General → **Check for updates**.
+Olympus checks GitHub Releases shortly after it starts and once a day. Settings → General → **Updates** has three modes: **Notify me** (a small notice with **What's new** and a **Download** link for the right installer; closing it skips that version), **Automatic** (from 0.2.1 on: downloads the update in the background, checks it against the release's `SHA256SUMS.txt`, and installs it when you press **Restart** or quit, putting the previous version back if any step fails; tested on macOS, the Windows and Linux installers are not yet tested on real machines) and **Off**. **Check now** checks right away.
 
 <img src="docs/screenshots/update-banner.png" alt="Update notice at the top of a chat: Olympus Coder 0.2.0 is available, What's new, Download" width="100%" />
 
