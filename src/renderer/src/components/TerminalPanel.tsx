@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Eraser, FlaskConical, Globe, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
+import { AlertTriangle, Copy, Eraser, FlaskConical, Globe, Play, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
 import type { PortInfo, TerminalView } from '@shared/types';
 import { api, onEvent } from '../api';
 import { composeInChat, portInUse } from '../compose';
@@ -213,46 +213,53 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
             </div>
           ))}
         </div>
-        <div className="term-tools">
-          {testCmd && (
-            <button className="btn ghost icon" title={`Run tests: ${testCmd}`} onClick={() => void runCommand(testCmd)}>
-              <FlaskConical size={13} />
-            </button>
-          )}
-          {current && !current.alive ? (
-            <button className="btn ghost small term-rerun" title={current.command ? `Run again: ${current.command}` : 'Start a new shell here'} onClick={() => void rerun(current.ptyId)}>
-              <RotateCw size={12} /> {current.command ? 'Run again' : 'Restart'}
-            </button>
-          ) : (
-            <button className="btn ghost icon" title="Stop (Ctrl+C)" disabled={!current} onClick={() => active && terminalAction(active, 'interrupt')}>
-              <Square size={12} />
-            </button>
-          )}
-          <button className="btn ghost icon" title={`Find (${navigator.platform.toLowerCase().includes('mac') ? '⌘F' : 'Ctrl+Shift+F'})`} disabled={!current} onClick={() => setFinding((f) => !f)}>
-            <Search size={13} />
-          </button>
-          <button className="btn ghost icon" title="Clear" disabled={!current} onClick={() => active && terminalAction(active, 'clear')}>
-            <Eraser size={13} />
-          </button>
-          <button
-            className="btn ghost icon"
-            title={copied ? 'Copied' : 'Copy output (or the selection)'}
-            disabled={!current}
-            onClick={() => {
-              if (active && terminalAction(active, 'copy')) {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1200);
-              }
-            }}
-          >
-            <Copy size={13} className={copied ? 'ok' : ''} />
-          </button>
-          <span className="term-sep" />
-          <button className="btn ghost icon" title="New terminal" aria-label="New terminal" onClick={() => void add()}>
-            <Plus size={14} />
-          </button>
-        </div>
+        <button className="btn ghost icon term-add" title="New terminal" aria-label="New terminal" onClick={() => void add()}>
+          <Plus size={14} />
+        </button>
       </div>
+      {current && (
+        // The active terminal's actions, on their own line under the tabs: small icons, nothing that runs a command
+        // again by accident next to the tabs.
+        <div className="term-toolbar" data-testid="term-toolbar">
+          <span className={`term-toolbar-cmd ellipsis ${current.command ? 'mono' : ''}`} title={current.command ?? current.title}>
+            {current.command ?? current.title}
+          </span>
+          <div className="term-tools">
+            {testCmd && (
+              <button className="btn ghost icon" title={`Run tests: ${testCmd}`} onClick={() => void runCommand(testCmd)}>
+                <FlaskConical size={13} />
+              </button>
+            )}
+            {!current.alive ? (
+              <button className="btn ghost icon term-rerun" title={current.command ? `Run again: ${current.command}` : 'Start a new shell here'} aria-label={current.command ? 'Run again' : 'Restart'} onClick={() => void rerun(current.ptyId)} data-testid="term-rerun">
+                {current.command ? <Play size={13} /> : <RotateCw size={13} />}
+              </button>
+            ) : (
+              <button className="btn ghost icon" title="Stop (Ctrl+C)" onClick={() => active && terminalAction(active, 'interrupt')}>
+                <Square size={12} />
+              </button>
+            )}
+            <button className="btn ghost icon" title={`Find (${navigator.platform.toLowerCase().includes('mac') ? '⌘F' : 'Ctrl+Shift+F'})`} onClick={() => setFinding((f) => !f)}>
+              <Search size={13} />
+            </button>
+            <button className="btn ghost icon" title="Clear" onClick={() => active && terminalAction(active, 'clear')}>
+              <Eraser size={13} />
+            </button>
+            <button
+              className="btn ghost icon"
+              title={copied ? 'Copied' : 'Copy output (or the selection)'}
+              onClick={() => {
+                if (active && terminalAction(active, 'copy')) {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1200);
+                }
+              }}
+            >
+              <Copy size={13} className={copied ? 'ok' : ''} />
+            </button>
+          </div>
+        </div>
+      )}
       {current && results[current.ptyId] && (
         <TestBar
           result={results[current.ptyId]!}

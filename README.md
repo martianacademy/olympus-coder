@@ -3,7 +3,7 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — with shared project memory, multi-agent orchestration, a built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.1.0</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+    <code>v0.2.0</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
   </p>
 </div>
 
@@ -14,7 +14,7 @@
   <img src="docs/screenshots/hero-code-mode.png" alt="Olympus Coder — Code Mode workspace with Antigravity, collapsible step timeline, inline diff, and CodeMirror 6 editor" width="100%" />
 </picture>
 
-> **Status:** v0.1.0, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
+> **Status:** v0.2.0, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
 
 ## Download
 
@@ -22,7 +22,7 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | [`Olympus.Coder-0.1.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.1.0-arm64.dmg) |
+| macOS, Apple silicon | [`Olympus.Coder-0.2.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.2.0-arm64.dmg) |
 | macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
 | Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
 | Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |
@@ -41,6 +41,46 @@ Modern AI-assisted engineering often splits context across disconnected CLI term
 - **One shared `~/.olympus` brain** — Every agent reads and updates the same two-tier persistent project memory (`MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, `AGENTS.md`, and cross-agent session transcripts) instead of writing into siloed vendor directories.
 - **Full IDE workbench built in** — Inspect live edits in **CodeMirror 6**, stage and commit in the **Git** client, run multi-tab **WebGL terminals** with 1-click test reruns, roll back any prompt via **shadow-git checkpoints**, and preview localhost apps side by side.
 - **Continue from your phone anywhere** — The exact same responsive UI runs over local Wi-Fi/Hotspot (`:47816`) or an **AES-256-GCM end-to-end encrypted Cloudflare Relay** with full chat, tool approvals, file editing, Git, and live PTY terminals.
+
+---
+
+## What's new in 0.2
+
+**You can see the problem on screen, but saying where it is takes a paragraph.**
+Image and video attachments now have **Mark up**. Draw with a pen, highlighter, rectangle, circle, arrow, freehand shape, text or numbered pins, then press **Done**: the marks are baked into a new PNG at the original's resolution, the original stays attached unless you untick **Also send the original**, and the agent gets a short legend right before the image, e.g. `1. Red circle around x 1720–2480, y 680–910 (middle right) — text: "make this smaller"`. Agents can't watch video, so for a video you mark one frame (saved with its timestamp) or one area across a time range, which becomes a contact sheet of 4–6 evenly spaced frames with the mark and the timestamp on each. Images already in a chat have **Mark up & add to message** in the viewer.
+
+<img src="docs/screenshots/annotate-editor.png" alt="Mark up editor: a circle with a note around an oversized button, a numbered pin and an arrow at a misaligned price, and a highlighted title" width="100%" />
+
+**Adding another agent meant leaving the chat for Settings.**
+Agents can now search the ACP registry and add or remove CLI agents themselves with the Olympus tools `search_agent_registry`, `add_agent`, `add_custom_agent` and `remove_agent`. Every change waits for an Olympus confirm card that shows the exact command, and **Approve all** never answers it for you. A custom command is saved only if it answers an ACP `initialize`; built-in agents and agents a running chat is using can't be removed. Sub-sessions don't get these tools.
+
+<img src="docs/screenshots/agent-confirm.png" alt="Olympus confirm card: Claude Code wants to add OpenCode, with the command opencode acp, while Approve all is on" width="100%" />
+
+**Some appearance settings only reached part of the app.**
+Settings → Appearance adds **Steps & tool output size** (Smaller, Default, Larger, Largest, with a live preview) and **Chat width** (Narrow, Default, Wide). **Density** (Comfortable or Compact) now changes the spacing of the chat, steps, sidebar and composer on desktop, and **corner radius** and **app font size** now reach message bubbles, code blocks, cards, menus, the chat and the sidebar.
+
+<img src="docs/screenshots/appearance-steps.png" alt="Settings, Appearance, Chat and Reading: chat width, thinking style, and Steps and tool output size set to Larger with a live preview" width="100%" />
+
+**You only found out about a new version by checking GitHub.**
+Olympus checks GitHub Releases shortly after it starts and once a day, and shows a small notice with **What's new** and a **Download** link for the right installer for your machine. Closing the notice skips that version. Turn it off in Settings → General → **Check for updates**.
+
+<img src="docs/screenshots/update-banner.png" alt="Update notice at the top of a chat: Olympus Coder 0.2.0 is available, What's new, Download" width="100%" />
+
+**Olympus messaged agents whenever a command or sub-session finished, which cost extra turns.**
+Those messages are now off by default (Settings → General → **Message agents when their work finishes**). Agents check their own pending work instead: every session has a `set_timer` tool (1 to 1440 minutes) for a reminder, or uses its CLI's own background mode. Sub-sessions are now disposable by default: once one has finished and its parent has read the report, it deletes itself. Pass `keep: true` to keep one.
+
+**Shared data lived in `~/.agents`, a folder other tools use too.**
+It now lives in `~/.olympus` (override with `OLYMPUS_HOME`). On first launch Olympus copies its own items from `~/.agents` into a staging folder and moves them into place only when the whole copy succeeded, so a failed copy changes nothing and is retried on the next launch. `~/.agents` itself is never modified, and skills installed with `npx skills` stay where they are. A project whose folder was moved or renamed shows **Folder not found · Locate…** in the sidebar; pick the new folder and its chats and memory follow.
+
+**The phone page could break after a relay update, and was too short on iPhone.**
+A page left open while the relay is redeployed now reloads into the new version instead of failing to open chats (earlier page files are kept for 30 days). Opened from the iPhone home screen, the app uses the full screen height. The relay is rate-limited per IP (60 connections and 10 new rooms a minute) and each phone connection is capped at 300 messages per 10 seconds.
+
+**Smaller changes**
+- The composer's text box has a drag handle to resize it (remembered per device; double-click resets).
+- **Edit** on a queued message moves it back into an empty composer, or opens an edit window when the composer already has a draft.
+- Explorer rows (right-click, or the project header) offer **Open in** your installed editors, **Open with default app**, **Reveal in Finder**, **Copy relative path**, **Rename** and **Move to Trash**.
+- The working indicator sits in the same logo box as the agent logos.
+- In Code mode the composer no longer shows the Compact chip; the context ring opens the Info panel, where Compact is.
 
 ---
 
@@ -80,7 +120,7 @@ Shared guidance is delivered cleanly via native ACP `systemPrompt` options (or `
 - **Minimal collapsible `WorkGroup` timeline:** Consecutive thoughts, reads, edits, searches, MCP calls, sub-agents, and plan updates fold into a calm monochrome timeline with live volcano progress indicators — while immediately surfacing pending permission approvals so nothing blocks unseen.
 - **Calm, readable output:** Static syntax highlighting in `BASH`, `RESULT`, read/edit/write and diff boxes — TypeScript, TSX, Python, JSON, shell and more — with dim line-number gutters that never leak into copied text.
 - **In-chat media viewer & Add to message:** Click any image or video in a chat to open it in place with gallery arrows, wheel/pinch zoom, pan, download, and *Open in panel*. **Add to message** puts any chat file back into the composer without re-uploading it.
-- **Context ring & Compact:** A quiet ring colour-codes how full the context is (green → yellow → red), with one-click `/compact` when the agent advertises the command.
+- **Context ring & Compact:** A quiet ring colour-codes how full the context is (green → yellow → red), with one-click `/compact` when the agent advertises the command. In Code mode the ring opens the Info panel, where Compact lives.
 - **Send-while-busy queue & mid-turn steering:** Keep typing while an agent is working. Queue follow-up messages with edit/remove controls and delivery ticks, or steer active turns directly on agents supporting `_session/steering`.
 - **`/` Slash command palette & boolean config pills:** Autocomplete agent-advertised slash commands (`/review`, `/compact`, `/init`, `/model`, `/status`, `/mcp`), toggle boolean session modes (`Fast mode`, `Ultracode`), and attach screenshots, PDFs, Office documents, audio, or videos with QuickLook previews.
 
@@ -110,7 +150,7 @@ Every chat connects to Olympus Coder's built-in localhost MCP server (`olympus`)
 - **CodeMirror 6 Editor & Appearance Studio:** Multi-tab code editor with six syntax themes plus Auto (dark/light), Markdown/Mermaid/KaTeX split preview, relative line numbers, ligatures, column ruler, and unsaved-buffer awareness over ACP Client FS so agents read your latest in-memory edits without overwriting them silently.
 - **Per-turn Shadow-Git Checkpoints:** Before each prompt, Olympus snapshots your working tree into a separate shadow Git store (Electron's `userData/checkpoints/`), giving you instant per-turn file diffs and 1-click **Undo / Redo** without polluting your repository's `.git` history.
 - **Integrated Git Client:** Stage, unstage, discard hunks, inspect side-by-side diffs, commit, amend, push, pull, manage branches, merge, and stash directly from the Workbench.
-- **WebGL Terminals, Test Runner & Port Manager:** Multi-tab `node-pty` + `@xterm/addon-webgl` terminals with `⌘F` search, error-line stepping, auto-detected 1-click **Run Tests** (*Rerun failed* / *Ask agent to fix*), `EADDRINUSE` port inspection & kill controls, background job completion wake-ups, and an embedded localhost **Web Preview** that captures browser console errors for the agent.
+- **WebGL Terminals, Test Runner & Port Manager:** Multi-tab `node-pty` + `@xterm/addon-webgl` terminals with `⌘F` search, error-line stepping, auto-detected 1-click **Run Tests** (*Rerun failed* / *Ask agent to fix*), `EADDRINUSE` port inspection & kill controls, optional messages to the agent when a background job finishes (off by default), and an embedded localhost **Web Preview** that captures browser console errors for the agent.
 - **Project Analytics Dashboard:** Track token usage, cache hit rates, agent wall-clock time, turns, lines added/removed, and cost breakdowns per project and per agent.
 
 ### 6. Responsive Phone UI & End-to-End Encrypted Relay
