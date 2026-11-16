@@ -14,7 +14,7 @@
 
 .cmd-term-title {
   font-family: var(--code-font) !important;
-  font-size: 12.2px;
+  font-size: calc(12.2px * var(--steps-scale, 1));
   line-height: 1.45;
   color: color-mix(in srgb, var(--text) 94%, transparent);
 }
@@ -31,7 +31,7 @@
 
 .cmd-comment {
   font-family: var(--code-font);
-  font-size: 11.4px;
+  font-size: calc(11.4px * var(--steps-scale, 1));
   color: color-mix(in srgb, var(--muted) 88%, transparent);
   font-weight: 420;
 }
@@ -43,7 +43,7 @@
 
 .cmd-box-label {
   font-family: var(--code-font);
-  font-size: 10.6px;
+  font-size: calc(10.6px * var(--steps-scale, 1));
   font-weight: 650;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -60,7 +60,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--code-font);
-  font-size: 11.4px;
+  font-size: calc(11.4px * var(--steps-scale, 1));
   color: var(--muted);
 }
 
@@ -96,7 +96,7 @@
 
 .inline-media-card {
   border: 1px solid var(--hairline, var(--border));
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--surface) 85%, var(--bg));
   overflow: hidden;
   max-width: 560px;
@@ -108,7 +108,7 @@
   gap: 6px;
   padding: 5px 8px 5px 10px;
   border-bottom: 1px solid var(--hairline, var(--border));
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--steps-scale, 1));
   min-width: 0;
 }
 
@@ -130,7 +130,7 @@
 }
 
 .inline-media-badge {
-  font-size: 10px;
+  font-size: calc(10px * var(--steps-scale, 1));
   font-weight: 650;
   padding: 1px 5px;
   border-radius: 4px;
@@ -140,7 +140,7 @@
 }
 
 .inline-media-size {
-  font-size: 10.8px;
+  font-size: calc(10.8px * var(--steps-scale, 1));
   flex: none;
 }
 

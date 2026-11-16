@@ -8,8 +8,10 @@
    ===================================================================================== */
 
 .tool-group.work-group {
-  --wg-row-h: 28px;
-  --wg-icon: 14px;
+  /* Row height and icon follow Settings → Appearance → Steps size (`--steps-scale`) and Density (`--wg-row-base`). */
+  --wg-row-base: 28px;
+  --wg-row-h: calc(var(--wg-row-base) * var(--steps-scale, 1));
+  --wg-icon: calc(14px * var(--steps-scale, 1));
   --wg-gap: 8px;
   --wg-ink: color-mix(in srgb, var(--text) 84%, var(--muted));
   --wg-quiet: var(--muted);
@@ -37,7 +39,7 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 13px;
+  font-size: calc(13px * var(--steps-scale, 1));
   color: var(--wg-quiet);
 }
 
@@ -64,8 +66,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  height: 20px;
-  line-height: 20px;
+  height: calc(20px * var(--steps-scale, 1));
+  line-height: calc(20px * var(--steps-scale, 1));
   overflow: hidden;
   min-width: 0;
 }
@@ -88,7 +90,7 @@
 .wg-single-target.mono,
 .wg-live-detail.mono {
   font-family: var(--code-font);
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
 }
 
 .work-group-head:hover .wg-headline,
@@ -105,7 +107,7 @@
 
 .wg-flag {
   flex: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
   color: var(--wg-quiet);
   white-space: nowrap;
 }
@@ -117,7 +119,7 @@
 .wg-time,
 .wg-plan-count {
   flex: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
   color: var(--wg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -168,6 +170,8 @@
 
 .wg-step-icon svg {
   display: block;
+  width: 100%;
+  height: 100%;
   stroke-width: 1.75;
 }
 
@@ -194,8 +198,8 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: calc(13px * var(--steps-scale, 1));
+  line-height: calc(18px * var(--steps-scale, 1));
 }
 
 .work-group-body .tool-row-head:hover {
@@ -222,7 +226,7 @@
   background: transparent;
   color: var(--wg-ink);
   font-family: var(--ui-font);
-  font-size: 13px;
+  font-size: calc(13px * var(--steps-scale, 1));
   font-weight: 450;
   letter-spacing: 0;
 }
@@ -233,9 +237,9 @@
 .work-group .work-group-body .tool-row-title.mono {
   min-width: 0;
   font-family: var(--ui-font);
-  font-size: 13px;
+  font-size: calc(13px * var(--steps-scale, 1));
   font-weight: 400;
-  line-height: 18px;
+  line-height: calc(18px * var(--steps-scale, 1));
   color: var(--wg-quiet);
   -webkit-line-clamp: 1;
   overflow: hidden;
@@ -247,7 +251,7 @@
 .work-group .work-group-body .tool-row-title.mono,
 .work-group .work-group-body .cmd-term-title {
   font-family: var(--code-font) !important;
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
 }
 
 .work-group-body .tool-sub-target {
@@ -272,7 +276,7 @@
 /* Right side: empty by default. Duration on hover (desktop), live timer while running, red exit code on failure. */
 .work-group-body .tool-dur {
   flex: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
   color: var(--wg-faint);
   font-family: var(--ui-font);
   visibility: hidden;
@@ -290,7 +294,7 @@
   border: none;
   background: transparent;
   font-family: var(--ui-font);
-  font-size: 12px;
+  font-size: calc(12px * var(--steps-scale, 1));
   font-weight: 450;
 }
 
@@ -341,7 +345,7 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  font-size: 0.91em;
+  font-size: calc(12.74px * var(--steps-scale, 1)); /* 0.91 of 14px chat text */
   font-style: normal;
 }
 
@@ -373,7 +377,7 @@
 
 @media (hover: none), (pointer: coarse) {
   .tool-group.work-group {
-    --wg-row-h: 34px;
+    --wg-row-h: max(34px, calc(34px * var(--steps-scale, 1)));
   }
 
   .work-group-body .tool-row-head > svg:last-child {
@@ -392,6 +396,6 @@
 /* Phones (also when the browser reports a fine pointer): touch-sized rows */
 @media (max-width: 600px) {
   .tool-group.work-group {
-    --wg-row-h: 34px;
+    --wg-row-h: max(34px, calc(34px * var(--steps-scale, 1)));
   }
 }

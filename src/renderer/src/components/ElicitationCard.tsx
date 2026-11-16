@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronRight, CircleCheck, CircleSlash, Clock, ExternalLink, Globe, Loader2, MessageCircleQuestionMark, X } from 'lucide-react';
+import { Check, ChevronRight, CircleCheck, CircleSlash, Clock, ExternalLink, Globe, Loader2, MessageCircleQuestionMark, ShieldCheck, X } from 'lucide-react';
 import type { ThreadItem } from '@shared/types';
 import { askQuestions, describeAnswer, fieldError, initialValue, parseElicitSchema, type ElicitField, type ElicitOption, type ElicitValue } from '@shared/elicitation';
 import { api } from '../api';
@@ -16,7 +16,10 @@ type Values = Record<string, ElicitValue | undefined>;
  */
 export function ElicitationCard({ item, threadId, agentName, compact }: { item: AskItem; threadId: string; agentName: string; compact?: boolean }) {
   const waitingOnLink = item.mode === 'url' && item.resolved === 'accepted' && !item.completed;
-  if (item.resolved && !waitingOnLink) return <AnsweredCard item={item} agentName={agentName} compact={compact} />;
+  // Olympus Coder's own confirm cards (e.g. an agent asked to add an agent) speak for the app, not the agent.
+  const from = item.confirm ? 'Olympus Coder' : agentName;
+  if (item.resolved && !waitingOnLink) return <AnsweredCard item={item} agentName={from} compact={compact} />;
+  if (item.confirm) return <ConfirmCard item={item} threadId={threadId} compact={compact} />;
   return item.mode === 'url' ? <UrlCard item={item} threadId={threadId} agentName={agentName} compact={compact} /> : <FormCard item={item} threadId={threadId} agentName={agentName} compact={compact} />;
 }
 
@@ -250,6 +253,56 @@ function Field({ field: f, value, error, onChange, onEnter }: { field: ElicitFie
   );
 }
 
+// ------------------------------------------------------------------ Olympus confirm
+
+/** Olympus asks the user to approve an action an agent requested: what will happen, the exact command, yes / cancel. */
+function ConfirmCard({ item, threadId, compact }: { item: AskItem; threadId: string; compact?: boolean }) {
+  const c = item.confirm!;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const act = async (action: 'accept' | 'decline' | 'cancel') => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await send(threadId, item, action);
+    } catch (e) {
+      setError(errText(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={`elicit confirm ${compact ? 'compact' : ''}`} data-testid="elicit-card" data-mode="confirm">
+      <div className="elicit-head">
+        <ShieldCheck size={15} className="elicit-icon" />
+        <span className="grow ellipsis">Olympus Coder needs your OK</span>
+      </div>
+      <div className="elicit-message">{c.title}</div>
+      <dl className="confirm-rows">
+        {c.rows.map((r, i) => (
+          <div key={i} className="confirm-row">
+            <dt>{r.label}</dt>
+            <dd className={r.code ? 'confirm-code' : undefined}>{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {error && (
+        <div className="elicit-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="elicit-actions">
+        <button type="button" className={`btn small ${c.danger ? 'danger-solid' : 'primary'}`} onClick={() => void act('accept')} disabled={busy} data-testid="confirm-yes">
+          {busy ? <Loader2 size={13} className="spin" /> : null} {c.action}
+        </button>
+        <button type="button" className="btn ghost small" onClick={() => void act('decline')} disabled={busy} data-testid="confirm-no">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ URL mode
 
 const hostOf = (url: string) => {
@@ -326,13 +379,14 @@ function AnsweredCard({ item, agentName, compact }: { item: AskItem; agentName: 
   let icon = <CircleCheck size={14} className="ok-text" />;
   let outcome: string;
   if (item.resolved === 'accepted') {
-    if (item.mode === 'url') outcome = 'Link opened · done';
+    if (item.confirm) outcome = 'Approved';
+    else if (item.mode === 'url') outcome = 'Link opened · done';
     else if (lines.length === 1) outcome = lines[0].value;
     else outcome = lines.length ? `${lines.length} answers sent` : 'Sent';
   } else {
     icon = item.resolved === 'expired' ? <Clock size={14} className="muted" /> : <CircleSlash size={14} className="muted" />;
     outcome =
-      item.resolved === 'declined' ? (item.mode === 'url' ? 'Declined' : 'Skipped') : item.resolved === 'withdrawn' ? 'No longer needed' : item.resolved === 'expired' ? 'Expired' : 'Dismissed';
+      item.resolved === 'declined' ? (item.mode === 'url' || item.confirm ? 'Declined' : 'Skipped') : item.resolved === 'withdrawn' ? 'No longer needed' : item.resolved === 'expired' ? 'Expired' : 'Dismissed';
   }
   const question = item.message || (item.mode === 'url' ? 'Open a link' : 'Question');
   return (
@@ -349,6 +403,16 @@ function AnsweredCard({ item, agentName, compact }: { item: AskItem; agentName: 
         <div className="elicit-detail">
           <div className="elicit-detail-from">{agentName} asked</div>
           {item.message && <div className="elicit-message">{item.message}</div>}
+          {item.confirm && (
+            <dl className="confirm-rows">
+              {item.confirm.rows.map((r, i) => (
+                <div key={i} className="confirm-row">
+                  <dt>{r.label}</dt>
+                  <dd className={r.code ? 'confirm-code' : undefined}>{r.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
           {item.mode === 'url' && item.url && (
             <div className="elicit-url" title={item.url}>
               <Globe size={13} className="muted" />

@@ -1,4 +1,4 @@
-import type { EditorSyntaxTheme, ThemePalette, ThemeSettings } from './types';
+import type { ChatWidth, EditorSyntaxTheme, StepsSize, ThemePalette, ThemeSettings } from './types';
 
 export interface ThemePreset {
   id: string;
@@ -69,6 +69,8 @@ export const DEFAULT_THEME: ThemeSettings = {
   thinkingItalic: true,
   thinkingOpacity: 70,
   thinkingSize: 95,
+  stepsSize: 'default',
+  chatWidth: 'default',
   editorFontFamily: '',
   editorFontSize: 0,
   editorFontWeight: 400,
@@ -100,6 +102,21 @@ export const DEFAULT_THEME: ThemeSettings = {
   terminalCursorBlink: true,
   terminalScrollback: 10000,
 };
+
+/** Steps text size as a factor of the chat text (Default = 13px rows next to 14px chat text). */
+export const STEPS_SIZES: { id: StepsSize; name: string; scale: number }[] = [
+  { id: 'smaller', name: 'Smaller', scale: 0.92 },
+  { id: 'default', name: 'Default', scale: 1 },
+  { id: 'larger', name: 'Larger', scale: 1.12 },
+  { id: 'largest', name: 'Largest', scale: 1.25 },
+];
+
+/** Max width of the chat column, composer, pills and banners. */
+export const CHAT_WIDTHS: { id: ChatWidth; name: string; px: number }[] = [
+  { id: 'narrow', name: 'Narrow', px: 680 },
+  { id: 'default', name: 'Default', px: 780 },
+  { id: 'wide', name: 'Wide', px: 960 },
+];
 
 export const UI_FONTS: { id: string; name: string; css: string }[] = [
   { id: 'system', name: 'System', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' },

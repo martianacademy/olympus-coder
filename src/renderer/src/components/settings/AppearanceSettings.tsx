@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Code2, MessageSquareText, Palette, RotateCcw, SquareTerminal } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
+import { Brain, ChevronDown, Code2, FileText, MessageSquareText, Palette, RotateCcw, SquareTerminal } from 'lucide-react';
 import { THEME_TOKENS, type ThemeSettings, type ThemeToken } from '@shared/types';
-import { CODE_FONTS, DEFAULT_THEME, resolvePalette, THEME_PRESETS, UI_FONTS } from '@shared/themes';
+import { CHAT_WIDTHS, CODE_FONTS, DEFAULT_THEME, resolvePalette, STEPS_SIZES, THEME_PRESETS, UI_FONTS } from '@shared/themes';
 import { setExpandSteps, setWrapLines, useExpandSteps } from '../../prefs';
 import { EditorSettingsSection, TerminalSettingsSection } from './EditorSettingsPanel';
 
@@ -203,7 +203,7 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               <label>Density</label>
               <div className="seg">
                 {(['comfortable', 'compact'] as const).map((d) => (
-                  <button key={d} className={theme.density === d ? 'active' : ''} onClick={() => set({ density: d })}>
+                  <button key={d} data-density-option={d} className={t.density === d ? 'active' : ''} onClick={() => set({ density: d })}>
                     {d === 'comfortable' ? 'Comfortable' : 'Compact'}
                   </button>
                 ))}
@@ -236,6 +236,16 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
             <div className="field grow">
               <label>Line spacing: {t.lineHeight?.toFixed(2)}</label>
               <input type="range" min={1.3} max={2} step={0.05} value={t.lineHeight} onChange={(e) => set({ lineHeight: Number(e.target.value) })} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Chat width</label>
+            <div className="seg" data-testid="chat-width">
+              {CHAT_WIDTHS.map((w) => (
+                <button key={w.id} className={t.chatWidth === w.id ? 'active' : ''} onClick={() => set({ chatWidth: w.id })}>
+                  {w.name}
+                </button>
+              ))}
             </div>
           </div>
           <h4 className="settings-sub">Thinking &amp; tool steps</h4>
@@ -273,6 +283,16 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               <input type="range" min={80} max={100} step={5} value={t.thinkingSize} onChange={(e) => set({ thinkingSize: Number(e.target.value) })} />
             </div>
           </div>
+          <div className="field">
+            <label>Steps &amp; tool output size</label>
+            <div className="seg" data-testid="steps-size">
+              {STEPS_SIZES.map((s) => (
+                <button key={s.id} className={t.stepsSize === s.id ? 'active' : ''} onClick={() => set({ stepsSize: s.id })}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="appearance-preview">
             <div className="small muted" style={{ marginBottom: 6 }}>
               Preview
@@ -283,6 +303,7 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               </p>
             </div>
             <div className="thought msg-agent">Thinking looks like this — quieter, so the answer stands out.</div>
+            <StepsPreview />
           </div>
         </>
       )}
@@ -301,5 +322,38 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
         </button>
       </div>
     </>
+  );
+}
+
+/** A static, non-interactive copy of a settled WorkGroup (same classes), so Steps size changes show live. */
+function StepsPreview() {
+  const rows: { icon: ReactNode; verb: string; target: string; mono?: boolean }[] = [
+    { icon: <Brain size={14} />, verb: 'Thought', target: 'Read the entry file first' },
+    { icon: <FileText size={14} />, verb: 'Read', target: 'src/app.ts' },
+    { icon: <SquareTerminal size={14} />, verb: 'Ran', target: 'npm test', mono: true },
+  ];
+  return (
+    <div className="tool-group work-group appearance-steps-preview" aria-hidden="true" data-testid="steps-preview">
+      <div className="tool-group-head work-group-head">
+        <span className="grow wg-settled-title">
+          <span className="wg-headline">Worked for 28s</span>
+          <span className="wg-detail wg-part"> · 1 command, 1 file read</span>
+        </span>
+        <ChevronDown size={14} className="wg-chev" />
+      </div>
+      <div className="tool-group-body work-group-body">
+        {rows.map((r) => (
+          <div key={r.verb} className="wg-step wg-step-done">
+            <span className="wg-step-icon">{r.icon}</span>
+            <div className="tool-row">
+              <div className="tool-row-head">
+                <span className="tool-badge wg-verb">{r.verb}</span>
+                <span className={`grow ellipsis tool-row-title ${r.mono ? 'mono cmd-term-title' : 'human'}`}>{r.target}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

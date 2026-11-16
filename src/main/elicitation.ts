@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { RequestError } from '@agentclientprotocol/sdk/unstable';
 import { cleanContent, parseElicitSchema, type ElicitContent, type ElicitSchema } from '@shared/elicitation';
-import type { ElicitResolution, ThreadItem } from '@shared/types';
+import type { ConfirmRequest, ElicitResolution, ThreadItem } from '@shared/types';
 
 /**
  * ACP elicitations: the agent asks the user something (`elicitation/create`). Claude Code sends its
@@ -28,6 +28,8 @@ export interface ElicitHost {
   runtimes: () => Iterable<ElicitRuntime>;
   addItem: (rt: ElicitRuntime, item: ThreadItem) => void;
   pushItem: (rt: ElicitRuntime, item: ThreadItem) => void;
+  /** The runtime of a chat by thread id (created if needed), for questions Olympus itself asks. */
+  forThread?: (threadId: string) => ElicitRuntime;
   log?: (msg: string) => void;
 }
 
@@ -91,6 +93,42 @@ export async function createElicitation(params: any, signal?: AbortSignal): Prom
         h.pushItem(rt, item);
       }
       resolve(r);
+    });
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Olympus Coder itself asks the user in a chat to approve an action (e.g. an agent's add_agent tool call). The same
+ * question card as an agent's elicitation, so it shows on the phone too and is never answered by "Approve all" or a
+ * bypass mode. Resolves true only when the user approves; Stop, dismiss, decline or `signal` give false.
+ */
+export async function confirmInThread(threadId: string, confirm: ConfirmRequest, signal?: AbortSignal): Promise<boolean> {
+  const h = host;
+  if (!h?.forThread) throw new Error('Olympus Coder cannot ask in this chat right now.');
+  const rt = h.forThread(threadId);
+  if (signal?.aborted) return false;
+  const item: ElicitItem = {
+    kind: 'elicitation',
+    id: randomUUID(),
+    agentId: rt.agentId,
+    mode: 'form',
+    message: confirm.title,
+    schema: { type: 'object', properties: {} },
+    confirm,
+    ts: Date.now(),
+  };
+  h.addItem(rt, item);
+  return new Promise((resolve) => {
+    const onAbort = () => rt.pendingElicits.get(item.id)?.({ action: 'cancel' }, 'withdrawn');
+    rt.pendingElicits.set(item.id, (r, why) => {
+      rt.pendingElicits.delete(item.id);
+      signal?.removeEventListener('abort', onAbort);
+      if (!item.resolved) {
+        item.resolved = why ?? (r.action === 'accept' ? 'accepted' : r.action === 'decline' ? 'declined' : 'cancelled');
+        h.pushItem(rt, item);
+      }
+      resolve(r.action === 'accept');
     });
     signal?.addEventListener('abort', onAbort, { once: true });
   });

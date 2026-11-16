@@ -40,6 +40,8 @@ export interface ChatComposerProps {
   allStatuses?: Record<string, AgentStatus>;
   onLogin: () => void;
   onUsage?: () => void;
+  /** Compact chip next to the context ring (Code mode has it in the Info panel instead). */
+  compactInComposer?: boolean;
   onSwitchAgent?: (agentId: string) => void;
   onAutoApprove?: (on: boolean) => void;
   onSendingChange: (sending: boolean) => void;
@@ -203,7 +205,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               ≈ {estimateTokens(text).toLocaleString()} tokens
             </span>
           )}
-          <CompactButton threadId={threadId} session={session} compacting={Boolean(props.compacting)} queue={queue} variant="chip" />
+          {props.compactInComposer !== false && (
+            <CompactButton threadId={threadId} session={session} compacting={Boolean(props.compacting)} queue={queue} variant="chip" />
+          )}
           <ContextMeter usage={session?.usage} onClick={props.onUsage} />
           <div className="composer-send">
             {running && (

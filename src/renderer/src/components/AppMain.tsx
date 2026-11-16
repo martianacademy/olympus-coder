@@ -202,6 +202,7 @@ export function AppMain(props: AppMainProps) {
           onFork={props.onForkActive}
           onOpenThread={props.onOpenThread}
           onUsage={() => (mode === 'code' && codeWorkbench ? props.onOpenInfoWorkbench() : props.onSetPage('usage'))}
+          compactInComposer={!(mode === 'code' && codeWorkbench)}
           allStatuses={agents.statuses}
           onSwitchAgent={props.onPickAgent}
           onAutoApprove={props.onAutoApprove}

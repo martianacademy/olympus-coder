@@ -81,6 +81,8 @@ export function AgentCatalog({ autoAdd, onChanged }: { autoAdd?: boolean; onChan
   useEffect(() => {
     void load();
     return onEvent((ch, p) => {
+      // An agent's add_agent / remove_agent tool changed the list: show it as added / not added.
+      if (ch === 'agents:changed') void api.catalog().then(setItems);
       if (ch !== 'catalog:progress') return;
       if (p.phase === 'download') setBusy((b) => ({ ...b, [p.id]: p.total ? `Downloading ${Math.round(((p.received ?? 0) / p.total) * 100)}%` : `Downloading ${((p.received ?? 0) / 1e6).toFixed(1)} MB` }));
       if (p.phase === 'verify') setBusy((b) => ({ ...b, [p.id]: 'Verifying…' }));

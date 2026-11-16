@@ -1,7 +1,7 @@
 /* Rows for ACP session updates beyond messages and tools: notices, context compaction, plan documents. */
 
 /* ---- notice: one quiet line; only warnings and errors get a faint tint */
-.acp-notice { display: flex; gap: 9px; align-items: flex-start; min-width: 0; max-width: 100%; padding: 7px 11px; border-radius: 10px; font-size: 13px; line-height: 1.5; background: color-mix(in srgb, var(--text) 3%, transparent); user-select: text; animation: rise-in .22s var(--ease); }
+.acp-notice { display: flex; gap: 9px; align-items: flex-start; min-width: 0; max-width: 100%; padding: 7px 11px; border-radius: 10px; font-size: calc(13px * var(--ui-scale, 1)); line-height: 1.5; background: color-mix(in srgb, var(--text) 3%, transparent); user-select: text; animation: rise-in .22s var(--ease); }
 .acp-notice-icon { flex: none; margin-top: 3px; color: var(--muted); }
 .acp-notice.sev-warning { background: color-mix(in srgb, var(--warning) 7%, transparent); }
 .acp-notice.sev-warning .acp-notice-icon { color: var(--warning); }
@@ -13,31 +13,31 @@
 
 /* ---- compaction: a divider-like row, summary on demand */
 .compaction { min-width: 0; max-width: 100%; animation: rise-in .22s var(--ease); }
-.compaction-head { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--muted); text-align: left; }
+.compaction-head { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 2px 0; border: 0; background: none; font: inherit; font-size: calc(12.5px * var(--ui-scale, 1)); color: var(--muted); text-align: left; }
 .compaction-head::after { content: ''; flex: 1; min-width: 12px; border-top: 1px solid var(--hairline); margin-left: 4px; }
 button.compaction-head { cursor: pointer; }
 button.compaction-head:hover { color: var(--text); }
 .compaction-icon { display: inline-flex; flex: none; }
-.compaction-meta { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; opacity: .8; }
+.compaction-meta { flex: none; font-size: calc(11px * var(--ui-scale, 1)); font-variant-numeric: tabular-nums; opacity: .8; }
 .compaction-chev { flex: none; }
 .compaction.s-failed .compaction-icon { color: var(--danger); }
-.compaction-error { margin: 2px 0 0 20px; font-size: 12px; color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.compaction-summary { margin: 6px 0 2px 6px; padding: 2px 0 2px 13px; border-left: 2px solid var(--hairline); font-size: 13px; color: color-mix(in srgb, var(--text) 82%, var(--muted)); max-height: 360px; overflow: auto; }
+.compaction-error { margin: 2px 0 0 20px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--danger); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.compaction-summary { margin: 6px 0 2px 6px; padding: 2px 0 2px 13px; border-left: 2px solid var(--hairline); font-size: calc(13px * var(--ui-scale, 1)); color: color-mix(in srgb, var(--text) 82%, var(--muted)); max-height: 360px; overflow: auto; }
 
 /* ---- plan document */
 .plan-doc { min-width: 0; max-width: 100%; }
-.plan-doc-head { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 28px; font-size: 12px; color: var(--muted); }
+.plan-doc-head { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 28px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); }
 .plan-doc-icon { flex: none; color: var(--accent); }
 .plan-doc-label { font-weight: 650; color: var(--text); }
 .plan-doc-from { min-width: 0; }
 .plan-doc-toggle { flex: none; color: var(--muted); padding: 4px; }
 .plan-doc-body { margin-top: 2px; padding: 2px 0 2px 14px; border-left: 2px solid color-mix(in srgb, var(--accent) 35%, var(--hairline)); min-width: 0; overflow-wrap: anywhere; }
-.plan-doc-file { display: flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; margin-top: 2px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: 9px; background: transparent; font: inherit; font-size: 13px; color: var(--text); text-align: left; cursor: pointer; }
+.plan-doc-file { display: flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; margin-top: 2px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: 9px; background: transparent; font: inherit; font-size: calc(13px * var(--ui-scale, 1)); color: var(--text); text-align: left; cursor: pointer; }
 .plan-doc-file:hover { background: var(--hover); }
 .plan-doc-file.is-static { cursor: default; }
 .plan-doc-file > svg { flex: none; color: var(--muted); }
 .plan-doc-file-name { font-weight: 550; min-width: 0; flex: none; max-width: 60%; }
-.plan-doc-file-path { min-width: 0; font-size: 11.5px; color: var(--muted); font-family: var(--code-font); }
+.plan-doc-file-path { min-width: 0; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); font-family: var(--code-font); }
 
 /* ---- a user message that came from the agent's session */
 .msg-via-agent .msg-user { background: var(--surface); border-color: var(--hairline); border-style: dashed; }

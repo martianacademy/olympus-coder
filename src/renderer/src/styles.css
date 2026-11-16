@@ -1,7 +1,7 @@
 :root {
   --bg: #f7f7f8; --panel: #efeff1; --surface: #fff; --border: #e1e1e5; --text: #1c1c21; --muted: #6b6b76;
   --accent: #d97757; --accentText: #fff; --danger: #e5484d; --success: #30a46c; --warning: #f5a524; --code: #f1f1f3;
-  --font-size: 14px; --radius: 10px; --pad: 12px;
+  --font-size: 14px; --radius: 10px; --ui-scale: 1; --steps-scale: 1; --steps-factor: 1; --chat-width: 780px;
   --ui-font: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --code-font: "SF Mono", ui-monospace, Menlo, monospace;
 }
@@ -816,7 +816,7 @@ html:not([data-platform='darwin']) .app.sb-collapsed .main-head { padding-left: 
 
 
 /* "working" in the app's look: the volcano mark erupting + code tokens streaming (as on the loading screen) */
-.working-brand { display: flex; align-items: center; gap: 10px; padding: 8px 2px 14px; font-size: 13px; color: var(--muted); min-width: 0; contain: layout paint; }
+.working-brand { display: flex; align-items: center; gap: 10px; padding: 8px 2px 14px; font-size: calc(13px * var(--ui-scale, 1)); color: var(--muted); min-width: 0; contain: layout paint; }
 /* Long chats: older history is behind a button, and offscreen tool groups skip layout/paint until scrolled to. */
 .chat-older-wrap { display: flex; justify-content: center; margin: 4px 0 12px; }
 .chat-load-older { gap: 6px; color: var(--muted); }
@@ -928,11 +928,13 @@ body { font-weight: var(--text-weight, 400); }
 b, strong, .msg-agent h1, .msg-agent h2, .msg-agent h3, .msg-agent h4, .msg-agent th, .main-head .title, .project-head .project-name, .tasks-role { font-weight: var(--bold-weight, 600) !important; }
 .msg-agent, .msg-user { font-size: var(--chat-size, 1em); line-height: var(--line-height, 1.65); }
 .msg-agent .codeblock pre, .msg-agent pre, .tool-body pre, .run-tail { font-size: var(--code-size, 12.5px) !important; }
+.tool-body pre.step-box-pre { font-size: calc(var(--code-size, 12.5px) * var(--steps-factor, 1)) !important; }
 .msg-agent :not(pre) > code { font-size: calc(var(--code-size, 12.5px) * 1.02); }
 .thought.msg-agent { font-style: var(--thinking-style, italic); font-size: var(--thinking-size, .95em); color: color-mix(in srgb, var(--text) var(--thinking-opacity, 70%), transparent); }
 .settings-sub { margin: 18px 0 4px; font-size: .78em; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .appearance-preview { margin-top: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 6px; user-select: text; }
 .appearance-preview .msg-agent p { margin: 0; }
+.appearance-steps-preview { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--hairline); pointer-events: none; animation: none; }
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 
 /* a session talking to its sub-sessions, as conversation lines */

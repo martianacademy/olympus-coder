@@ -319,8 +319,19 @@ export type ThreadItem =
       answer?: ElicitContent;
       /** URL mode: the agent reported the flow behind the link finished. */
       completed?: boolean;
+      /** Olympus Coder itself asks the user to approve an action an agent requested (e.g. adding an agent). */
+      confirm?: ConfirmRequest;
       ts: number;
     };
+
+/** What an Olympus-owned confirm card shows: a title, labelled rows (commands in monospace) and the yes button. */
+export interface ConfirmRequest {
+  title: string;
+  rows: { label: string; value: string; code?: boolean }[];
+  /** Label of the approve button, e.g. "Add agent". */
+  action: string;
+  danger?: boolean;
+}
 
 export type ElicitResolution = 'accepted' | 'declined' | 'cancelled' | 'withdrawn' | 'expired';
 
@@ -409,6 +420,8 @@ export type EditorCursorStyle = 'line' | 'block' | 'underline';
 export type EditorCursorBlink = 'blink' | 'smooth' | 'solid';
 export type EditorSurface = 'surface' | 'code' | 'bg';
 export type TerminalCursorStyle = 'bar' | 'block' | 'underline';
+export type StepsSize = 'smaller' | 'default' | 'larger' | 'largest';
+export type ChatWidth = 'narrow' | 'default' | 'wide';
 
 export interface ThemeSettings {
   preset: string;
@@ -431,6 +444,10 @@ export interface ThemeSettings {
   thinkingItalic?: boolean;
   thinkingOpacity?: number;
   thinkingSize?: number;
+  /** Text size of the steps between replies (WorkGroup rows, BASH / RESULT and file boxes), relative to chat text. */
+  stepsSize?: StepsSize;
+  /** Width of the chat column, composer and banners. */
+  chatWidth?: ChatWidth;
 
   // ---------- code editor customization ----------
   /** Dedicated editor font family ('' = follow `codeFont`). */
@@ -740,6 +757,8 @@ export interface DeskEvents {
   'terminal:changed': { projectId: string };
   'schedules:changed': ScheduledTask[];
   'catalog:progress': { id: string; phase: 'download' | 'verify' | 'extract' | 'done' | 'error'; received?: number; total?: number; error?: string };
+  /** An agent was added or removed outside the Settings screen (e.g. by an agent's add_agent tool). */
+  'agents:changed': { defs: AgentDef[]; statuses: AgentStatus[] };
 }
 
 // ---------- code mode: files, git, terminals ----------

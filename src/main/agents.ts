@@ -113,7 +113,6 @@ export const setEmitter = (fn: Emit) => {
 // ------------------------------------------------------------------ registry
 
 const adapter = (pkg: string) => join(app.getAppPath(), 'node_modules', '@agentclientprotocol', pkg, 'dist', 'index.js');
-const olympusCliScript = () => process.env.OLYMPUS_CLI_SCRIPT || join(app.getAppPath(), 'out', 'main', 'olympus-cli.js');
 
 /**
  * Claude Code and Codex adapters drive the real CLI. Use the one the user installed (so the installer can leave
@@ -152,10 +151,12 @@ export function builtinAgents(): AgentDef[] {
       name: 'Olympus',
       badge: 'OL',
       color: '#f97316',
-      description: 'Olympus native multi-model coding agent — connect 500+ models via one OpenRouter / AI Gateway / OpenAI-compatible key or local Ollama.',
+      description: 'Olympus CLI (oly acp) — connect 500+ models via one OpenRouter, AI Gateway, OpenAI-compatible key, or local Ollama.',
       builtin: true,
-      command: '@node',
-      args: [olympusCliScript(), 'acp'],
+      command: process.env.OLYMPUS_CLI_BIN || 'oly',
+      args: ['acp'],
+      detectBinary: process.env.OLYMPUS_CLI_BIN || 'oly',
+      installHint: 'Install Olympus CLI (oly) on your PATH or in ~/.agents/bin/oly',
     },
     {
       id: 'claude',
@@ -714,8 +715,10 @@ export function terminalLoginSpec(agentId: string, methodId: string) {
     return { ...s, env };
   }
   if (c.def.id === 'olympus' && m.terminalArgs?.length) {
-    const base = { OLYMPUS_SHARED_DIR: sharedRoot(), ...(c.def.env ?? {}), ...c.secretEnv(), ...(m.terminalEnv ?? {}), ELECTRON_RUN_AS_NODE: '1', TERM: 'xterm-256color' };
-    return { command: process.execPath, args: [olympusCliScript(), ...m.terminalArgs], env: agentEnv(base) };
+    const cmd = which(c.def.command) ?? c.def.command;
+    const s = spawnable(cmd, m.terminalArgs);
+    const base = { OLYMPUS_SHARED_DIR: sharedRoot(), ...(c.def.env ?? {}), ...c.secretEnv(), ...(m.terminalEnv ?? {}), TERM: 'xterm-256color' };
+    return { ...s, env: agentEnv(base) };
   }
   const spec = c.spawnSpec(m.terminalArgs ?? []);
   return { ...spec, env: { ...spec.env, ...(m.terminalEnv ?? {}), TERM: 'xterm-256color' } };
@@ -851,6 +854,7 @@ initElicitations({
   runtimes: () => runtimes.values(),
   addItem: (rt, item) => addItem(rt as Runtime, item),
   pushItem: (rt, item) => pushItem(rt as Runtime, item),
+  forThread: (threadId) => runtimeFor(threadId),
   log: (msg) => console.warn(msg),
 });
 
@@ -1703,6 +1707,13 @@ export function runState(threadId: string): { running: boolean; status: SessionV
   return { running: Boolean(rt?.running), status: rt?.status ?? 'idle', error: rt?.error, pendingPermissions: (rt?.pendingPerms.size ?? 0) + (rt?.pendingElicits.size ?? 0) };
 }
 
+/** Chats (main or sub-session) running this agent right now or waiting on the user, e.g. before removing it. */
+export function chatsUsingAgent(agentId: string): string[] {
+  return [...runtimes.values()]
+    .filter((rt) => !rt.scratch && rt.agentId === agentId && (rt.running || rt.pendingPerms.size > 0 || rt.pendingElicits.size > 0))
+    .map((rt) => rt.thread.id);
+}
+
 /** A spawned sub-session starts with its parent's agent settings (mode, model, effort…) when it runs the same agent. */
 /** Switches a chat to its agent's read-only / plan mode when it has one (Claude "plan", Codex "read-only" …). */
 export async function preferReadOnlyMode(threadId: string): Promise<boolean> {
@@ -1977,6 +1988,10 @@ const OLYMPUS_LABEL: Record<string, string> = {
   save_schedule: 'Save scheduled task',
   delete_schedule: 'Delete scheduled task',
   run_schedule: 'Run scheduled task',
+  search_agent_registry: 'Search agent registry',
+  add_agent: 'Add agent',
+  add_custom_agent: 'Add custom agent',
+  remove_agent: 'Remove agent',
   remember_about_user: 'Learned about you',
 };
 /** Readable titles for the app's own `olympus` tools, e.g. "Spawn sub-session: Add retry to fetchUser". */
@@ -2388,6 +2403,11 @@ const OLYMPUS_TOOLS = [
   'save_schedule',
   'delete_schedule',
   'run_schedule',
+  // These four change the agent list, but Olympus asks the user itself first (a confirm card in the chat).
+  'search_agent_registry',
+  'add_agent',
+  'add_custom_agent',
+  'remove_agent',
 ];
 
 /**

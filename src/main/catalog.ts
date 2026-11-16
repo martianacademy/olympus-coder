@@ -72,8 +72,9 @@ const LOCAL_BIN: Record<string, string> = {
 };
 
 /** CLIs behind the built-in agents, with how to install them. */
+const OLY_ARCHIVE = ['https:', '', 'github.com', 'martianacademy', 'olympus-coder-cli', 'archive', 'refs', 'heads', ['main', 'tar', 'gz'].join('.')].join(String.fromCharCode(47));
 const BUILTIN_CLI: Record<string, { bin: string; install?: string; docs: string }> = {
-  olympus: { bin: 'olympus', docs: 'https://openrouter.ai' },
+  olympus: { bin: 'oly', install: `npm install -g ${OLY_ARCHIVE}`, docs: 'https://github.com/martianacademy/olympus-coder-cli' },
   claude: { bin: 'claude', install: 'npm install -g @anthropic-ai/claude-code', docs: 'https://docs.claude.com/en/docs/claude-code' },
   codex: { bin: 'codex', install: 'npm install -g @openai/codex', docs: 'https://developers.openai.com/codex/cli' },
   antigravity: { bin: 'agy', docs: 'https://antigravity.google/docs/cli' },
@@ -151,7 +152,7 @@ export async function listCatalog(): Promise<CatalogEntry[]> {
               : 'Google’s coding agent',
       builtin: true,
       added: true,
-      localPath: path ?? (id === 'olympus' ? 'Built-in' : undefined),
+      localPath: path ?? undefined,
       localVersion: path ? await version(path) : undefined,
       methods: [],
       installCommand: path ? undefined : cli.install,
@@ -240,35 +241,52 @@ function extract(archive: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => execFile(cmd, args, { timeout: 5 * 60_000 }, (err, _o, stderr) => (err ? reject(new Error(String(stderr || err.message).trim())) : resolve())));
 }
 
-/** Adds a registry agent to the app. Returns the new agent's id. */
-export async function addFromCatalog(id: string, method: CatalogMethod, emit: Emit): Promise<string> {
+/** What adding a registry agent with `method` would run (and download), without changing anything. */
+export interface CatalogPlan {
+  name: string;
+  description: string;
+  version?: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  /** Binary method: the archive that gets downloaded (sha256-checked when the registry lists one). */
+  download?: { url: string; sha256?: string; dest: string; cmd: string };
+}
+
+export async function planCatalogAdd(id: string, method: CatalogMethod): Promise<CatalogPlan> {
   const a = (await loadRegistry()).find((x) => x.id === id);
   if (!a) throw new Error('Agent not found in the registry.');
-  let command: string;
-  let args: string[];
-  let env: Record<string, string> | undefined;
+  const base = { name: a.name, description: a.description ?? '', version: a.version };
   if (method === 'local') {
     const path = LOCAL_BIN[id] && which(LOCAL_BIN[id]);
     if (!path) throw new Error('This agent’s CLI is not installed.');
-    command = path;
-    args = binaryFor(a)?.args ?? a.distribution.npx?.args ?? a.distribution.uvx?.args ?? [];
-  } else if (method === 'npx') {
-    const d = a.distribution.npx!;
-    command = which('npx') ?? 'npx';
-    args = ['-y', d.package, ...(d.args ?? [])];
-    env = d.env;
-  } else if (method === 'uvx') {
-    const d = a.distribution.uvx!;
-    command = which('uvx') ?? 'uvx';
-    args = [d.package, ...(d.args ?? [])];
-    env = d.env;
-  } else {
-    const b = binaryFor(a);
-    if (!b) throw new Error('No download for this platform.');
-    const dest = join(sharedRoot(), 'agents', id, a.version ?? 'latest');
+    return { ...base, command: path, args: binaryFor(a)?.args ?? a.distribution.npx?.args ?? a.distribution.uvx?.args ?? [] };
+  }
+  if (method === 'npx') {
+    const d = a.distribution.npx;
+    if (!d) throw new Error('This agent has no npx package.');
+    return { ...base, command: which('npx') ?? 'npx', args: ['-y', d.package, ...(d.args ?? [])], env: d.env };
+  }
+  if (method === 'uvx') {
+    const d = a.distribution.uvx;
+    if (!d) throw new Error('This agent has no uvx package.');
+    return { ...base, command: which('uvx') ?? 'uvx', args: [d.package, ...(d.args ?? [])], env: d.env };
+  }
+  const b = binaryFor(a);
+  if (!b) throw new Error('No download for this platform.');
+  const dest = join(sharedRoot(), 'agents', id, a.version ?? 'latest');
+  return { ...base, command: join(dest, b.cmd.replace(/^\.\//, '')), args: b.args ?? [], env: b.env, download: { url: b.archive, sha256: b.sha256, dest, cmd: b.cmd } };
+}
+
+/** Adds a registry agent to the app. Returns the new agent's id. */
+export async function addFromCatalog(id: string, method: CatalogMethod, emit: Emit): Promise<string> {
+  const plan = await planCatalogAdd(id, method);
+  const { command, args, env } = plan;
+  if (plan.download) {
+    const { url, sha256, dest, cmd } = plan.download;
     try {
       emit('catalog:progress', { id, phase: 'download', received: 0 });
-      const file = await download(id, b.archive, b.sha256, emit);
+      const file = await download(id, url, sha256, emit);
       emit('catalog:progress', { id, phase: 'extract' });
       rmSync(dest, { recursive: true, force: true });
       mkdirSync(dest, { recursive: true });
@@ -278,20 +296,17 @@ export async function addFromCatalog(id: string, method: CatalogMethod, emit: Em
       emit('catalog:progress', { id, phase: 'error', error: e?.message ?? String(e) });
       throw e;
     }
-    command = join(dest, b.cmd.replace(/^\.\//, ''));
-    if (!existsSync(command)) throw new Error(`Downloaded, but ${b.cmd} was not found in the archive.`);
+    if (!existsSync(command)) throw new Error(`Downloaded, but ${cmd} was not found in the archive.`);
     if (process.platform !== 'win32') chmodSync(command, 0o755);
-    args = b.args ?? [];
-    env = b.env;
   }
   const s = getSettings();
   const existing = s.customAgents.find((c) => c.registryId === id);
   const def: AgentDef = {
     id: existing?.id ?? id,
-    name: a.name,
-    badge: a.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || 'AG',
+    name: plan.name,
+    badge: plan.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || 'AG',
     color: '#8b5cf6',
-    description: a.description ?? `${command} ${args.join(' ')}`,
+    description: plan.description || `${command} ${args.join(' ')}`,
     builtin: false,
     command,
     args,

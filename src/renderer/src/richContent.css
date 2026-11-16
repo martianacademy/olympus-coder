@@ -41,7 +41,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ui-scale, 1));
   min-width: 0;
 }
 
@@ -89,7 +89,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--ui-scale, 1));
   text-align: left;
   cursor: pointer;
   align-self: flex-start;
@@ -117,7 +117,7 @@
 
 .rich-link-meta {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--ui-scale, 1));
   flex: 0 1 auto;
   min-width: 0;
   max-width: 40%;
@@ -142,7 +142,7 @@
   gap: 6px;
   max-width: 100%;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--ui-scale, 1));
   align-self: flex-start;
 }
 
@@ -165,7 +165,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--ui-scale, 1));
   color: var(--muted);
   cursor: pointer;
   list-style: none;
@@ -202,7 +202,7 @@
   border-radius: 6px;
   background: transparent;
   color: var(--text);
-  font-size: 11px;
+  font-size: calc(11px * var(--ui-scale, 1));
   cursor: pointer;
 }
 
@@ -236,7 +236,7 @@
 
 /* The real tool behind a step (MCP server › tool, skill, tool name), quiet line at the top of its body */
 .rich-tool-identity {
-  font-size: 11px;
+  font-size: calc(11px * var(--ui-scale, 1));
   padding: 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -1,0 +1,35 @@
+/* =====================================================================================
+   Settings → Appearance → Density (`html[data-density]`, set by theme.ts).
+   Comfortable is the base look in design.css / workGroup.css; Compact only tightens a handful of spacings.
+   Phones and touch screens keep their own spacing and ≥34px touch rows (responsive.css, workGroup.css).
+   ===================================================================================== */
+
+html[data-density='compact'] .tool-group.work-group {
+  --wg-row-base: 24px;
+}
+
+@media (min-width: 561px) {
+  html[data-density='compact'] .chat-inner {
+    gap: 14px;
+    padding: 20px 24px 36px;
+  }
+
+  html[data-density='compact'] .composer {
+    padding: 9px 10px 7px 15px;
+  }
+
+  html[data-density='compact'] .composer-pills {
+    margin-top: 6px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-density='compact'] .nav-item {
+    height: 30px;
+  }
+
+  html[data-density='compact'] .project-head,
+  html[data-density='compact'] .thread-row {
+    height: 28px;
+  }
+}

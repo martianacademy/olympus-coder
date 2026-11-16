@@ -57,6 +57,8 @@ export function Chat(props: {
   onFork: (uptoItemId?: string) => void;
   onOpenThread: (id: string) => void;
   onUsage?: () => void;
+  /** Show Compact in the composer: only where the Info panel (which has it, opened from the context ring) is not available. */
+  compactInComposer?: boolean;
   /** Every agent's status, to offer a switch when this one is out of quota. */
   allStatuses?: Record<string, AgentStatus>;
   onSwitchAgent?: (agentId: string) => void;
@@ -246,6 +248,7 @@ export function Chat(props: {
         allStatuses={props.allStatuses}
         onLogin={props.onLogin}
         onUsage={props.onUsage}
+        compactInComposer={props.compactInComposer}
         onSwitchAgent={props.onSwitchAgent}
         onAutoApprove={props.onAutoApprove}
         onSendingChange={setSending}

@@ -75,6 +75,7 @@ export const EVENTS = new Set([
   'heat:alert',
   'schedules:changed',
   'catalog:progress',
+  'agents:changed',
   // ACP config slice (src/shared/acpConfig.ts AcpConfigEvents).
   'mcp:status',
   'auth:info',

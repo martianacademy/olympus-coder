@@ -9,6 +9,7 @@ import './composerCards.css';
 import './taskSubagents.css';
 import './workGroup.css';
 import './mediaAndConsole.css';
+import './appearance.css';
 import './responsive.css';
 import App from './App';
 import { installTooltips } from './tooltip';

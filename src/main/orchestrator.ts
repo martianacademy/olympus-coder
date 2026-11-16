@@ -33,6 +33,7 @@ import {
 } from './orchestratorAgents';
 import { listSchedules } from './schedules';
 import { canManageSchedules, handleScheduleTool, scheduleToolDefs } from './scheduleTools';
+import { agentToolDefs, canManageAgents, handleAgentTool } from './agentTools';
 import { agySubagentSummary, discoverAgySubagents } from './agySubagents';
 import { claudeSubagentSummary, discoverClaudeSubagents } from './claudeSubagents';
 import { nativeSubagentSummary } from './nativeSubagents';
@@ -521,7 +522,8 @@ export function toolsFor(t: Thread) {
       ]
     : [];
   const schedules = canManageSchedules(t) ? scheduleToolDefs(t.agentId) : [];
-  if (!canOrchestrate(t)) return [info, ...term, ...learn, ...schedules];
+  const agentMgmt = canManageAgents(t) ? agentToolDefs() : [];
+  if (!canOrchestrate(t)) return [info, ...term, ...learn, ...schedules, ...agentMgmt];
   // Keep these schemas small: Antigravity (agy 1.5.8) silently disables MCP tools whose declaration is too large
   // ("tool … is not enabled for server …"; seen at ≥1144 chars, fine at ≤840). Agent ids are validated server-side
   // (assertAgentQuotaAvailable) instead of a long `enum`; list_agents shows the ids, models, modes and efforts.
@@ -545,6 +547,7 @@ export function toolsFor(t: Thread) {
     ...term,
     ...learn,
     ...schedules,
+    ...agentMgmt,
     {
       name: 'spawn_subsession',
       title: 'Spawn sub-session',
@@ -709,6 +712,15 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         const schedOut = await handleScheduleTool(t, name, args, emit);
         if (schedOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
         text = schedOut;
+        break;
+      }
+      case 'search_agent_registry':
+      case 'add_agent':
+      case 'add_custom_agent':
+      case 'remove_agent': {
+        const agentOut = await handleAgentTool(t, name, args, emit, closed);
+        if (agentOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
+        text = agentOut;
         break;
       }
       default:

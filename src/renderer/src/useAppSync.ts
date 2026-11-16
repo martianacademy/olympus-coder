@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
-import type { AgentStatus, AppState, Project, SessionView, Thread, ThreadItem, ThreadMeta, UiMode } from '@shared/types';
+import type { AgentStatus, AppState, DeskEvents, Project, SessionView, Thread, ThreadItem, ThreadMeta, UiMode } from '@shared/types';
 import { onEvent, terminalAskedRecently } from './api';
 import { addTerminal, type WorkbenchTab } from './components/Workbench';
 import type { SettingsTab } from './components/Settings';
@@ -154,6 +154,11 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
         case 'agent:status':
           setAgents((a) => ({ ...a, statuses: { ...a.statuses, [(payload as AgentStatus).id]: payload as AgentStatus } }));
           break;
+        case 'agents:changed': {
+          const r = payload as DeskEvents['agents:changed'];
+          setAgents({ defs: r.defs, statuses: Object.fromEntries(r.statuses.map((x) => [x.id, x])) });
+          break;
+        }
         case 'thread:item': {
           if (payload.threadId !== activeIdRef.current) break;
           const item = payload.item as ThreadItem;

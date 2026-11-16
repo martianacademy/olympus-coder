@@ -3,11 +3,12 @@ import { copyFileSync, existsSync, mkdirSync, realpathSync, statSync } from 'nod
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AgentDef, AppState, AttachmentView, DeskEvents, ProcAction, Settings } from '@shared/types';
+import type { AppState, AttachmentView, DeskEvents, ProcAction, Settings } from '@shared/types';
 import * as agents from './agents';
 import * as attachments from './attachments';
 import { readClipboardMessage, writeClipboard, type ClipboardPayload } from './clipboard';
 import * as catalog from './catalog';
+import { addCustomAgent, removeCustomAgent, type CustomAgentInput } from './customAgents';
 import { agentEnv, loadLoginShellPath, userShell } from './env';
 import * as files from './files';
 import * as git from './git';
@@ -135,8 +136,6 @@ const projectOrThrow = (id: string) => {
   return p;
 };
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'agent';
-
 const handlers: Record<string, (...args: any[]) => unknown> = {
   'app.state': () => appState(),
   'settings.update': (patch: Partial<Settings>) => {
@@ -205,24 +204,8 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     agents.restartAgent(id);
     return agents.checkAgent(id);
   },
-  'agents.addCustom': (def: Pick<AgentDef, 'name' | 'command' | 'args' | 'env' | 'color' | 'logo'>) => {
-    const s = store.getSettings();
-    let id = slug(def.name);
-    while (agents.allAgents().some((a) => a.id === id)) id += '-2';
-    const full: AgentDef = {
-      id,
-      name: def.name,
-      badge: def.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || 'AG',
-      color: def.color || '#8b5cf6',
-      description: `${def.command} ${def.args.join(' ')}`,
-      builtin: false,
-      command: def.command,
-      args: def.args,
-      env: def.env,
-      detectBinary: def.command,
-      logo: def.logo || undefined,
-    };
-    store.updateSettings({ customAgents: [...s.customAgents, full] });
+  'agents.addCustom': (def: CustomAgentInput) => {
+    addCustomAgent(def, emit);
     return agents.agentStatuses();
   },
   'agents.setLogo': (id: string, logo: string) => {
@@ -230,8 +213,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     return agents.agentStatuses();
   },
   'agents.removeCustom': (id: string) => {
-    agents.restartAgent(id);
-    store.updateSettings({ customAgents: store.getSettings().customAgents.filter((a) => a.id !== id) });
+    removeCustomAgent(id, emit);
     return agents.agentStatuses();
   },
 

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { ThemeSettings } from '@shared/types';
-import { codeFontCss, DEFAULT_THEME, resolvePalette, UI_FONTS } from '@shared/themes';
+import { CHAT_WIDTHS, codeFontCss, DEFAULT_THEME, resolvePalette, STEPS_SIZES, UI_FONTS } from '@shared/themes';
 import { applyChatSyntaxVars } from './syntaxPalettes';
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -31,14 +31,23 @@ export function applyTheme(theme: ThemeSettings) {
   const root = document.documentElement;
   for (const [k, v] of Object.entries(palette)) root.style.setProperty(`--${k}`, v);
   root.style.setProperty('--font-size', `${t.fontSize}px`);
+  // Fixed px sizes in the chat and sidebar are written as `calc(Npx * var(--ui-scale))` so the App font size reaches them.
+  root.style.setProperty('--ui-scale', String(Math.round((t.fontSize / 14) * 1000) / 1000));
   root.style.setProperty('--radius', `${t.radius}px`);
   root.style.setProperty('--ui-font', UI_FONTS.find((f) => f.id === t.uiFont)?.css ?? UI_FONTS[0].css);
   const codeFamily = `${codeFontCss(t.codeFont)}, ui-monospace, Menlo, monospace`;
   root.style.setProperty('--code-font', codeFamily);
-  root.style.setProperty('--pad', t.density === 'compact' ? '8px' : '12px');
+  root.dataset.density = t.density === 'compact' ? 'compact' : 'comfortable';
   root.style.setProperty('--text-weight', String(t.textWeight));
   root.style.setProperty('--bold-weight', String(t.boldWeight));
-  root.style.setProperty('--chat-size', t.chatFontSize ? `${t.chatFontSize}px` : `${t.fontSize}px`);
+  const chatSize = t.chatFontSize || t.fontSize;
+  root.style.setProperty('--chat-size', `${chatSize}px`);
+  // Steps follow the chat text (13px next to 14px by default) times the chosen Steps size.
+  // Code inside step boxes follows the code size times the same Steps size factor.
+  const stepsFactor = STEPS_SIZES.find((s) => s.id === t.stepsSize)?.scale ?? 1;
+  root.style.setProperty('--steps-scale', String(Math.round((chatSize / 14) * stepsFactor * 1000) / 1000));
+  root.style.setProperty('--steps-factor', String(stepsFactor));
+  root.style.setProperty('--chat-width', `${CHAT_WIDTHS.find((w) => w.id === t.chatWidth)?.px ?? 780}px`);
   root.style.setProperty('--line-height', String(t.lineHeight));
   root.style.setProperty('--code-size', `${t.codeFontSize}px`);
   root.style.setProperty('--thinking-style', t.thinkingItalic ? 'italic' : 'normal');

@@ -533,7 +533,7 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
 
   .composer {
     padding: 10px 10px 8px 13px;
-    border-radius: 16px;
+    border-radius: calc(var(--radius) * 1.6);
   }
 
   .composer-pills {
