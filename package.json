@@ -5,6 +5,7 @@
   "description": "Olympus Coder: one desktop app for Claude Code, Antigravity CLI, Codex and other ACP coding agents, with shared memory.",
   "main": "out/main/index.js",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",

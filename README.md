@@ -3,7 +3,7 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — with shared project memory, multi-agent orchestration, a built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.1.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+    <code>v0.1.0</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
   </p>
 </div>
 
@@ -294,3 +294,13 @@ OLYMPUS_TEST_HIDDEN=1 npx electron . \
 - **Encrypted provider secrets:** Custom model provider API keys are encrypted at rest via Electron `safeStorage` (macOS Keychain / Windows DPAPI / Linux Secret Service) and injected only into the target agent's process environment.
 - **Zero-knowledge relay:** Remote phone sessions through `relay/` derive an `AES-256-GCM` session key encoded after `#` in the pairing QR link. Because URL fragments are never sent in HTTP requests, the Cloudflare Worker relays opaque encrypted frames without ever possessing the decryption key.
 - **Guarded filesystem & process boundaries:** ACP Client FS enforces project-root path sandboxing and symlink escape checks (`acpClientFs.ts`), while a per-agent **Ask first / Approve all** switch keeps destructive shell commands under explicit user control.
+
+---
+
+## Contributing
+
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks to run and how to sign off commits (DCO).
+
+## License
+
+Olympus Coder is open source under the [Apache License 2.0](LICENSE). You may use, modify and distribute it, including commercially, under its terms. See [NOTICE](NOTICE) for attribution. "Olympus Coder" and its logo identify this project; the license does not grant rights to use them for other products (Apache-2.0, section 6).
