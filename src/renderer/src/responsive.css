@@ -289,11 +289,13 @@ html[data-platform='darwin'] .app.drawer-layout.sb-collapsed .main-head {
   padding: 0 12px 0 9px;
   gap: 8px;
   border-radius: 11px;
-  max-width: min(240px, calc(100dvw - 116px));
+  /* Never wider than its (shrinking) .picker: the name ellipsizes instead of the button spilling over its neighbours. */
+  min-width: 0;
+  max-width: min(240px, 100%, calc(100dvw - 116px));
 }
 
 html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
-  max-width: min(240px, calc(100dvw - 186px));
+  max-width: min(240px, 100%, calc(100dvw - 186px));
 }
 
 .app.drawer-layout .main-head .picker-btn .picker-name {
@@ -320,6 +322,7 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
 
 /* Hide inline secondary header buttons on narrow sheet viewports; they live cleanly inside the right drawer. */
 .app.sheet-layout .main-head > .stats-btn,
+.app.sheet-layout .main-head > .stats-picker,
 .app.sheet-layout .main-head > .head-fork-btn {
   display: none;
 }

@@ -258,7 +258,7 @@ export const SessionStatsButton = memo(function SessionStatsButton(props: { thre
   }, [open]);
   const t = useMemo(() => sessionTotals(props.thread), [props.thread.items]);
   return (
-    <div className="picker" ref={ref}>
+    <div className="picker stats-picker" ref={ref}>
       <button className={`stats-btn ${open ? 'on' : ''}`} onClick={() => setOpen((o) => !o)} title="Tokens and context for this chat" data-testid="session-stats">
         <Sigma size={14} />
         <span>{fmtTokens(t.prompt + t.output)}</span>

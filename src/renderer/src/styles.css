@@ -976,7 +976,8 @@ button.orch-target:hover { color: var(--accent); text-decoration: underline; }
 .pair-code { display: flex; align-items: baseline; gap: 12px; margin: 6px 0 10px; }
 .pair-code .mono { font-size: 1.9em; font-weight: 700; letter-spacing: .12em; color: var(--accent); }
 .device-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
-.update-banner { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; align-items: center; gap: 10px; max-width: min(720px, calc(100vw - 32px)); padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.3); font-size: .86em; -webkit-app-region: no-drag; }
+/* Centred with left/right + auto margins, not left:50% + translate: that left it only half the screen to wrap in (one word per line on a phone). */
+.update-banner { position: fixed; top: 10px; left: 16px; right: 16px; margin-inline: auto; width: max-content; z-index: 300; display: flex; align-items: center; gap: 10px; max-width: min(720px, calc(100vw - 32px)); padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.3); font-size: .86em; -webkit-app-region: no-drag; }
 .update-banner > svg { color: var(--accent); flex: none; }
 .phone-card { display: flex; gap: 18px; align-items: flex-start; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin: 10px 0; }
 .phone-card.warn { gap: 12px; border-color: color-mix(in srgb, var(--warn, #e0a030) 50%, var(--border)); }
