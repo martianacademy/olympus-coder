@@ -9,8 +9,26 @@ const src = join(here, '../../out/renderer');
 const out = join(here, '../public');
 if (!existsSync(join(src, 'remote.html'))) throw new Error('Build the app first (npx electron-vite build): out/renderer/remote.html is missing.');
 
+// Assets of earlier versions stay for KEEP_DAYS: a phone that still has an older page open (iOS keeps home-screen
+// apps alive in memory) loads its chunks on demand, and a 404 there means a chat that never opens.
+const KEEP_DAYS = 30;
+const historyFile = join(here, '../.assets-history.json'); // outside public/: not deployed
+let history = {};
+try {
+  history = JSON.parse(readFileSync(historyFile, 'utf8'));
+} catch {
+  /* first copy */
+}
+const keep = new Map();
+if (existsSync(join(out, 'assets'))) {
+  for (const f of readdirSync(join(out, 'assets'))) {
+    const seen = history[f] ?? Date.now();
+    if (Date.now() - seen < KEEP_DAYS * 86_400_000) keep.set(f, { seen, data: readFileSync(join(out, 'assets', f)) });
+  }
+}
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'assets'), { recursive: true });
+for (const [f, { data }] of keep) writeFileSync(join(out, 'assets', f), data);
 
 let html = readFileSync(join(src, 'remote.html'), 'utf8');
 html = html
@@ -33,6 +51,10 @@ const visit = (name) => {
 };
 for (const m of html.matchAll(/assets\/([\w.@-]+)/g)) visit(m[1]);
 for (const n of need) cpSync(join(src, 'assets', n), join(out, 'assets', n));
+const nextHistory = {};
+for (const [f, { seen }] of keep) nextHistory[f] = seen;
+for (const n of need) nextHistory[n] = history[n] ?? Date.now();
+writeFileSync(historyFile, JSON.stringify(nextHistory, null, 1));
 
 writeFileSync(
   join(out, '_headers'),
@@ -49,4 +71,4 @@ writeFileSync(
   Cache-Control: public, max-age=31536000, immutable
 `,
 );
-console.log(`Phone page copied: ${need.size} asset files.`);
+console.log(`Phone page copied: ${need.size} asset files (+${[...keep.keys()].filter((f) => !need.has(f)).length} kept from earlier versions).`);

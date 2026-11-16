@@ -20,6 +20,16 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 document.documentElement.classList.add('remote');
 installTooltips();
 
+// A newer version was deployed while this page stayed open (iOS keeps home-screen apps in memory): a part loaded
+// on demand (a chat, a panel) is gone from the server. Reload once into the current version instead of a dead tap.
+window.addEventListener('vite:preloadError', (e) => {
+  const last = Number(sessionStorage.getItem('olympus.reloadedForUpdate') || 0);
+  if (Date.now() - last < 30_000) return; // already reloaded just now: let the error show instead of looping
+  e.preventDefault();
+  sessionStorage.setItem('olympus.reloadedForUpdate', String(Date.now()));
+  location.reload();
+});
+
 // Opened from the home screen (iOS "Add to Home Screen", installed PWA): iOS reports 100dvh short by the
 // status bar's height there, which left an empty band under the composer. The window's own height is right.
 const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
