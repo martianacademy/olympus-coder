@@ -85,10 +85,16 @@ function PortsCard() {
   );
 }
 
+const OUTPUTS_SHOWN = 10;
+/** Tool kinds that write files (ACP), for tools that report a location but no diff. */
+const WRITE_KINDS = new Set(['edit', 'delete', 'move']);
+
 export function InfoPanel(props: {
   project: Project;
   thread: Thread | null;
   agentDef?: AgentDef;
+  /** Every agent, so per-agent rows in this chat's stats show each agent's logo. */
+  agentDefs?: Record<string, AgentDef>;
   agentStatus?: AgentStatus;
   session: SessionView | null;
   git: GitStatus | null;
@@ -102,15 +108,20 @@ export function InfoPanel(props: {
     void api.memory(props.project.id).then(setMem);
   }, [props.project.id, props.refreshKey]);
 
+  // Files the agent changed or created in this chat (not ones it only read), newest first.
   const outputs = [
     ...new Set(
       (props.thread?.items ?? [])
-        .flatMap((i) => (i.kind === 'tool' ? [...i.locations, ...i.content.filter((c) => c.type === 'diff' && c.path).map((c) => c.path!)] : []))
+        .flatMap((i) => {
+          if (i.kind !== 'tool') return [];
+          const diffs = i.content.filter((c) => c.type === 'diff' && c.path).map((c) => c.path!);
+          return diffs.length ? diffs : WRITE_KINDS.has(i.toolKind ?? '') ? i.locations : [];
+        })
         .reverse(),
     ),
-  ]
-    .map((p) => (p.startsWith(`${props.project.path}/`) ? p.slice(props.project.path.length + 1) : p))
-    .slice(0, 30);
+  ].map((p) => (p.startsWith(`${props.project.path}/`) ? p.slice(props.project.path.length + 1) : p));
+  const [allOutputs, setAllOutputs] = useState(false);
+  const shownOutputs = allOutputs ? outputs : outputs.slice(0, OUTPUTS_SHOWN);
 
   const model = props.session?.configOptions.find((o) => o.category === 'model');
 
@@ -145,7 +156,7 @@ export function InfoPanel(props: {
           <SessionStats
             thread={props.thread}
             usage={props.session?.usage}
-            agentDefs={props.agentDef ? { [props.agentDef.id]: props.agentDef } : {}}
+            agentDefs={{ ...(props.agentDefs ?? {}), ...(props.agentDef ? { [props.agentDef.id]: props.agentDef } : {}) }}
             action={canCompact(props.session) ? <InfoCompact thread={props.thread} session={props.session} /> : undefined}
           />
         </div>
@@ -183,16 +194,27 @@ export function InfoPanel(props: {
       </div>
       <PortsCard />
       <div className="info-section">
-        <div className="info-title">Outputs</div>
+        <div className="info-title row">
+          <span className="grow">Changed files</span>
+          {outputs.length > 0 && <span className="info-count" data-testid="outputs-count">{outputs.length}</span>}
+        </div>
         {outputs.length ? (
-          outputs.map((p) => (
-            <div key={p} className="info-row link-like" onClick={() => props.onOpenFile(p)} title={p}>
-              <FileCode size={15} className="muted" /> <span className="ellipsis">{p.split('/').pop()}</span>
-              <span className="small muted ellipsis">{p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''}</span>
-            </div>
-          ))
+          <div className="info-files" data-testid="outputs-list">
+            {shownOutputs.map((p) => (
+              <button key={p} className="info-file" onClick={() => props.onOpenFile(p)} title={p}>
+                <FileCode size={14} className="info-file-icon" />
+                <span className="info-file-name ellipsis">{p.split('/').pop()}</span>
+                <span className="info-file-dir ellipsis">{p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''}</span>
+              </button>
+            ))}
+            {outputs.length > OUTPUTS_SHOWN && (
+              <button className="info-more" onClick={() => setAllOutputs((a) => !a)} data-testid="outputs-more">
+                {allOutputs ? 'Show fewer' : `Show all ${outputs.length}`}
+              </button>
+            )}
+          </div>
         ) : (
-          <div className="small muted">The agent has not touched any files in this chat yet.</div>
+          <div className="small muted">The agent has not changed any files in this chat yet.</div>
         )}
       </div>
     </div>

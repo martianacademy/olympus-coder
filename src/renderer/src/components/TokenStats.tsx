@@ -155,7 +155,7 @@ export function SessionStats({ thread, usage, agentDefs, action }: { thread: Thr
           <div className="stats-big">{usage?.size ? `${fmtTokens(usage.used)} / ${fmtTokens(usage.size)}` : 'Context unknown'}</div>
           <div className="small muted">Tokens currently in the context window{usage?.model ? ` · ${usage.model}` : ''}</div>
           <div className="small muted">
-            {t.turns} turns · {fmtDur(t.durationMs)} agent time
+            {t.turns} {t.turns === 1 ? 'turn' : 'turns'} · {fmtDur(t.durationMs)} agent time
           </div>
           {action}
         </div>
@@ -233,7 +233,7 @@ export function SessionStats({ thread, usage, agentDefs, action }: { thread: Thr
               {agentDefs[id] && <AgentLogo def={agentDefs[id]} size={18} />}
               <span className="grow">{agentDefs[id]?.name ?? id}</span>
               <span className="muted">
-                {a.turns} turns · ↑{fmtTokens(a.prompt)} · ↓{fmtTokens(a.output)}
+                {a.turns} {a.turns === 1 ? 'turn' : 'turns'} · ↑{fmtTokens(a.prompt)} · ↓{fmtTokens(a.output)}
                 {a.cost ? ` · ${fmtCost(a.cost)}` : ''}
               </span>
             </div>

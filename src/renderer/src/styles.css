@@ -399,6 +399,15 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 .info-section:last-child { border-bottom: none; }
 .info-title { font-weight: 600; margin-bottom: 8px; }
 .info-row { display: flex; align-items: center; gap: 9px; padding: 5px 0; min-width: 0; }
+.info-count { font-weight: 500; font-size: .78em; color: var(--muted); padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 7%, transparent); font-variant-numeric: tabular-nums; }
+.info-files { display: flex; flex-direction: column; gap: 1px; margin: 0 -8px; }
+.info-file { display: grid; grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 8px; border: none; background: none; color: var(--text); font: inherit; text-align: left; border-radius: calc(var(--radius) - 2px); cursor: pointer; min-width: 0; }
+.info-file:hover, .info-file:focus-visible { background: color-mix(in srgb, var(--text) 6%, transparent); outline: none; }
+.info-file-icon { color: var(--muted); }
+.info-file-name { font-size: .92em; }
+.info-file-dir { font-size: .8em; color: var(--muted); text-align: right; direction: rtl; }
+.info-more { align-self: flex-start; margin: 4px 8px 0; padding: 3px 0; border: none; background: none; color: var(--accent); font: inherit; font-size: .85em; cursor: pointer; }
+.info-more:hover { text-decoration: underline; }
 .info-pre { white-space: pre-wrap; font-size: .82em; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin: 6px 0 0; user-select: text; max-height: 180px; overflow: auto; }
 
 /* header never wraps: picker and tools keep their size, the title shrinks */
@@ -508,6 +517,8 @@ button.pill { background: transparent; font: inherit; font-size: .86em; color: v
 .c-out { background: var(--c-out); }
 .turn-bars { height: 56px; display: flex; align-items: flex-end; gap: 3px; }
 .turn-bar { flex: 1; max-width: 22px; height: 100%; display: flex; align-items: flex-end; }
+/* `.turn-bar` is also the chat's per-turn summary row (margin below): not here. */
+.turn-bars .turn-bar { margin: 0; }
 .tb-stack { width: 100%; display: flex; flex-direction: column; border-radius: 4px; overflow: hidden; min-height: 3px; }
 .info-panel .stats-tiles { grid-template-columns: repeat(2, 1fr); }
 
