@@ -294,7 +294,7 @@ export function UsagePage({ defs, statuses, onOpenThread, onClose }: { defs: Age
             </div>
           )}
           <p className="small muted">
-            Tokens come from the usage each agent reports and are saved in <code>~/.agents/usage/</code>. Cost is an estimate at API prices; subscription plans such as Claude Max, ChatGPT or Google AI are not billed separately.
+            Tokens come from the usage each agent reports and are saved in <code>~/.olympus/usage/</code>. Cost is an estimate at API prices; subscription plans such as Claude Max, ChatGPT or Google AI are not billed separately.
           </p>
         </div>
       </div>

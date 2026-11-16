@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { NOTE_SECTIONS, addNote } from './usernotes';
-import { dropWakes } from './agenttimers';
+import { dropWakes, parseTimerArgs, setTimer, setTimerToolDef } from './agenttimers';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -106,6 +106,8 @@ function maybeWake(parentId: string) {
   const fresh = views.filter((v) => !LIVE_STATES.has(v.status) && v.endedAt && v.endedAt > APP_STARTED && !seen.has(doneKey(v)) && !woken.has(doneKey(v)));
   if (!fresh.length) return;
   for (const v of fresh) woken.add(doneKey(v));
+  // Off by default: the parent checks its sub-sessions itself (wait_for_subsessions, get_subsession, set_timer).
+  if (!getSettings().notifyAgentsWhenWorkEnds) return;
 
   const running = views.filter((v) => LIVE_STATES.has(v.status));
   const stillRunning = running.length
@@ -523,7 +525,7 @@ export function toolsFor(t: Thread) {
     : [];
   const schedules = canManageSchedules(t) ? scheduleToolDefs(t.agentId) : [];
   const agentMgmt = canManageAgents(t) ? agentToolDefs() : [];
-  if (!canOrchestrate(t)) return [info, ...term, ...learn, ...schedules, ...agentMgmt];
+  if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...learn, ...schedules, ...agentMgmt];
   // Keep these schemas small: Antigravity (agy 1.5.8) silently disables MCP tools whose declaration is too large
   // ("tool … is not enabled for server …"; seen at ≥1144 chars, fine at ≤840). Agent ids are validated server-side
   // (assertAgentQuotaAvailable) instead of a long `enum`; list_agents shows the ids, models, modes and efforts.
@@ -536,6 +538,7 @@ export function toolsFor(t: Thread) {
   };
   return [
     info,
+    setTimerToolDef,
     {
       name: 'list_agents',
       title: 'List agents & limits',
@@ -645,6 +648,14 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
     switch (name) {
       case 'session_info':
         text = sessionInfo(t);
+        break;
+      case 'set_timer':
+        try {
+          const a = parseTimerArgs(args);
+          text = setTimer(t.id, a.minutes, a.note);
+        } catch (e: any) {
+          throw new ToolError(e?.message ?? String(e));
+        }
         break;
       case 'list_agents':
         if (!canOrchestrate(t)) throw new ToolError('list_agents is available only to main orchestrator sessions.');

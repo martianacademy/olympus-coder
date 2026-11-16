@@ -9,9 +9,15 @@ import { getSettings, listProjects, sharedRoot, updateSettings } from './store';
  * Shared skills: <sharedRoot>/skills/<id>/SKILL.md (frontmatter `name` and `description`, then instructions; other
  * files in the folder are the skill's resources). Every agent session's guide lists the enabled ones, and an agent
  * reads SKILL.md when a task matches. Skills from ~/.claude, ~/.codex or a project are copied in, never changed.
+ * ~/.agents/skills (where the third-party `npx skills` tool installs, and Olympus's old shared folder) is also
+ * listed, read-only, for skills not in the shared folder.
  */
 
 export const skillsDir = () => join(sharedRoot(), 'skills');
+const npxSkillsDir = () => join(homedir(), '.agents', 'skills');
+/** The shared folder first, then ~/.agents/skills when it is a different folder. */
+const skillRoots = () => (npxSkillsDir() === skillsDir() ? [skillsDir()] : [skillsDir(), npxSkillsDir()]);
+const NPX_READ_ONLY = 'Installed with `npx skills` in ~/.agents/skills: change or remove it with that tool.';
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'skill';
 
 /**
@@ -62,24 +68,41 @@ function readSkill(dir: string): { name: string; description: string; body: stri
 }
 
 export function listSkills(): SkillView[] {
-  const root = skillsDir();
-  if (!existsSync(root)) return [];
   const off = new Set(getSettings().disabledSkills);
-  return readdirSync(root)
-    .filter((d) => !d.startsWith('.') && statSync(join(root, d)).isDirectory())
-    .map((id) => {
+  const seen = new Set<string>();
+  const out: SkillView[] = [];
+  for (const root of skillRoots()) {
+    if (!existsSync(root)) continue;
+    const readOnly = root !== skillsDir();
+    for (const id of readdirSync(root)) {
+      if (id.startsWith('.') || seen.has(id)) continue;
+      try {
+        if (!statSync(join(root, id)).isDirectory()) continue;
+      } catch {
+        continue;
+      }
       const s = readSkill(join(root, id));
-      return s ? { id, name: s.name, description: s.description, path: join(root, id, 'SKILL.md'), enabled: !off.has(id) } : null;
-    })
-    .filter((s): s is SkillView => Boolean(s))
-    .sort((a, b) => a.name.localeCompare(b.name));
+      if (!s) continue;
+      seen.add(id);
+      out.push({ id, name: s.name, description: s.description, path: join(root, id, 'SKILL.md'), enabled: !off.has(id), ...(readOnly ? { readOnly } : {}) });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The folder of a skill: the shared one, else ~/.agents/skills (read-only). */
+function skillDir(id: string): { dir: string; readOnly: boolean } {
+  const own = join(skillsDir(), basename(id));
+  if (existsSync(own) || skillRoots().length === 1) return { dir: own, readOnly: false };
+  const npx = join(npxSkillsDir(), basename(id));
+  return existsSync(npx) ? { dir: npx, readOnly: true } : { dir: own, readOnly: false };
 }
 
 export function getSkill(id: string): SkillView {
-  const dir = join(skillsDir(), basename(id));
+  const { dir, readOnly } = skillDir(id);
   const s = readSkill(dir);
   if (!s) throw new Error('Skill not found.');
-  return { id: basename(id), name: s.name, description: s.description, path: join(dir, 'SKILL.md'), enabled: !getSettings().disabledSkills.includes(id), body: s.body };
+  return { id: basename(id), name: s.name, description: s.description, path: join(dir, 'SKILL.md'), enabled: !getSettings().disabledSkills.includes(id), body: s.body, ...(readOnly ? { readOnly } : {}) };
 }
 
 const yamlValue = (s: string) => (/^[\w .,()/-]*$/.test(s) && !/^\s|\s$/.test(s) ? s : JSON.stringify(s));
@@ -90,6 +113,7 @@ export function saveSkill(input: { id?: string; name: string; description: strin
   if (!name) throw new Error('Give the skill a name.');
   if (!description) throw new Error('Add a description: agents use it to decide when the skill applies.');
   let id = input.id ? basename(input.id) : slug(name);
+  if (input.id && skillDir(id).readOnly) throw new Error(NPX_READ_ONLY);
   if (!input.id) while (existsSync(join(skillsDir(), id))) id += '-2';
   const dir = join(skillsDir(), id);
   mkdirSync(dir, { recursive: true });
@@ -99,6 +123,7 @@ export function saveSkill(input: { id?: string; name: string; description: strin
 
 /** Moves the skill folder to the Trash (recoverable). */
 export async function deleteSkill(id: string): Promise<SkillView[]> {
+  if (skillDir(id).readOnly) throw new Error(NPX_READ_ONLY);
   const dir = join(skillsDir(), basename(id));
   if (existsSync(dir)) await shell.trashItem(dir);
   updateSettings({ disabledSkills: getSettings().disabledSkills.filter((x) => x !== id) });

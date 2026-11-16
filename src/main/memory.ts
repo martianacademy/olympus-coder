@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { MemoryView, Project, Thread } from '@shared/types';
 import { notesForAgents } from './usernotes';
+import { pathSlug } from './relocate';
 import { GENERAL_PROJECT_ID, getSettings, listThreads, sharedRoot } from './store';
 
 /**
@@ -15,7 +16,8 @@ import { GENERAL_PROJECT_ID, getSettings, listThreads, sharedRoot } from './stor
  * is redirected here per session (see claudeSessionMeta in guide.ts).
  */
 
-export const projectSlug = (path: string) => path.replace(/[^a-zA-Z0-9]/g, '-');
+/** Same rule as Claude Code's ~/.claude/projects/<slug> (relocate.ts). */
+export const projectSlug = pathSlug;
 export const memoryDir = (p: Project) => join(sharedRoot(), 'memory', projectSlug(p.path));
 
 /**

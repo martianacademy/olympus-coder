@@ -14,7 +14,7 @@ const METHOD_LABEL: Record<CatalogMethod, string> = {
 };
 const METHOD_HINT: Record<CatalogMethod, string> = {
   local: 'Uses the copy already installed on this computer.',
-  binary: 'Downloads the agent from its official release, checks it against the registry, and keeps it in ~/.agents/agents.',
+  binary: 'Downloads the agent from its official release, checks it against the registry, and keeps it in ~/.olympus/agents.',
   npx: 'Runs the npm package with npx — nothing is installed globally. The first run downloads it.',
   uvx: 'Runs the Python package with uvx. The first run downloads it.',
 };

@@ -105,6 +105,8 @@ export interface Project {
   name: string;
   path: string;
   createdAt: number;
+  /** The folder is gone (renamed or moved): the sidebar offers "Locate…" (projects.list only). */
+  missing?: boolean;
 }
 
 /** Tokens the agent read for one turn (this message plus the whole context it carried). */
@@ -572,6 +574,9 @@ export interface Settings {
   agentDefaults: Record<string, Record<string, string>>;
   lastProjectId?: string;
   lastThreadId?: string;
+  /** Send a message into an agent's chat when its terminal command or sub-sessions finish. Off: agents check
+   *  their own pending work (read_terminal, wait_for_subsessions, set_timer). */
+  notifyAgentsWhenWorkEnds?: boolean;
 }
 
 export interface ConnectorDef {
@@ -630,6 +635,8 @@ export interface SkillView {
   enabled: boolean;
   /** SKILL.md without its frontmatter (only when one skill is read). */
   body?: string;
+  /** From ~/.agents/skills (installed with `npx skills`): listed and used, but not edited or deleted here. */
+  readOnly?: boolean;
 }
 
 /** A skill or connector found in another tool's folder, offered for import (read-only; never changed). */

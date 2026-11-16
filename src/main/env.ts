@@ -69,7 +69,7 @@ export function loadLoginShellPath(): void {
       const m = /__AGENTDESK__(.*)__AGENTDESK__/s.exec(r.stdout || '');
       const fromShell = m?.[1]?.split(delimiter).filter(Boolean) ?? [];
       const current = (process.env.PATH || '').split(delimiter).filter(Boolean);
-      const extra = [join(process.env.HOME || '', '.agents/bin'), join(process.env.HOME || '', '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+      const extra = [join(process.env.HOME || '', '.olympus/bin'), join(process.env.HOME || '', '.agents/bin'), join(process.env.HOME || '', '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin'];
       process.env.PATH = [...new Set([...fromShell, ...current, ...extra])].join(delimiter);
     } catch {
       /* keep the current PATH */

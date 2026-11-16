@@ -290,7 +290,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'git.stashApply': (pid: string, ref: string) => git.stashApply(pid, ref),
   'git.stashDrop': (pid: string, ref: string) => git.stashDrop(pid, ref),
 
-  'projects.list': () => store.listProjects(),
+  'projects.list': () => store.listProjectsWithMissing(),
   'projects.reorder': (ids: string[]) => store.reorderProjects(ids),
   'projects.add': async (path?: string) => {
     let dir = path;
@@ -306,6 +306,18 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'projects.remove': (id: string) => {
     store.removeProject(id);
     forgetCheckpoints(id);
+  },
+  /** The project's folder was renamed or moved: pick it (or pass the path) and point the project there. */
+  'projects.relocate': async (id: string, path?: string) => {
+    const p = store.projectRecord(id);
+    if (!p) return null;
+    let dir = path;
+    if (!dir) {
+      const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: `Locate "${p.name}"`, defaultPath: dirname(p.path) });
+      if (r.canceled || !r.filePaths[0]) return null;
+      dir = r.filePaths[0];
+    }
+    return store.relocateProject(id, dir);
   },
   'projects.reveal': (id: string) => {
     const p = store.getProject(id);

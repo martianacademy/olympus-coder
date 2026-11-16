@@ -394,6 +394,13 @@ export default function App() {
               if (active?.projectId === p.id) setActive(null);
             }}
             onRevealProject={(p) => api.revealProject(p.id)}
+            onLocateProject={async (p) => {
+              try {
+                if (await api.relocateProject(p.id)) setProjects(await api.projects());
+              } catch (e: any) {
+                alert(e?.message ?? String(e));
+              }
+            }}
             onReorderProjects={(ids) => {
               setProjects((ps) => ids.map((id) => ps.find((p) => p.id === id)!).filter(Boolean));
               void api.reorderProjects(ids);

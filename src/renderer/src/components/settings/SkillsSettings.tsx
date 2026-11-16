@@ -141,19 +141,24 @@ export function SkillsSettings() {
             <div className="grow" style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>{s.name}</div>
               <div className="small muted">{s.description}</div>
+              {s.readOnly && <div className="small muted" title={s.path}>From ~/.agents/skills (npx skills)</div>}
             </div>
-            <button className="btn ghost icon" title="Edit" onClick={() => void edit(s)}>
-              <Pencil size={14} />
-            </button>
-            <button
-              className="btn ghost icon"
-              title="Move to Trash"
-              onClick={async () => {
-                if (confirm(`Move the skill "${s.name}" to the Trash?`)) setList(await api.deleteSkill(s.id));
-              }}
-            >
-              <Trash2 size={14} />
-            </button>
+            {!s.readOnly && (
+              <>
+                <button className="btn ghost icon" title="Edit" onClick={() => void edit(s)}>
+                  <Pencil size={14} />
+                </button>
+                <button
+                  className="btn ghost icon"
+                  title="Move to Trash"
+                  onClick={async () => {
+                    if (confirm(`Move the skill "${s.name}" to the Trash?`)) setList(await api.deleteSkill(s.id));
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
             <button className={`switch ${s.enabled ? 'on' : ''}`} title={s.enabled ? 'On' : 'Off'} onClick={() => void api.enableSkill(s.id, !s.enabled).then(setList)} />
           </div>
         </div>

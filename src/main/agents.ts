@@ -156,7 +156,7 @@ export function builtinAgents(): AgentDef[] {
       command: process.env.OLYMPUS_CLI_BIN || 'oly',
       args: ['acp'],
       detectBinary: process.env.OLYMPUS_CLI_BIN || 'oly',
-      installHint: 'Install Olympus CLI (oly) on your PATH or in ~/.agents/bin/oly',
+      installHint: 'Install Olympus CLI (oly) on your PATH or in ~/.olympus/bin/oly',
     },
     {
       id: 'claude',

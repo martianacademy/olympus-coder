@@ -7,6 +7,8 @@ import { basename, dirname, join, sep } from 'node:path';
 import type { Project, SearchHit, Settings, Thread, ThreadItem, ThreadMeta, UserProfile } from '@shared/types';
 import { DEFAULT_THEME } from '@shared/themes';
 import { chatMediaDir, removeChatMedia } from './acpContent';
+import { defaultSharedRoot, migrateLegacySharedRoot } from './sharedMigration';
+import { relocateOnDisk } from './relocate';
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -46,8 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   uiMode: 'code',
   profile: DEFAULT_PROFILE,
-  // AGENTDESK_SHARED_ROOT lets tests use a throwaway folder instead of ~/.agents.
-  sharedRoot: process.env.AGENTDESK_SHARED_ROOT || join(homedir(), '.agents'),
+  // ~/.olympus, or OLYMPUS_HOME / the older AGENTDESK_SHARED_ROOT (tests use a throwaway folder).
+  sharedRoot: defaultSharedRoot(homedir()),
   defaultAgent: 'claude',
   injectSharedContext: true,
   theme: DEFAULT_THEME,
@@ -59,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   disabledSkills: [],
   agentDefaults: {},
   remote: { enabled: false, port: 47816 },
+  notifyAgentsWhenWorkEnds: false,
 };
 
 let settings: Settings | null = null;
@@ -66,6 +69,15 @@ let settings: Settings | null = null;
 export function getSettings(): Settings {
   if (!settings) {
     const saved = readJson<Partial<Settings>>(settingsFile(), {});
+    // Once: the shared folder moves from the old default ~/.agents to ~/.olympus (sharedMigration.ts).
+    migrateLegacySharedRoot({
+      home: homedir(),
+      saved,
+      save: (patch) => {
+        Object.assign(saved, patch);
+        writeJson(settingsFile(), saved);
+      },
+    });
     settings = {
       ...DEFAULT_SETTINGS,
       ...saved,
@@ -139,6 +151,25 @@ const threadsDir = (projectId: string) => join(sharedRoot(), 'threads', projectI
 
 export function listProjects(): Project[] {
   return readJson<Project[]>(projectsFile(), []).filter((p) => existsSync(p.path));
+}
+
+/** For the sidebar: every project, with `missing` set when its folder is gone (renamed or moved). */
+export function listProjectsWithMissing(): Project[] {
+  return readJson<Project[]>(projectsFile(), []).map((p) => (existsSync(p.path) ? p : { ...p, missing: true }));
+}
+
+/** A project by id even when its folder is missing (getProject only returns reachable ones). */
+export function projectRecord(id: string): Project | undefined {
+  return readJson<Project[]>(projectsFile(), []).find((p) => p.id === id);
+}
+
+/** Points a project at its renamed or moved folder; memory and Claude Code's sessions follow (relocate.ts). */
+export function relocateProject(id: string, newPath: string): Project {
+  const p = projectRecord(id);
+  if (!p) throw new Error('Project not found.');
+  const r = relocateOnDisk({ sharedRoot: sharedRoot(), home: homedir(), oldPath: p.path, newPath, projectId: id });
+  console.log(`[relocate] ${p.path} → ${newPath}\n  ${r.steps.join('\n  ')}`);
+  return { ...p, ...r.project! };
 }
 
 /** Chat-mode conversations that are not about a project run in this folder. */

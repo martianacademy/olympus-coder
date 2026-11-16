@@ -165,6 +165,7 @@ export const api = {
   projects: () => call<Project[]>('projects.list'),
   addProject: (path?: string) => call<Project | null>('projects.add', path),
   removeProject: (id: string) => call<void>('projects.remove', id),
+  relocateProject: (id: string, path?: string) => call<Project | null>('projects.relocate', id, path),
   reorderProjects: (ids: string[]) => call<void>('projects.reorder', ids),
   revealProject: (id: string) => call<void>('projects.reveal', id),
 

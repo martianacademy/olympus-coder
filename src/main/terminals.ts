@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import type { DeskEvents, TerminalView } from '@shared/types';
 import { agentEnv, userShell } from './env';
 import { forgetPty, ptyBuffer, ptyForeground, restorePty, startPty, writePty } from './pty';
-import { getProject } from './store';
+import { getProject, projectRecord } from './store';
 
 /**
  * The workbench's terminals: plain shells (the + button), and terminals opened with a command already typed in
@@ -199,7 +199,8 @@ export function restoreTerminals() {
   try {
     const saved = JSON.parse(readFileSync(file(), 'utf8')) as { terminals?: Saved[] };
     for (const t of saved.terminals ?? []) {
-      if (!t.ptyId || !getProject(t.projectId)) continue;
+      // A project whose folder is missing (renamed or moved) keeps its tabs: "Locate…" brings the folder back.
+      if (!t.ptyId || !(getProject(t.projectId) ?? projectRecord(t.projectId))) continue;
       restorePty(t.ptyId, t.data + (t.wasAlive ? STOPPED_NOTE : ''));
       opened.set(t.ptyId, { projectId: t.projectId, title: t.title, command: t.command, startedAt: t.startedAt, exitCode: t.exitCode, restored: true, threadId: t.threadId });
       const n = /^Terminal (\d+)$/.exec(t.title);

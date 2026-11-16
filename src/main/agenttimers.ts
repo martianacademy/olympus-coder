@@ -49,3 +49,52 @@ export function keepWake(threadId: string, toolCallId: string, ms: number, note:
 export function dropWakes(threadId: string) {
   for (const [k, t] of timers) if (k.startsWith(`${threadId}:`)) (clearTimeout(t), timers.delete(k));
 }
+
+// ---- set_timer: an olympus MCP tool every session has ----
+
+export const TIMER_MAX_MINUTES = 1440;
+const TIMERS_PER_CHAT = 20;
+
+/** Kept small: agy silently disables MCP tools with large declarations (see toolsFor in orchestrator.ts). */
+export const setTimerToolDef = {
+  name: 'set_timer',
+  title: 'Set timer',
+  description: 'Wake this chat later with "[Olympus Coder] Timer: <note>", e.g. to check work you left running. Olympus does not tell you when background work ends.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      minutes: { type: 'number', minimum: 1, maximum: TIMER_MAX_MINUTES, description: 'Delay, 1–1440.' },
+      note: { type: 'string', description: 'What to do then.' },
+    },
+    required: ['minutes', 'note'],
+    additionalProperties: false,
+  },
+};
+
+/** Checked arguments of set_timer; throws a message for the agent. */
+export function parseTimerArgs(args: any): { minutes: number; note: string } {
+  const minutes = Number(args?.minutes);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > TIMER_MAX_MINUTES) throw new Error(`"minutes" must be a number from 1 to ${TIMER_MAX_MINUTES}.`);
+  const note = String(args?.note ?? '').replace(/\s+/g, ' ').trim();
+  if (!note) throw new Error('"note" is required: say what to check when the timer fires.');
+  return { minutes, note: note.slice(0, 600) };
+}
+
+let timerSeq = 0;
+/** Starts a timer for the chat; when due, the message goes out now or after the agent's current turn. */
+export function setTimer(threadId: string, minutes: number, note: string): string {
+  const own = [...timers.keys()].filter((k) => k.startsWith(`${threadId}:timer:`)).length;
+  if (own >= TIMERS_PER_CHAT) throw new Error(`This chat already has ${TIMERS_PER_CHAT} timers waiting.`);
+  const key = `${threadId}:timer:${++timerSeq}`;
+  const due = Date.now() + minutes * 60_000;
+  timers.set(
+    key,
+    setTimeout(() => {
+      timers.delete(key);
+      // The user pressed Stop in this chat: stay quiet (dropWakes also clears these).
+      if (isMuted(threadId)) return;
+      notifyAgent(threadId, `[Olympus Coder] Timer: ${note}`);
+    }, minutes * 60_000),
+  );
+  return `Timer set: this chat gets "[Olympus Coder] Timer: ${note}" at ${new Date(due).toLocaleTimeString()} (in ${minutes} min). Timers end if Olympus Coder quits.`;
+}

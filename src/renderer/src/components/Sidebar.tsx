@@ -1,6 +1,6 @@
 import { StatusCounts, StatusDot } from './StatusDot';
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Clock, Folder, FolderOpen, GitBranch, History, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Folder, FolderOpen, FolderSearch, GitBranch, History, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { ProjectDashboard } from './ProjectSettings';
 import type { AgentDef, Project, ThreadMeta } from '@shared/types';
 import { AgentLogo } from '../logos';
@@ -21,6 +21,8 @@ interface Props {
   /** Open "Import from agent…" for this project. */
   onImport?: (p: Project) => void;
   onReveal: (p: Project) => void;
+  /** The project's folder is missing (renamed or moved): pick where it is now. */
+  onLocate?: (p: Project) => void;
   /** Drag a project up or down: the new order of project ids. */
   onReorder?: (ids: string[]) => void;
   /** The sidebar is the narrow slide-over drawer: each row's buttons fold into one "More" menu so names keep the width. */
@@ -86,7 +88,7 @@ export function Sidebar(props: Props) {
               data-testid="sidebar-project-toggle"
               aria-expanded={open}
               onClick={() => setProjectOpen(p.id, !open)}
-              title={`${p.path}\nDrag to reorder`}
+              title={`${p.missing ? 'Folder not found: ' : ''}${p.path}\nDrag to reorder`}
               draggable={Boolean(props.onReorder)}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = 'move';
@@ -110,6 +112,7 @@ export function Sidebar(props: Props) {
                   title="Project actions"
                   testId="sidebar-project-more"
                   actions={[
+                    ...(p.missing && props.onLocate ? [{ label: 'Locate folder…', icon: <FolderSearch size={14} />, onSelect: () => props.onLocate!(p) }] : []),
                     { label: 'New chat in this project', icon: <Plus size={14} />, onSelect: () => props.onNew(p.id) },
                     { label: 'Project dashboard', icon: <Settings2 size={14} />, onSelect: () => setDash(p) },
                     ...(props.onImport ? [{ label: 'Import from agent…', icon: <History size={14} />, onSelect: () => props.onImport!(p) }] : []),
@@ -148,6 +151,14 @@ export function Sidebar(props: Props) {
                 </>
               )}
             </div>
+            {p.missing && props.onLocate && (
+              <div className="thread-row muted small" data-testid="project-missing" title={p.path}>
+                <span className="grow ellipsis">Folder not found</span>
+                <button className="btn ghost small" data-testid="project-locate" onClick={() => props.onLocate!(p)}>
+                  <FolderSearch size={13} /> Locate…
+                </button>
+              </div>
+            )}
             {open && roots.map((t) => <ThreadNode key={t.id} t={t} all={list} folds={folds} {...props} />)}
             {open && !list.length && <div className="thread-row muted small">No chats</div>}
           </div>

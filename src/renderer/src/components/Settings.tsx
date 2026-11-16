@@ -118,6 +118,20 @@ export function SettingsModal(props: {
                   )}
                 </div>
                 <div className="field">
+                  <div className="row">
+                    <button
+                      className={`switch ${state.settings.notifyAgentsWhenWorkEnds ? 'on' : ''}`}
+                      onClick={() => void update({ notifyAgentsWhenWorkEnds: !state.settings.notifyAgentsWhenWorkEnds })}
+                      data-testid="notify-agents-toggle"
+                    />
+                    <label>Message agents when their work finishes</label>
+                  </div>
+                  <span className="small muted">
+                    When a command an agent left running, or a sub-session, finishes, Olympus sends a short message into that agent's chat. Off by default: agents check their own
+                    pending work and can set timers. The Tasks panel updates either way.
+                  </span>
+                </div>
+                <div className="field">
                   <label>Onboarding</label>
                   <div>
                     <button className="btn" onClick={() => void update({ onboarded: false })}>

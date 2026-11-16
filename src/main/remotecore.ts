@@ -96,6 +96,9 @@ export async function remoteCall(method: string, args: unknown): Promise<{ ok: b
   if (method === 'projects.add' && (!list[0] || typeof list[0] !== 'string' || !list[0].trim())) {
     return { ok: false, forbidden: true, error: 'Enter a folder path on your Mac to add a project remotely.' };
   }
+  if (method === 'projects.relocate' && (!list[1] || typeof list[1] !== 'string' || !list[1].trim())) {
+    return { ok: false, forbidden: true, error: 'Locate the moved folder on your Mac.' };
+  }
   try {
     if (method === 'app.state') {
       const raw = (await handlers['app.state']()) as AppState;

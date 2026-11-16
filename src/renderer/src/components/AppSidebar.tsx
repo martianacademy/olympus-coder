@@ -42,6 +42,7 @@ export interface AppSidebarProps {
   /** "Import from agent…": the agent's own saved sessions for this project. */
   onImportProject: (p: Project) => void;
   onRevealProject: (p: Project) => void;
+  onLocateProject?: (p: Project) => void;
   onReorderProjects: (ids: string[]) => void;
   onShowProfile: () => void;
   onMemory: () => void;
@@ -223,6 +224,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   closeIfDrawer();
                 }}
                 onReveal={props.onRevealProject}
+                onLocate={props.onLocateProject}
                 onReorder={props.onReorderProjects}
                 compact={isDrawer}
               />

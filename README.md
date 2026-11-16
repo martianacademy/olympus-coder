@@ -38,7 +38,7 @@ Modern AI-assisted engineering often splits context across disconnected CLI term
 **Olympus Coder** brings every [Agent Client Protocol (ACP)](https://agentclientprotocol.com) coding agent into a single desktop and mobile-ready IDE:
 
 - **Switch agents mid-conversation** — Start an investigation in **Antigravity**, hand implementation to **Claude Code**, and request a read-only **Second Opinion** from **Codex** in the same thread without losing context.
-- **One shared `~/.agents` brain** — Every agent reads and updates the same two-tier persistent project memory (`MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, `AGENTS.md`, and cross-agent session transcripts) instead of writing into siloed vendor directories.
+- **One shared `~/.olympus` brain** — Every agent reads and updates the same two-tier persistent project memory (`MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, `AGENTS.md`, and cross-agent session transcripts) instead of writing into siloed vendor directories.
 - **Full IDE workbench built in** — Inspect live edits in **CodeMirror 6**, stage and commit in the **Git** client, run multi-tab **WebGL terminals** with 1-click test reruns, roll back any prompt via **shadow-git checkpoints**, and preview localhost apps side by side.
 - **Continue from your phone anywhere** — The exact same responsive UI runs over local Wi-Fi/Hotspot (`:47816`) or an **AES-256-GCM end-to-end encrypted Cloudflare Relay** with full chat, tool approvals, file editing, Git, and live PTY terminals.
 
@@ -49,16 +49,16 @@ Modern AI-assisted engineering often splits context across disconnected CLI term
 ### 1. Multi-Agent ACP Hub & 1-Click Registry
 
 - **First-class built-in agents & Olympus CLI:** Ships ready for **Claude Code** (`@agentclientprotocol/claude-agent-acp`), **Codex** (`@agentclientprotocol/codex-acp`), and **Google Antigravity** (`agy acp`), reusing existing CLI logins, models, and reasoning effort levels. It also lists **Olympus** (`oly acp`), our multi-model agent for OpenRouter, Vercel AI Gateway, any OpenAI-compatible key, or local Ollama. Install it separately from [olympus-coder-cli](https://github.com/martianacademy/olympus-coder-cli).
-- **46-agent ACP Registry:** Browse, auto-detect on `PATH`, or 1-click install official ACP agents (`gemini`, `opencode`, `goose`, `cursor-agent`, `qwen`, `copilot`, and more) via `local`, `npx`, `uvx`, or `sha256`-verified binary archives into `~/.agents/agents/`.
+- **46-agent ACP Registry:** Browse, auto-detect on `PATH`, or 1-click install official ACP agents (`gemini`, `opencode`, `goose`, `cursor-agent`, `qwen`, `copilot`, and more) via `local`, `npx`, `uvx`, or `sha256`-verified binary archives into `~/.olympus/agents/`.
 - **Custom providers & commands:** Point any compatible agent at custom Anthropic- or OpenAI-compatible API gateways (`src/main/acpProviders.ts`) with OS-encrypted API keys, or register arbitrary stdio ACP binaries.
 - **Mid-chat agent handoff & CLI session import:** Switching the agent selector mid-thread automatically synthesizes prior goals, turns, and modified files for the incoming agent. Existing CLI conversations can also be browsed and imported via native ACP `session/list` and `session/load`.
 
-### 2. Two-Tier Persistent Context (`~/.agents`)
+### 2. Two-Tier Persistent Context (`~/.olympus`)
 
-Olympus Coder enforces a structured, cross-agent memory hierarchy stored in `~/.agents` (configurable via `AGENTDESK_SHARED_ROOT`):
+Olympus Coder enforces a structured, cross-agent memory hierarchy stored in `~/.olympus` (configurable via `OLYMPUS_HOME`; installs that used the old `~/.agents` folder are copied over once on first launch, and `~/.agents` is left as it was):
 
-1. **Tier 1 — Shared Project Memory (`~/.agents/memory/<project-slug>/`):** Indexed summaries and YAML frontmatter from `MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, topic notes, and user preferences (`~/.agents/user/learned.json`), plus project-level `AGENTS.md` and `~/.agents/skills/*/SKILL.md`.
-2. **Tier 2 — Cross-Agent Session Index (`~/.agents/threads/`):** Recent session summaries across Claude Code, Codex, and Antigravity with direct transcript paths so a new session can pick up where an earlier session stopped.
+1. **Tier 1 — Shared Project Memory (`~/.olympus/memory/<project-slug>/`):** Indexed summaries and YAML frontmatter from `MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, topic notes, and user preferences (`~/.olympus/user/learned.json`), plus project-level `AGENTS.md` and `~/.olympus/skills/*/SKILL.md` (skills installed with `npx skills` in `~/.agents/skills` are listed too, read-only).
+2. **Tier 2 — Cross-Agent Session Index (`~/.olympus/threads/`):** Recent session summaries across Claude Code, Codex, and Antigravity with direct transcript paths so a new session can pick up where an earlier session stopped.
 
 Shared guidance is delivered cleanly via native ACP `systemPrompt` options (or `_meta.antigravity.systemPrompt.append` for Antigravity) while keeping your prompt bubble concise and preventing writes to private vendor memory silos.
 
@@ -108,7 +108,7 @@ Every chat connects to Olympus Coder's built-in localhost MCP server (`olympus`)
 </table>
 
 - **CodeMirror 6 Editor & Appearance Studio:** Multi-tab code editor with six syntax themes plus Auto (dark/light), Markdown/Mermaid/KaTeX split preview, relative line numbers, ligatures, column ruler, and unsaved-buffer awareness over ACP Client FS so agents read your latest in-memory edits without overwriting them silently.
-- **Per-turn Shadow-Git Checkpoints:** Before each prompt, Olympus snapshots your working tree into a separate shadow Git store (`~/.agents/checkpoints/`), giving you instant per-turn file diffs and 1-click **Undo / Redo** without polluting your repository's `.git` history.
+- **Per-turn Shadow-Git Checkpoints:** Before each prompt, Olympus snapshots your working tree into a separate shadow Git store (Electron's `userData/checkpoints/`), giving you instant per-turn file diffs and 1-click **Undo / Redo** without polluting your repository's `.git` history.
 - **Integrated Git Client:** Stage, unstage, discard hunks, inspect side-by-side diffs, commit, amend, push, pull, manage branches, merge, and stash directly from the Workbench.
 - **WebGL Terminals, Test Runner & Port Manager:** Multi-tab `node-pty` + `@xterm/addon-webgl` terminals with `⌘F` search, error-line stepping, auto-detected 1-click **Run Tests** (*Rerun failed* / *Ask agent to fix*), `EADDRINUSE` port inspection & kill controls, background job completion wake-ups, and an embedded localhost **Web Preview** that captures browser console errors for the agent.
 - **Project Analytics Dashboard:** Track token usage, cache hit rates, agent wall-clock time, turns, lines added/removed, and cost breakdowns per project and per agent.
@@ -177,8 +177,8 @@ CI builds all four targets on every `v*` tag (and manual dispatch) via `.github/
 
 | Platform | Bundled Inside Installer | Host CLI Behavior |
 | :--- | :--- | :--- |
-| **macOS** (`arm64`, `x64`) | `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp` | Uses your installed `claude`, `codex`, `agy`, and `~/.agents/agents/*` binaries + existing CLI logins |
-| **Linux** (`x64`, `arm64`) | `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp` | Uses your installed `claude`, `codex`, `agy`, and `~/.agents/agents/*` binaries + existing CLI logins |
+| **macOS** (`arm64`, `x64`) | `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp` | Uses your installed `claude`, `codex`, `agy`, and `~/.olympus/agents/*` binaries + existing CLI logins |
+| **Linux** (`x64`, `arm64`) | `@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp` | Uses your installed `claude`, `codex`, `agy`, and `~/.olympus/agents/*` binaries + existing CLI logins |
 | **Windows** (`x64`) | ACP adapters **plus** `@anthropic-ai/claude-code` & `@openai/codex` (`resources/bundled-clis/`) | Works out of the box with zero global Node/CLI setup; also detects external CLIs on `PATH` |
 
 ### Installing Locally on macOS (`/Applications`)
@@ -243,7 +243,7 @@ Then paste your deployed `https://<your-worker>.workers.dev` URL into **Settings
     │   ├── catalog.ts          # 46-agent ACP Registry client & sha256/npx/uvx installer
     │   ├── checkpoints.ts      # Shadow-git per-turn working-tree snapshots & undo/redo
     │   ├── elicitation.ts      # Interactive ACP form & URL elicitation broker
-    │   ├── guide.ts            # Two-tier ~/.agents persistent context & system prompt builder
+    │   ├── guide.ts            # Two-tier ~/.olympus persistent context & system prompt builder
     │   ├── memory.ts           # Shared project memory indexer (MEMORY.md, BUGS.md, learned.json)
     │   ├── nativeSubagents.ts  # ACP subagents + JetBrains AIR asyncTasks/backgroundSubagents
     │   ├── orchestrator.ts     # Localhost olympus MCP server (sub-sessions, schedules, terminals)
@@ -261,7 +261,8 @@ Then paste your deployed `https://<your-worker>.workers.dev` URL into **Settings
 
 | Variable | Purpose |
 | :--- | :--- |
-| `AGENTDESK_SHARED_ROOT` | Override the default `~/.agents` shared root (useful for isolated workspaces or CI tests; the legacy name is kept for compatibility) |
+| `OLYMPUS_HOME` | Override the default `~/.olympus` shared root (useful for isolated workspaces or CI tests) |
+| `AGENTDESK_SHARED_ROOT` | Older name for the same override, still honoured |
 | `OLYMPUS_TEST_HIDDEN=1` | Launch Electron completely hidden (no dock icon, no window focus steal) for automated CDP testing |
 
 ---
@@ -290,7 +291,7 @@ OLYMPUS_TEST_HIDDEN=1 npx electron . \
 
 ## Security & Privacy Model
 
-- **Local-first state:** Threads, project metadata, checkpoints, and memories live on your disk under `~/.agents` and Electron's `userData` directory.
+- **Local-first state:** Threads, project metadata, checkpoints, and memories live on your disk under `~/.olympus` and Electron's `userData` directory.
 - **Encrypted provider secrets:** Custom model provider API keys are encrypted at rest via Electron `safeStorage` (macOS Keychain / Windows DPAPI / Linux Secret Service) and injected only into the target agent's process environment.
 - **Zero-knowledge relay:** Remote phone sessions through `relay/` derive an `AES-256-GCM` session key encoded after `#` in the pairing QR link. Because URL fragments are never sent in HTTP requests, the Cloudflare Worker relays opaque encrypted frames without ever possessing the decryption key.
 - **Guarded filesystem & process boundaries:** ACP Client FS enforces project-root path sandboxing and symlink escape checks (`acpClientFs.ts`), while a per-agent **Ask first / Approve all** switch keeps destructive shell commands under explicit user control.

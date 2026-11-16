@@ -2,7 +2,7 @@ import type { RunningTask } from '@shared/types';
 import { runState } from './agents';
 import { notifyAgent } from './appmsg';
 import { runningTasks } from './processes';
-import { findThread } from './store';
+import { findThread, getSettings } from './store';
 import { readTerminal } from './terminals';
 
 /**
@@ -10,6 +10,7 @@ import { readTerminal } from './terminals';
  * or a command it left running in its own background. Only jobs that ran at least ~10 seconds count (the
  * agent handles quick ones itself), and not while the agent is still in the very turn that started the job
  * (it is watching). The message waits in the queue if the agent is busy (appmsg.ts).
+ * Off by default (Settings → General, `notifyAgentsWhenWorkEnds`): agents check their own pending work.
  */
 
 interface Job {
@@ -49,7 +50,8 @@ function describe(j: Job): string {
   return `The command you left running finished after about ${ran}: \`${j.task.title.split('\n')[0].slice(0, 200)}\`.`;
 }
 
-async function tick() {
+/** One check (every 3 s via startJobWatch; exported for the unit test). */
+export async function tick() {
   const tasks = (await runningTasks().catch(() => [] as RunningTask[])).filter((t) => t.threadId);
   const now = Date.now();
   const seen = new Set<string>();
@@ -77,6 +79,7 @@ async function tick() {
     }
     finished.set(j.threadId, [...(finished.get(j.threadId) ?? []), j]);
   }
+  if (!getSettings().notifyAgentsWhenWorkEnds) return;
   for (const [threadId, list] of finished) {
     const body = list.map(describe).join('\n\n');
     notifyAgent(threadId, `[Olympus Coder] ${body}\n\nCheck the result and carry on with what you told the user you would do next; if nothing more is needed, give the user a short update.`);
