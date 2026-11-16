@@ -22,12 +22,12 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | `Olympus Coder-<version>-arm64.dmg` |
-| macOS, Intel | `Olympus Coder-<version>.dmg` |
-| Windows (x64) | `Olympus Coder Setup <version>.exe` |
-| Linux (x64) | `Olympus Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` |
+| macOS, Apple silicon | [`Olympus.Coder-0.1.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.1.0-arm64.dmg) |
+| macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
+| Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
+| Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |
 
-The builds are not code-signed yet. On macOS, if the app is reported as damaged or from an unidentified developer, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once after moving it to Applications. On Windows, choose **More info → Run anyway** in SmartScreen.
+Each release includes `SHA256SUMS.txt` (`shasum -a 256 -c SHA256SUMS.txt`). The builds are ad-hoc signed but not notarized yet. On macOS, if the app is reported as damaged or from an unidentified developer, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once after moving it to Applications. On Windows, choose **More info → Run anyway** in SmartScreen.
 
 ---
 
