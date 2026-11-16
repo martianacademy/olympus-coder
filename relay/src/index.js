@@ -13,6 +13,21 @@ import { DurableObject } from 'cloudflare:workers';
 const ROOM_ID = /^[A-Za-z0-9_-]{20,64}$/;
 const MAX_CLIENTS = 20;
 const MAX_MSG = 4 * 1024 * 1024;
+// A phone sends a few messages a second at most (taps, scrolls, typing); a script flooding a room is cut off.
+const CLIENT_WINDOW_MS = 10_000;
+const CLIENT_MAX_MSGS = 300;
+
+const clientIp = (req) => req.headers.get('CF-Connecting-IP') || 'local';
+
+/** One hit on a Workers Rate Limiting binding; a missing binding (older config) never blocks. */
+async function allowed(limiter, key) {
+  if (!limiter) return true;
+  try {
+    return (await limiter.limit({ key })).success;
+  } catch {
+    return true;
+  }
+}
 
 export default {
   async fetch(req, env) {
@@ -22,6 +37,7 @@ export default {
     if (m) {
       if (!ROOM_ID.test(m[1])) return new Response('Bad room', { status: 400 });
       if (req.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
+      if (!(await allowed(env.CONNECT_LIMIT, clientIp(req)))) return new Response('Too many connections, try again in a minute', { status: 429 });
       return env.ROOMS.get(env.ROOMS.idFromName(m[1])).fetch(req);
     }
     return env.ASSETS.fetch(req);
@@ -57,7 +73,11 @@ export class Room extends DurableObject {
       const h = await sha256(secret);
       const owner = await this.ctx.storage.get('owner');
       if (owner && owner !== h) return new Response('Forbidden', { status: 403 });
-      if (!owner) await this.ctx.storage.put('owner', h);
+      if (!owner) {
+        // Claiming a new room is the costly part for the relay (stored forever), so it has its own, tighter limit.
+        if (!(await allowed(this.env.NEW_ROOM_LIMIT, clientIp(req)))) return new Response('Too many new rooms, try again in a minute', { status: 429 });
+        await this.ctx.storage.put('owner', h);
+      }
       for (const old of this.ctx.getWebSockets('host')) old.close(4000, 'Replaced by a newer connection');
       this.ctx.acceptWebSocket(server, ['host']);
       server.send(JSON.stringify({ t: 'hello', clients: this.clients().map((c) => c.deserializeAttachment()?.cid).filter(Boolean) }));
@@ -90,9 +110,19 @@ export class Room extends DurableObject {
       return;
     }
     const cid = ws.deserializeAttachment()?.cid;
+    if (!this.withinRate(ws)) return ws.close(4008, 'Too many messages');
     const host = this.host();
     if (!host) return ws.send('{"t":"host","up":false}');
     host.send(JSON.stringify({ t: 'msg', cid, d: msg }));
+  }
+
+  /** Messages from one phone in the current 10 s window (in memory: a woken room starts counting again). */
+  withinRate(ws) {
+    const now = Date.now();
+    this.rates ??= new WeakMap();
+    let r = this.rates.get(ws);
+    if (!r || now - r.start > CLIENT_WINDOW_MS) this.rates.set(ws, (r = { start: now, n: 0 }));
+    return ++r.n <= CLIENT_MAX_MSGS;
   }
 
   webSocketClose(ws, code, reason) {

@@ -20,6 +20,18 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 document.documentElement.classList.add('remote');
 installTooltips();
 
+// Opened from the home screen (iOS "Add to Home Screen", installed PWA): iOS reports 100dvh short by the
+// status bar's height there, which left an empty band under the composer. The window's own height is right.
+const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+if (standalone) {
+  const root = document.documentElement;
+  root.classList.add('standalone');
+  const fit = () => root.style.setProperty('--app-h', `${window.innerHeight}px`);
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 250));
+}
+
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary label="Olympus">
     <RemoteApp />

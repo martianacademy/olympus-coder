@@ -133,3 +133,10 @@ html.remote #root {
 .r-form-col .r-big {
   max-width: none;
 }
+
+/* Home-screen app: full window height from remote/main.tsx (iOS's 100dvh is short there by the status bar). */
+html.remote.standalone,
+html.remote.standalone body,
+html.remote.standalone #root {
+  height: var(--app-h, 100dvh);
+}

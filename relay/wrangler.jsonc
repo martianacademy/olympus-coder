@@ -13,5 +13,11 @@
     "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  // Abuse limits per client IP (Workers Rate Limiting; periods must be 10 or 60 s). A Mac and its phones
+  // connect a few times a minute at most, so these only stop scripts using the relay as a free WebSocket pipe.
+  "ratelimits": [
+    { "name": "CONNECT_LIMIT", "namespace_id": "4101", "simple": { "limit": 60, "period": 60 } },
+    { "name": "NEW_ROOM_LIMIT", "namespace_id": "4102", "simple": { "limit": 10, "period": 60 } }
+  ],
   "observability": { "enabled": false }
 }
