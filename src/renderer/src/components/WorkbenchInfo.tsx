@@ -1,0 +1,200 @@
+import { useEffect, useState } from 'react';
+import { Brain, FileCode, FolderOpen, GitBranch, Laptop, RotateCw } from 'lucide-react';
+import type { AgentDef, AgentStatus, GitStatus, MemoryView, PortInfo, Project, SessionView, Thread } from '@shared/types';
+import { api } from '../api';
+import { AgentLogo } from '../logos';
+import { isRemoteBrowser } from '../responsive';
+import { canCompact, CompactButton, isCompacting } from './CompactButton';
+import { McpStatusSection } from './McpStatusSection';
+import { usePromptQueue } from '../promptQueueApi';
+import { SessionStats } from './TokenStats';
+import { LimitBars, LimitsFreshness } from './Usage';
+import type { WorkbenchTab } from './Workbench';
+
+/** "Compact context" under the context ring (only for agents that advertise `compact`). */
+function InfoCompact({ thread, session }: { thread: Thread; session: SessionView | null }) {
+  const queue = usePromptQueue(thread.id);
+  const compacting = isCompacting(thread.items, session?.status === 'running');
+  return <CompactButton threadId={thread.id} session={session} compacting={compacting} queue={queue} variant="full" />;
+}
+
+/** Ports in use on this machine, programs Olympus started first, each with Stop (asked once inline). */
+function PortsCard() {
+  const [ports, setPorts] = useState<PortInfo[] | null>(null);
+  const [confirm, setConfirm] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const load = () => void api.ports().then(setPorts).catch(() => setPorts([]));
+  useEffect(load, []);
+
+  const stop = async (p: PortInfo) => {
+    setError('');
+    try {
+      await api.stopPort(p.pid);
+      setConfirm(null);
+      load();
+    } catch (e: any) {
+      setError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+    }
+  };
+
+  const [all, setAll] = useState(false);
+  const list = (ports ?? []).filter((p) => !p.self);
+  const shown = all ? list : list.slice(0, 6);
+
+  return (
+    <div className="info-section">
+      <div className="info-title row" style={{ gap: 6 }}>
+        Ports in use
+        <span className="grow" />
+        <button className="btn ghost icon" title="Refresh" onClick={load}>
+          <RotateCw size={12} />
+        </button>
+      </div>
+      {ports === null && <div className="small muted">Looking…</div>}
+      {ports !== null && !list.length && <div className="small muted">No program is listening on a port.</div>}
+      {shown.map((p) => (
+        <div key={`${p.pid}:${p.port}`} className="info-row port-row" title={`${p.command}\npid ${p.pid} · ${p.address}`}>
+          <span className="port-num mono">:{p.port}</span>
+          <span className="ellipsis grow">
+            {p.name}
+            {p.startedHere && <span className="port-here">started here</span>}
+          </span>
+          {confirm === p.pid ? (
+            <>
+              <button className="btn small ghost" onClick={() => setConfirm(null)}>
+                Keep
+              </button>
+              <button className="btn small danger" onClick={() => void stop(p)}>
+                Stop {p.name}
+              </button>
+            </>
+          ) : (
+            <button className="btn ghost small port-stop" onClick={() => (p.startedHere ? void stop(p) : setConfirm(p.pid))} title={`Stop ${p.name} (pid ${p.pid})`}>
+              Stop
+            </button>
+          )}
+        </div>
+      ))}
+      {list.length > shown.length && (
+        <button className="btn ghost small muted" onClick={() => setAll(true)}>
+          Show {list.length - shown.length} more
+        </button>
+      )}
+      {error && <div className="small error-text">{error}</div>}
+    </div>
+  );
+}
+
+export function InfoPanel(props: {
+  project: Project;
+  thread: Thread | null;
+  agentDef?: AgentDef;
+  agentStatus?: AgentStatus;
+  session: SessionView | null;
+  git: GitStatus | null;
+  refreshKey: number;
+  onOpenFile: (p: string) => void;
+  onTab: (t: WorkbenchTab) => void;
+}) {
+  const remote = isRemoteBrowser();
+  const [mem, setMem] = useState<MemoryView | null>(null);
+  useEffect(() => {
+    void api.memory(props.project.id).then(setMem);
+  }, [props.project.id, props.refreshKey]);
+
+  const outputs = [
+    ...new Set(
+      (props.thread?.items ?? [])
+        .flatMap((i) => (i.kind === 'tool' ? [...i.locations, ...i.content.filter((c) => c.type === 'diff' && c.path).map((c) => c.path!)] : []))
+        .reverse(),
+    ),
+  ]
+    .map((p) => (p.startsWith(`${props.project.path}/`) ? p.slice(props.project.path.length + 1) : p))
+    .slice(0, 30);
+
+  const model = props.session?.configOptions.find((o) => o.category === 'model');
+
+  return (
+    <div className="info-panel">
+      <div className="info-section">
+        <div className="info-title">Environment</div>
+        <div className="info-row">
+          <Laptop size={15} className="muted" /> {remote ? 'Your Mac (remote)' : 'This computer'}
+        </div>
+        <div
+          className={`info-row ${remote ? '' : 'link-like'}`}
+          onClick={remote ? undefined : () => void api.revealProject(props.project.id)}
+          title={props.project.path}
+        >
+          <FolderOpen size={15} className="muted" /> <span className="ellipsis">{props.project.name}</span>
+          <span className="small muted ellipsis">{props.project.path.replace(/^\/Users\/[^/]+/, '~')}</span>
+        </div>
+        {props.agentDef && (
+          <div className="info-row">
+            <AgentLogo def={props.agentDef} size={18} />
+            {props.agentDef.name}
+            {model && <span className="small muted">· {model.options.find((x) => x.value === model.currentValue)?.name}</span>}
+            <span className={`dot ${props.session?.status === 'running' ? 'starting' : props.agentStatus?.state ?? 'unknown'}`} style={{ marginLeft: 'auto' }} />
+          </div>
+        )}
+      </div>
+      <McpStatusSection threadId={props.thread?.id} />
+      {props.thread && (
+        <div className="info-section">
+          <div className="info-title">Tokens in this chat</div>
+          <SessionStats
+            thread={props.thread}
+            usage={props.session?.usage}
+            agentDefs={props.agentDef ? { [props.agentDef.id]: props.agentDef } : {}}
+            action={canCompact(props.session) ? <InfoCompact thread={props.thread} session={props.session} /> : undefined}
+          />
+        </div>
+      )}
+      {(props.agentStatus?.plan || props.agentStatus?.limits?.length) && (
+        <div className="info-section">
+          <div className="info-title">Plan{props.agentStatus?.plan ? ` · ${props.agentStatus.plan}` : ''}</div>
+          {props.agentStatus?.limits?.length ? <LimitBars limits={props.agentStatus.limits} /> : <div className="small muted">This agent does not report its limits.</div>}
+          <LimitsFreshness status={props.agentStatus} agentName={props.agentDef?.name} />
+        </div>
+      )}
+      {props.git?.isRepo && (
+        <div className="info-section">
+          <div className="info-title">Git</div>
+          <div className="info-row link-like" onClick={() => props.onTab('git')}>
+            <GitBranch size={15} className="muted" /> {props.git.branch}
+            <span className="small muted" style={{ marginLeft: 'auto' }}>
+              {props.git.files.length} changes{props.git.ahead ? ` · ↑${props.git.ahead}` : ''}
+              {props.git.behind ? ` · ↓${props.git.behind}` : ''}
+            </span>
+          </div>
+        </div>
+      )}
+      <div className="info-section">
+        <div className="info-title">Shared memory</div>
+        <div className={`info-row ${remote ? '' : 'link-like'}`} onClick={remote ? undefined : () => void api.revealMemory(props.project.id)}>
+          <Brain size={15} className="muted" /> {mem ? `${mem.files.filter((f) => f.name !== 'MEMORY.md').length} memories` : '…'}
+          {!remote && (
+            <span className="small muted" style={{ marginLeft: 'auto' }}>
+              Open folder
+            </span>
+          )}
+        </div>
+        {mem?.index && <pre className="info-pre">{mem.index.replace(/^# Shared memory index[\s\S]*?\n\n(?:One line[^\n]*\n\n)?/, '').trim() || '(empty)'}</pre>}
+      </div>
+      <PortsCard />
+      <div className="info-section">
+        <div className="info-title">Outputs</div>
+        {outputs.length ? (
+          outputs.map((p) => (
+            <div key={p} className="info-row link-like" onClick={() => props.onOpenFile(p)} title={p}>
+              <FileCode size={15} className="muted" /> <span className="ellipsis">{p.split('/').pop()}</span>
+              <span className="small muted ellipsis">{p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''}</span>
+            </div>
+          ))
+        ) : (
+          <div className="small muted">The agent has not touched any files in this chat yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}

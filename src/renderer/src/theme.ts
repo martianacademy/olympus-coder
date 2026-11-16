@@ -1,0 +1,69 @@
+import { useSyncExternalStore } from 'react';
+import type { ThemeSettings } from '@shared/types';
+import { codeFontCss, DEFAULT_THEME, resolvePalette, UI_FONTS } from '@shared/themes';
+import { applyChatSyntaxVars } from './syntaxPalettes';
+
+const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+let currentTheme: ThemeSettings = { ...DEFAULT_THEME };
+const themeListeners = new Set<() => void>();
+
+/** Returns the active merged `ThemeSettings` snapshot for non-React consumers (e.g. xterm observers). */
+export function getThemeSettings(): ThemeSettings {
+  return currentTheme;
+}
+
+/** Subscribes a React component (such as `CodeEditor`) to live `ThemeSettings` updates. */
+export function useThemeSettings(): ThemeSettings {
+  return useSyncExternalStore(
+    (listener) => {
+      themeListeners.add(listener);
+      return () => themeListeners.delete(listener);
+    },
+    () => currentTheme,
+  );
+}
+
+export function applyTheme(theme: ThemeSettings) {
+  const t: ThemeSettings = { ...DEFAULT_THEME, ...theme };
+  currentTheme = t;
+  const { palette, dark } = resolvePalette(t, media.matches);
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(palette)) root.style.setProperty(`--${k}`, v);
+  root.style.setProperty('--font-size', `${t.fontSize}px`);
+  root.style.setProperty('--radius', `${t.radius}px`);
+  root.style.setProperty('--ui-font', UI_FONTS.find((f) => f.id === t.uiFont)?.css ?? UI_FONTS[0].css);
+  const codeFamily = `${codeFontCss(t.codeFont)}, ui-monospace, Menlo, monospace`;
+  root.style.setProperty('--code-font', codeFamily);
+  root.style.setProperty('--pad', t.density === 'compact' ? '8px' : '12px');
+  root.style.setProperty('--text-weight', String(t.textWeight));
+  root.style.setProperty('--bold-weight', String(t.boldWeight));
+  root.style.setProperty('--chat-size', t.chatFontSize ? `${t.chatFontSize}px` : `${t.fontSize}px`);
+  root.style.setProperty('--line-height', String(t.lineHeight));
+  root.style.setProperty('--code-size', `${t.codeFontSize}px`);
+  root.style.setProperty('--thinking-style', t.thinkingItalic ? 'italic' : 'normal');
+  root.style.setProperty('--thinking-opacity', `${t.thinkingOpacity}%`);
+  root.style.setProperty('--thinking-size', `${(t.thinkingSize ?? 95) / 100}em`);
+
+  // Editor & terminal CSS variables for instant DOM & observer updates
+  const editorFamily = t.editorFontFamily?.trim() ? `${codeFontCss(t.editorFontFamily)}, ui-monospace, Menlo, monospace` : codeFamily;
+  const editorSize = t.editorFontSize && t.editorFontSize > 0 ? t.editorFontSize : (t.codeFontSize ?? 12.5);
+  const termSize = t.terminalFontSize && t.terminalFontSize > 0 ? t.terminalFontSize : (t.codeFontSize ?? 12.5);
+  root.style.setProperty('--editor-font', editorFamily);
+  root.style.setProperty('--editor-size', `${editorSize}px`);
+  root.style.setProperty('--editor-line-height', String(t.editorLineHeight ?? 1.55));
+  root.style.setProperty('--editor-letter-spacing', `${t.editorLetterSpacing ?? 0}px`);
+  root.style.setProperty('--term-size', `${termSize}px`);
+  root.style.setProperty('--term-line-height', String(t.terminalLineHeight ?? 1.25));
+
+  applyChatSyntaxVars(root, t.editorSyntaxTheme, dark);
+
+  root.dataset.theme = dark ? 'dark' : 'light';
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  themeListeners.forEach((fn) => fn());
+}
+
+export function onSystemThemeChange(fn: () => void) {
+  media.addEventListener('change', fn);
+  return () => media.removeEventListener('change', fn);
+}

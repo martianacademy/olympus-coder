@@ -1,0 +1,15 @@
+/* Send while busy: delivery ticks and the queued-messages strip above the composer (src/renderer/src/components/
+   DeliveryTicks.tsx, QueuedMessages.tsx). "Seen" uses the app's blue (#4ea1ff, as `--c-cr`); the accent is orange. */
+.delivery-ticks { display: inline-flex; align-items: center; color: color-mix(in srgb, var(--muted) 80%, transparent); line-height: 0; cursor: default; }
+.delivery-ticks.seen { color: #4ea1ff; }
+
+.queued-list { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 0 2px 8px; }
+.queued-msg { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 85%; min-width: 0; }
+.queued-msg .msg-user { max-width: 100%; opacity: .62; border-style: dashed; }
+.queued-msg textarea { width: min(520px, 100%); min-height: 54px; resize: vertical; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 11px; }
+.queued-foot { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--muted); }
+.queued-foot .link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+.queued-foot .link-btn:hover { color: var(--text); text-decoration: underline; }
+.queued-foot .link-btn.send-now { color: var(--text); font-weight: 600; }
+.queued-foot .link-btn:disabled { opacity: .5; cursor: default; text-decoration: none; }
+.composer-send { gap: 6px; }

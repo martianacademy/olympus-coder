@@ -1,0 +1,214 @@
+/* In-chat viewer (`components/MediaViewer.tsx`): a calm overlay over the app for images, videos and documents. */
+
+.mv-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 10, 12, 0.9);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #ececf1;
+  outline: none;
+  animation: mv-in 0.14s ease-out;
+  overscroll-behavior: contain;
+}
+@keyframes mv-in {
+  from { opacity: 0; }
+}
+
+.mv-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 48px;
+  padding: env(safe-area-inset-top, 0px) 8px 0 16px;
+  box-sizing: content-box;
+}
+.mv-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.mv-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ececf1;
+  min-width: 0;
+}
+.mv-count {
+  flex: none;
+  font-size: 11.5px;
+  color: rgba(236, 236, 241, 0.55);
+}
+.mv-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(236, 236, 241, 0.78);
+  cursor: pointer;
+}
+.mv-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.mv-btn:focus-visible, .mv-nav:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
+.mv-zoom { padding: 0 8px; font-size: 11.5px; }
+
+.mv-stage-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.mv-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.mv-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+.mv-zoom-stage {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mv-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  transform-origin: center center;
+  cursor: zoom-in;
+  will-change: transform;
+  -webkit-user-drag: none;
+}
+.mv-zoom-stage.is-zoomed .mv-img { cursor: grab; border-radius: 0; }
+.mv-zoom-stage.is-zoomed .mv-img:active { cursor: grabbing; }
+.mv-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  background: #000;
+}
+.mv-audio {
+  width: min(460px, 100%);
+  padding: 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.mv-audio audio { width: 100%; display: block; }
+.mv-spinner { color: rgba(236, 236, 241, 0.6); }
+.mv-error {
+  max-width: 520px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2b8b5;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Documents: the panel's renderers on a plain surface, centred with room around it to tap away. */
+.mv-doc-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 4px 56px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.mv-doc.file-preview {
+  flex: 1 1 auto;
+  max-width: 980px;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.mv-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(236, 236, 241, 0.85);
+  cursor: pointer;
+  z-index: 1;
+}
+.mv-nav:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.mv-nav.prev { left: 10px; }
+.mv-nav.next { right: 10px; }
+.mv-root.is-media .mv-center { padding-left: 60px; padding-right: 60px; }
+
+@media (max-width: 600px) {
+  .mv-bar { padding-left: 12px; padding-right: 4px; }
+  .mv-root.is-media .mv-center { padding: 0 0 env(safe-area-inset-bottom, 0px); }
+  .mv-img, .mv-video { border-radius: 0; }
+  .mv-doc-wrap { padding: 0 0 env(safe-area-inset-bottom, 0px); }
+  .mv-doc.file-preview { border-radius: 0; }
+  /* Swipe steps on touch; the arrows stay out of the picture. */
+  .mv-nav { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv-root { animation: none; }
+}
+
+/* Players inside sent attachment cards. */
+.attach-player {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  cursor: default;
+}
+.attach-player video { width: 100%; height: 100%; object-fit: contain; }
+.attach-player.is-audio { background: color-mix(in srgb, var(--text) 5%, var(--surface)); padding: 0 6px; }
+.attach-player.is-audio audio { width: 100%; height: 32px; }
+.attach-expand {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+.attach-expand:hover { background: rgba(0, 0, 0, 0.75); }
+
+/* "Add to message" on sent attachment cards: next to Download; on hover with a mouse, always shown on touch. */
+.attach-dl.attach-add { right: 32px; }
+@media (hover: hover) {
+  .attach-dl.attach-add { opacity: 0; }
+  .attach-chip:hover .attach-dl.attach-add, .attach-dl.attach-add:focus-visible { opacity: 1; }
+}

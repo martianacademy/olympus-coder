@@ -1,0 +1,397 @@
+/* =====================================================================================
+   WorkGroup — quiet, monochrome steps between replies
+   - Settled header: one muted line, `Worked for 1m 10s · 3 commands, 2 files edited` + chevron.
+   - Live header: brand mark + present-tense action + timer.
+   - Expanded: a flat list (no rail, no discs). One 14px outline icon per row in the same muted colour,
+     verb in neutral text, target muted. Duration and chevron only on hover (desktop). Colour only for failures.
+   - Only text / muted / hairline tokens and --danger; works in light and dark.
+   ===================================================================================== */
+
+.tool-group.work-group {
+  --wg-row-h: 28px;
+  --wg-icon: 14px;
+  --wg-gap: 8px;
+  --wg-ink: color-mix(in srgb, var(--text) 84%, var(--muted));
+  --wg-quiet: var(--muted);
+  --wg-faint: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.tool-group.work-group,
+.tool-group.work-group.is-live,
+.tool-group.work-group.has-failed {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* ---------- Header ---------- */
+
+.tool-group-head.work-group-head {
+  min-height: var(--wg-row-h);
+  height: auto;
+  padding: 2px 0;
+  gap: var(--wg-gap);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  color: var(--wg-quiet);
+}
+
+.tool-group-head.work-group-head:hover {
+  background: transparent;
+}
+
+.tool-group-head.work-group-head:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--text) 30%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.work-group-head .wb-code {
+  display: none; /* The volcano alone is the brand mark here; the coloured code bars are noise in a list */
+}
+
+.work-group-head .wb-mark-box {
+  flex: none;
+}
+
+/* The settled line: parts that do not fit wrap onto a hidden second line, so nothing is cut mid-word. */
+.wg-settled-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  height: 20px;
+  line-height: 20px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.wg-headline,
+.wg-part {
+  flex: none;
+  white-space: pre;
+  color: var(--wg-quiet);
+  transition: color 0.12s;
+}
+
+.wg-single-target {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: 0.4em;
+  color: var(--wg-faint);
+}
+
+.wg-single-target.mono,
+.wg-live-detail.mono {
+  font-family: var(--code-font);
+  font-size: 12px;
+}
+
+.work-group-head:hover .wg-headline,
+.work-group-head:hover .wg-part,
+.work-group-head:hover .wg-chev {
+  color: var(--text);
+}
+
+.wg-chev {
+  flex: none;
+  color: var(--wg-faint);
+  transition: color 0.12s;
+}
+
+.wg-flag {
+  flex: none;
+  font-size: 12px;
+  color: var(--wg-quiet);
+  white-space: nowrap;
+}
+
+.wg-flag.failed {
+  color: var(--danger);
+}
+
+.wg-time,
+.wg-plan-count {
+  flex: none;
+  font-size: 12px;
+  color: var(--wg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Verb + target, shared by the live header and the rows WorkGroup renders itself (thought, plan). */
+.work-group .wg-verb {
+  flex: none;
+  color: var(--wg-ink);
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.work-group .wg-target {
+  min-width: 0;
+  color: var(--wg-quiet);
+  font-weight: 400;
+}
+
+/* ---------- Expanded list ---------- */
+
+.tool-group-body.work-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.wg-step {
+  position: relative;
+  padding-left: calc(var(--wg-icon) + var(--wg-gap));
+  min-width: 0;
+}
+
+.wg-step-icon {
+  position: absolute;
+  left: 0;
+  top: calc((var(--wg-row-h) - var(--wg-icon)) / 2);
+  width: var(--wg-icon);
+  height: var(--wg-icon);
+  display: grid;
+  place-items: center;
+  color: var(--wg-faint);
+  pointer-events: none;
+}
+
+.wg-step-icon svg {
+  display: block;
+  stroke-width: 1.75;
+}
+
+.wg-step-failed > .wg-step-icon {
+  color: var(--danger);
+}
+
+.wg-step-running > .wg-step-icon {
+  color: var(--wg-ink);
+}
+
+/* Row shell (ToolRow + the thought / plan rows): flat, one line, uniform height */
+.work-group-body .tool-row {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.work-group-body .tool-row-head {
+  min-height: var(--wg-row-h);
+  padding: 0;
+  gap: var(--wg-gap);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.work-group-body .tool-row-head:hover {
+  background: transparent;
+}
+
+/* Hidden per-row noise: coloured tiles, status dots, `$`, `# comment`, file badges, token counts, green exit 0 */
+.work-group-body .tool-kind,
+.work-group-body .tool-status,
+.work-group-body .cmd-dollar,
+.work-group-body .cmd-comment,
+.work-group-body .tool-open,
+.work-group-body .token-tag,
+.work-group-body .cmd-exit.ok {
+  display: none;
+}
+
+/* Verb label: neutral text, normal weight, UI font — the same for every kind and state */
+.work-group .work-group-body .tool-row-head .tool-badge[class] {
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wg-ink);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: 0;
+}
+
+/* Target: muted; commands in mono */
+.work-group .work-group-body .tool-row-title,
+.work-group .work-group-body .tool-row-title.human,
+.work-group .work-group-body .tool-row-title.mono {
+  min-width: 0;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--wg-quiet);
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.work-group .work-group-body .tool-row-title.mono,
+.work-group .work-group-body .cmd-term-title {
+  font-family: var(--code-font) !important;
+  font-size: 12px;
+}
+
+.work-group-body .tool-sub-target {
+  color: var(--wg-faint);
+}
+
+.work-group-body .wg-thought-snippet {
+  font-style: normal;
+  color: var(--wg-faint);
+}
+
+.work-group-body .tool-row-head:hover .tool-badge[class],
+.work-group-body .tool-row-head:hover .wg-verb {
+  color: var(--text);
+}
+
+.work-group-body .tool-row-head:hover .tool-row-title,
+.work-group-body .tool-row-head:hover .wg-target {
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+}
+
+/* Right side: empty by default. Duration on hover (desktop), live timer while running, red exit code on failure. */
+.work-group-body .tool-dur {
+  flex: none;
+  font-size: 12px;
+  color: var(--wg-faint);
+  font-family: var(--ui-font);
+  visibility: hidden;
+}
+
+.work-group-body .tool-row-head:hover .tool-dur,
+.wg-step-running .tool-dur {
+  visibility: visible;
+}
+
+.work-group-body .cmd-exit.bad,
+.work-group-body .status-pill {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.work-group-body .cmd-exit.bad {
+  color: var(--danger);
+}
+
+.work-group-body .status-pill {
+  color: var(--wg-quiet);
+}
+
+/* Failed rows keep neutral text; only the icon and the exit code turn red */
+.work-group .work-group-body .is-failed > .tool-row-head .cmd-term-title {
+  color: var(--wg-quiet);
+}
+
+/* Chevron: only on hover (desktop); on touch the whole row toggles */
+.work-group-body .tool-row-head > svg:last-child {
+  flex: none;
+  color: var(--wg-faint);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.work-group-body .tool-row-head:hover > svg:last-child,
+.work-group-body .tool-row.is-open > .tool-row-head > svg:last-child {
+  opacity: 1;
+}
+
+.work-group-body .tool-row.is-open > .tool-row-head > .wg-row-chev {
+  transform: rotate(90deg);
+}
+
+/* ---------- Expanded bodies (flat `.step-box`es from stepBox.css) ---------- */
+
+.work-group-body .work-thought-body,
+.work-group-body .tool-row .tool-body,
+.work-group-body .work-plan-body.plan {
+  margin: 2px 0 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.work-group-body .work-thought-body .thought.msg-agent {
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.91em;
+  font-style: normal;
+}
+
+.work-group-body .work-plan-body.plan {
+  padding: 2px 0 4px;
+}
+
+.work-group-body .work-orch-wrap {
+  padding: 3px 0;
+}
+
+.work-group-body .orch {
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.work-group-body .orch-quote,
+.work-group-body .orch-text {
+  border: none;
+  border-left: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 0 4px 10px;
+}
+
+/* ---------- Touch / narrow ---------- */
+
+@media (hover: none), (pointer: coarse) {
+  .tool-group.work-group {
+    --wg-row-h: 34px;
+  }
+
+  .work-group-body .tool-row-head > svg:last-child {
+    display: none;
+  }
+
+  .work-group-body .tool-row-head:hover .tool-dur {
+    visibility: hidden;
+  }
+
+  .wg-step-running .tool-dur {
+    visibility: visible;
+  }
+}
+
+/* Phones (also when the browser reports a fine pointer): touch-sized rows */
+@media (max-width: 600px) {
+  .tool-group.work-group {
+    --wg-row-h: 34px;
+  }
+}

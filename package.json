@@ -1,0 +1,161 @@
+{
+  "name": "olympus-coder",
+  "productName": "Olympus Coder",
+  "version": "0.1.0",
+  "description": "Olympus Coder: one desktop app for Claude Code, Antigravity CLI, Codex and other ACP coding agents, with shared memory.",
+  "main": "out/main/index.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "dist": "electron-vite build && electron-builder --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.107.0",
+    "@agentclientprotocol/codex-acp": "^2.6.0",
+    "@agentclientprotocol/sdk": "^2.6.0",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.43.15",
+    "@electron/rebuild": "^4.2.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@lobehub/icons-static-svg": "^1.102.0",
+    "@types/node": "^26.6.6",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "codemirror": "^6.0.2",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "katex": "^0.16.22",
+    "lucide-react": "^1.72.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true,
+    "fsevents@2.3.3": true
+  },
+  "author": {
+    "name": "Olympus Coder"
+  },
+  "build": {
+    "appId": "com.olympuscoder.app",
+    "productName": "Olympus Coder",
+    "copyright": "Copyright © 2026 Olympus Coder",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asar": false,
+    "npmRebuild": true,
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Olympus Coder does not use the microphone.",
+        "NSAppleEventsUsageDescription": "Lets agents open files and apps you ask them to."
+      },
+      "files": [
+        "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+        "!node_modules/@openai/codex-*/**"
+      ]
+    },
+    "dmg": {
+      "title": "Olympus Coder",
+      "background": "build/background.tiff",
+      "iconSize": 112,
+      "window": {
+        "width": 660,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 180,
+          "y": 215,
+          "type": "file"
+        },
+        {
+          "x": 480,
+          "y": 215,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "Olympus Coder"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "maintainer": "Olympus Coder",
+      "synopsis": "One desktop app for Claude Code, Antigravity, Codex and other coding agents",
+      "executableName": "olympus-coder",
+      "files": [
+        "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+        "!node_modules/@openai/codex-*/**"
+      ]
+    },
+    "deb": {
+      "depends": [
+        "libsecret-1-0",
+        "git"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/martianacademy/olympus-coder.git"
+  },
+  "homepage": "https://github.com/martianacademy/olympus-coder"
+}

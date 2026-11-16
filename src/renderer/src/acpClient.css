@@ -1,0 +1,65 @@
+/* ACP client features in the window. 1) Live agent terminals in the BASH + RESULT boxes (AcpTerminalBox.tsx), built on stepBox.css and
+   the `.cmd-*` rules in mediaAndConsole.css; only the live bits are added here. */
+
+.acp-term .acp-term-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+}
+
+.acp-term .acp-term-done {
+  opacity: 0.85;
+}
+
+/* Folder the command runs in: a quiet chip next to the BASH label that gives way first on narrow widths */
+.acp-term .acp-term-cwd {
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: 8px;
+  flex: 0 1 auto;
+}
+
+.acp-term .acp-term-stop:hover {
+  color: var(--danger);
+}
+
+.acp-term .acp-term-clipped {
+  margin-bottom: 4px;
+  font-family: var(--code-font);
+  font-size: 10.6px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+@container (max-width: 520px) {
+  .acp-term .acp-term-cwd {
+    display: none;
+  }
+}
+
+/* 2) Editor banner: an agent rewrote a file (fs/write_text_file) while it had unsaved edits (FilesPanel.tsx) */
+.agent-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--hairline));
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  color: var(--text);
+}
+
+.agent-conflict .agent-conflict-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.agent-conflict .agent-conflict-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}

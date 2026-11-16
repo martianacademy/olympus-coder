@@ -1,0 +1,108 @@
+/* ---------- CLI Sub-agent cards & inspector inside Tasks panel ---------- */
+.task-origin-pill {
+  font-size: 0.76em;
+  font-weight: 550;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 13%, var(--code));
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.task-role-pill,
+.task-model-pill {
+  font-size: 0.75em;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--code);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subagent-inspector {
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.subagent-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 65%, var(--bg));
+  flex-wrap: wrap;
+}
+
+.subagent-tabs {
+  display: inline-flex;
+  background: var(--code);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.subagent-tabs button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78em;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.subagent-tabs button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.subagent-prompt-box {
+  margin: 8px 10px 0;
+  padding: 7px 10px;
+  border-radius: calc(var(--radius) - 3px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.86em;
+}
+
+.subagent-prompt-body {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  user-select: text;
+  max-height: 180px;
+  overflow-y: auto;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.subagent-steps-pane {
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subagent-files-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  border-radius: calc(var(--radius) - 3px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.8em;
+}

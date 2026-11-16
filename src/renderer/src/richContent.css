@@ -1,0 +1,244 @@
+/* ACP rich content (components/RichContent.tsx): images, audio, embedded resources and resource links an agent sent,
+   content meant only for the agent, and tool call locations. Flat and quiet: hairlines, no shadows, no heavy cards. */
+
+.rich-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rich-parts.is-tool {
+  gap: 6px;
+}
+
+/* Images */
+.rich-image {
+  margin: 0;
+  width: fit-content;
+  min-width: 160px;
+  max-width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rich-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--hairline, var(--border));
+  background: color-mix(in srgb, var(--text) 3%, var(--bg));
+  cursor: zoom-in;
+  align-self: flex-start;
+}
+
+.rich-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.rich-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+}
+
+/* Audio */
+.rich-audio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, 100%);
+  min-width: 0;
+}
+
+.rich-audio audio {
+  height: 32px;
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 360px;
+}
+
+/* Links and file chips */
+.rich-link-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rich-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--hairline, var(--border));
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.rich-link:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.rich-link.is-static,
+.rich-link:disabled {
+  cursor: default;
+}
+
+.rich-link-icon {
+  color: var(--muted);
+  flex: none;
+}
+
+.rich-link-name {
+  font-weight: 540;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.rich-link-meta {
+  color: var(--muted);
+  font-size: 11px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rich-link-desc {
+  color: var(--muted);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rich-act {
+  flex: none;
+}
+
+.rich-omitted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  align-self: flex-start;
+}
+
+.rich-resource {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Content meant only for the agent: folded and dimmed */
+.rich-agent-only {
+  opacity: 0.62;
+  min-width: 0;
+}
+
+.rich-agent-only[open] {
+  opacity: 0.8;
+}
+
+.rich-agent-only > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rich-agent-only > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rich-agent-only-body {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--hairline, var(--border));
+  min-width: 0;
+}
+
+/* Tool call locations */
+.rich-locations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rich-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 7px 1px 5px;
+  border: 1px solid var(--hairline, var(--border));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rich-loc svg {
+  color: var(--muted);
+  flex: none;
+}
+
+.rich-loc:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.rich-loc-line {
+  color: var(--muted);
+  flex: none;
+}
+
+.rich-loc.more {
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .rich-link-desc,
+  .rich-audio .rich-link-meta {
+    display: none;
+  }
+  .rich-image img {
+    max-height: 260px;
+  }
+}
+
+/* The real tool behind a step (MCP server › tool, skill, tool name), quiet line at the top of its body */
+.rich-tool-identity {
+  font-size: 11px;
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,135 @@
+/* Olympus Remote Host: pairing/unlock screens + thin connection banner wrapping the unified <App />. */
+
+html.remote,
+html.remote body,
+html.remote #root {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remote-host {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.remote-host > .app {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.r-conn-banner {
+  flex: none;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px;
+  text-align: center;
+  font-size: 0.82em;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--warning) 22%, var(--bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  color: var(--text);
+}
+
+/* When the connection banner already absorbs the top notch inset, avoid doubling it on the app header. */
+.r-conn-banner + .app .titlebar,
+.r-conn-banner + .app .main-head,
+.r-conn-banner + .app .workbench-tabs {
+  padding-top: 0;
+  min-height: 54px;
+}
+
+.r-conn-banner + .app .sb-toggle-float {
+  top: 6px;
+}
+
+/* ---------- Pairing & Unlock Gate ---------- */
+.r-pair {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 22px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  text-align: center;
+  background: var(--bg);
+  user-select: text;
+}
+
+.r-pair h1 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.r-pair p {
+  margin: 0;
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+.r-pair-icon {
+  color: var(--accent);
+}
+
+.r-code {
+  width: 100%;
+  max-width: 280px;
+  text-align: center;
+  font: 700 2em var(--code-font);
+  letter-spacing: 0.2em;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.r-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.r-form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: stretch;
+  text-align: left;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.r-pair .link-btn {
+  margin-top: 6px;
+}
+
+.r-big {
+  width: 100%;
+  max-width: 320px;
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 1.02em;
+  justify-content: center;
+  text-align: center;
+}
+
+.r-form-col .r-big {
+  max-width: none;
+}

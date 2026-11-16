@@ -1,0 +1,23 @@
+#!/bin/sh
+# Olympus CLI launcher — runs out/main/olympus-cli.js via Electron's built-in Node 24 or system Node >= 20.17.
+set -e
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CLI_JS="$REPO_ROOT/out/main/olympus-cli.js"
+DEV_ELECTRON="$REPO_ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+DIST_APP_BIN="$REPO_ROOT/dist/mac-arm64/Olympus Coder.app/Contents/MacOS/Olympus Coder"
+
+if [ ! -f "$CLI_JS" ]; then
+  echo "[olympus] CLI bundle not built yet at $CLI_JS" >&2
+  exit 1
+fi
+
+if [ -x "$DEV_ELECTRON" ]; then
+  ELECTRON_RUN_AS_NODE=1 exec "$DEV_ELECTRON" "$CLI_JS" "$@"
+fi
+
+if [ -x "$DIST_APP_BIN" ]; then
+  ELECTRON_RUN_AS_NODE=1 exec "$DIST_APP_BIN" "$CLI_JS" "$@"
+fi
+
+exec node "$CLI_JS" "$@"

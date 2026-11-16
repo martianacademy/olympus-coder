@@ -1,0 +1,41 @@
+/* ACP session lifecycle UI: Import from <Agent>, the delete-chat confirm, and the home screen's option pills. */
+
+.acps-dialog { max-height: min(78vh, 720px); }
+.acps-toolbar { padding: 10px 18px 6px; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.acps-where { min-width: 0; max-width: 40%; }
+.acps-list { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 1px; min-height: 120px; }
+.acps-note { padding: 14px 10px; font-size: .9em; gap: 8px; }
+
+.acps-row {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 9px 10px; border-radius: 9px; cursor: pointer;
+  transition: background .12s;
+}
+.acps-row:hover, .acps-row:focus-visible { background: var(--hover, color-mix(in srgb, var(--text) 5%, transparent)); outline: none; }
+.acps-row.busy { cursor: progress; opacity: .7; }
+.acps-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acps-title { font-size: .95em; }
+.acps-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.acps-tag { color: var(--accent); font-size: .92em; }
+.acps-row-action { opacity: 0; flex: none; }
+.acps-row:hover .acps-row-action, .acps-row:focus-within .acps-row-action { opacity: 1; }
+.acps-more { align-self: center; margin-top: 6px; }
+
+.acps-confirm { width: min(460px, 100%); }
+.acps-confirm-body { gap: 14px; line-height: 1.45; }
+.acps-confirm-title { font-weight: 600; overflow-wrap: anywhere; }
+.acps-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.acps-check input[type='checkbox'] { accent-color: var(--accent); width: 14px; height: 14px; margin: 3px 0 0; flex: none; }
+.acps-check-hint { display: block; margin-top: 2px; }
+.acps-actions { padding: 0 18px 16px; gap: 8px; }
+.acps-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.acps-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+.acps-home-options { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }
+.acps-home-options .pill { max-width: 220px; }
+
+/* Touch screens: row actions cannot rely on hover. */
+@media (pointer: coarse), (max-width: 768px) {
+  .acps-row-action { opacity: 1; }
+  .acps-where { display: none; }
+}

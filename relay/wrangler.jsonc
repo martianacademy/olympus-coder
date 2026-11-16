@@ -1,0 +1,17 @@
+{
+  // Olympus Coder phone relay: serves the phone page and passes end-to-end encrypted messages between a Mac and
+  // its phones. It never sees the key (it lives in the QR link's #fragment), so it can't read anything.
+  "name": "olympus-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/ws/*", "/health"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": false }
+}

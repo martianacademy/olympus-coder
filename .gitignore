@@ -1,0 +1,12 @@
+node_modules
+out
+dist
+.DS_Store
+.wrangler
+.env
+.env.*
+*.log
+
+# Internal dev log and local agent settings: not part of the published source
+PROGRESS.md
+.claude/

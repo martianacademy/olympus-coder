@@ -1,0 +1,35 @@
+/* ACP session settings: on/off toggle pills (boolean config options), MCP status rows, model provider settings. */
+
+.config-toggle { border: 1px solid transparent; background: transparent; cursor: pointer; font: inherit; gap: 7px; }
+.config-toggle:hover:not(.disabled), .config-toggle:focus-visible { border-color: var(--border); color: var(--text); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.config-toggle.disabled { opacity: .55; cursor: default; }
+.config-toggle.on { color: var(--text); }
+.config-switch { position: relative; flex: none; width: 22px; height: 13px; border-radius: 99px; background: color-mix(in srgb, var(--text) 18%, transparent); transition: background .15s; }
+.config-knob { position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--panel, #fff); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 20%, transparent); transition: transform .15s; }
+.config-toggle.on .config-switch { background: var(--accent); }
+.config-toggle.on .config-knob { transform: translateX(9px); }
+.composer-pills .config-toggle { border-color: var(--hairline, var(--border)); }
+
+/* MCP servers of one chat (workbench info panel). */
+.mcp-status-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 0; font-size: .92em; }
+.mcp-status-row .mcp-name { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcp-status-row .mcp-why { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.mcp-status-row .mcp-state { flex: none; color: var(--muted); font-size: .9em; }
+.mcp-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.mcp-dot.ready { background: var(--success); }
+.mcp-dot.starting { background: var(--warning); }
+.mcp-dot.failed, .mcp-dot.needs-auth { background: var(--danger); }
+.mcp-dot.skipped, .mcp-dot.dropped, .mcp-dot.cancelled { background: color-mix(in srgb, var(--warning) 70%, var(--muted)); }
+.mcp-summary { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font-size: .86em; }
+
+/* Settings → Agents: model provider. */
+.provider-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline, var(--border)); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.provider-head { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.provider-head .provider-current { color: var(--muted); font-size: .9em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provider-form { display: grid; grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); gap: 8px 10px; align-items: center; min-width: 0; }
+.provider-form label { font-size: .9em; color: var(--muted); }
+.provider-form .input, .provider-form select { min-width: 0; width: 100%; }
+.provider-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 520px) {
+  .provider-form { grid-template-columns: minmax(0, 1fr); }
+}

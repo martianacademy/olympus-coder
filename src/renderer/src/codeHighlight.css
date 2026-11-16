@@ -1,0 +1,55 @@
+/* Static syntax highlighting for code in chat (codeHighlight.tsx). Colours: `--hl-*` from syntaxPalettes.ts. */
+
+.hl-k { color: var(--hl-keyword); }
+.hl-f { color: var(--hl-fn); }
+.hl-s { color: var(--hl-str); }
+.hl-n { color: var(--hl-num); }
+.hl-t { color: var(--hl-type); }
+.hl-c { color: var(--hl-comment); }
+.hl-p { color: var(--hl-prop); }
+.hl-g { color: var(--hl-tag); }
+.hl-a { color: var(--hl-attr); }
+.hl-m { color: var(--muted); }
+.hl-h { color: var(--hl-keyword); font-weight: var(--bold-weight, 650); }
+.hl-b { font-weight: var(--bold-weight, 650); }
+.hl-i { font-style: italic; }
+.hl-l { color: var(--hl-str); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.hl-ins { color: color-mix(in srgb, var(--success) 85%, var(--text)); }
+.hl-del { color: color-mix(in srgb, var(--danger) 85%, var(--text)); }
+.hl-sep { color: var(--muted); opacity: .6; }
+
+/* Line-number gutter: the number is CSS-generated content, so selection and copy never include it. */
+.hl-code.has-gutter { display: block; }
+.hl-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 1lh;
+}
+.hl-gutter {
+  flex: none;
+  width: calc(var(--hl-gw, 3ch) + 1.6ch);
+  padding-right: 1.6ch;
+  box-sizing: border-box;
+  text-align: right;
+  color: var(--muted);
+  opacity: .55;
+  user-select: none;
+  -webkit-user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.hl-gutter::before { content: attr(data-n); }
+.hl-row-code {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Diff rows keep their add/remove tint; code tokens stay readable on top, context lines are dimmed. */
+.step-box-diff .diff-sign { user-select: none; -webkit-user-select: none; }
+.step-box-diff .diff-add .diff-sign { color: color-mix(in srgb, var(--success) 85%, var(--text)); }
+.step-box-diff .diff-del .diff-sign { color: color-mix(in srgb, var(--danger) 85%, var(--text)); }
+.step-box-diff .diff-ctx.is-hl { color: var(--text); opacity: .62; }
+
+/* Failed commands keep their red RESULT text: no token colours on error output. */
+.cmd-terminal-out.err .hl-code [class^='hl-'] { color: inherit; }

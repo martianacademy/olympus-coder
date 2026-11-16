@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: ws://localhost:*; frame-src 'self' blob: http://localhost:* http://127.0.0.1:* http://0.0.0.0:* https://localhost:*" />
+    <title>Olympus Coder</title>
+    <!--
+      Splash: painted with the very first frame (the window waits for it), so starting the app never shows a blank
+      window. Pure CSS — the CSP allows no inline script. App.tsx fades it out once the app state has loaded.
+      The mark is the same drawing as AppMark: a volcano (Olympus Mons), the eruption ball, a brace as the cloud.
+    -->
+    <style>
+      #splash {
+        --bg: #fbfaf9; --ink: #2b211e; --muted: rgba(43, 33, 30, .14); --sand: #f0b28a; --lava: #ee6a3e;
+        position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+        background: var(--bg); color: var(--ink); -webkit-app-region: drag; transition: opacity .35s ease, transform .35s ease;
+        font: 500 13px -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash { --bg: #121011; --ink: #fff7f0; --muted: rgba(255, 247, 240, .12); --sand: #f2b48c; }
+      }
+      #splash.gone { opacity: 0; transform: scale(1.015); pointer-events: none; }
+      #splash svg { overflow: visible; }
+      .sp-volcano { fill: var(--lava); }
+      .sp-cloud { fill: none; stroke: var(--ink); stroke-width: 5.2; stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 100; animation: sp-draw 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
+      .sp-ball { fill: var(--ink); transform-origin: 50px 40px; animation: sp-erupt 1.2s ease-in-out infinite; }
+      .sp-glow { fill: var(--lava); opacity: .0; transform-origin: 50px 40px; animation: sp-glow 1.2s ease-out infinite; }
+      @keyframes sp-draw { 0% { stroke-dashoffset: 100; } 45%, 60% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
+      @keyframes sp-erupt { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-3.2px); } }
+      @keyframes sp-glow { 0% { opacity: .45; transform: scale(.6); } 80%, 100% { opacity: 0; transform: scale(2.6); } }
+      .sp-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; opacity: .92; }
+      /* "AI writing code": token blocks stream in, line by line, then the block clears and starts again. */
+      .sp-code { display: flex; flex-direction: column; gap: 7px; width: 168px; margin-top: 2px; }
+      .sp-line { display: flex; gap: 5px; height: 6px; }
+      .sp-line:nth-child(2) { padding-left: 14px; }
+      .sp-line:nth-child(3) { padding-left: 14px; }
+      .sp-line i { display: block; height: 6px; border-radius: 3px; background: var(--muted); transform-origin: left center;
+        transform: scaleX(0); opacity: 0; animation: sp-tok 2.4s ease-out infinite; }
+      .sp-line i.k { background: var(--lava); }
+      .sp-line i.s { background: var(--sand); }
+      .sp-line i.t { background: var(--ink); opacity: 0; }
+      @keyframes sp-tok { 0% { transform: scaleX(0); opacity: 0; } 8% { transform: scaleX(1); opacity: 1; } 78% { transform: scaleX(1); opacity: 1; } 92%, 100% { transform: scaleX(1); opacity: 0; } }
+      .sp-line i.t { animation-name: sp-tok-ink; }
+      @keyframes sp-tok-ink { 0% { transform: scaleX(0); opacity: 0; } 8% { transform: scaleX(1); opacity: .55; } 78% { transform: scaleX(1); opacity: .55; } 92%, 100% { transform: scaleX(1); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { #splash * { animation: none !important; } .sp-line i { transform: none; opacity: 1; } .sp-cloud { stroke-dasharray: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="splash" aria-hidden="true">
+      <svg width="78" height="63" viewBox="4 12 92 74">
+        <path class="sp-volcano" d="M 7 83 C 18.4 78.55 32.65 48.29 35.5 38.5 L 41.8 38.5 L 41.8 39.7 A 8.2 8.2 0 0 0 58.2 39.7 L 58.2 38.5 L 64.5 38.5 C 67.35 48.29 81.6 78.55 93 83 Z" />
+        <circle class="sp-glow" cx="50" cy="39.7" r="5.8" />
+        <path class="sp-cloud" pathLength="100" d="M 25 27 C 25 21.5 25 21.5 33 21.5 L 42 21.5 C 48.5 21.5 50 16 50 16 C 50 16 51.5 21.5 58 21.5 L 67 21.5 C 75 21.5 75 21.5 75 27" />
+        <circle class="sp-ball" cx="50" cy="39.7" r="5.8" />
+      </svg>
+      <div class="sp-name">Olympus Coder</div>
+      <div class="sp-code">
+        <div class="sp-line"><i class="k" style="width: 26px; animation-delay: 0s"></i><i class="t" style="width: 44px; animation-delay: .08s"></i><i style="width: 18px; animation-delay: .16s"></i></div>
+        <div class="sp-line"><i class="s" style="width: 52px; animation-delay: .28s"></i><i class="t" style="width: 30px; animation-delay: .36s"></i><i class="k" style="width: 22px; animation-delay: .44s"></i></div>
+        <div class="sp-line"><i class="t" style="width: 36px; animation-delay: .56s"></i><i style="width: 58px; animation-delay: .64s"></i></div>
+        <div class="sp-line"><i class="k" style="width: 14px; animation-delay: .76s"></i></div>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

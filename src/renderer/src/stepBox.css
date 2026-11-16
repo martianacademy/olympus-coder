@@ -1,0 +1,264 @@
+/* =====================================================================================
+   Step content boxes (`StepBox` in components/StepBox.tsx)
+   - One flat shell for every expanded step type: file reads, edits/diffs, searches, web, MCP/other
+     tools and reasoning. Hairline border, no shadow, slim header with actions.
+   - Body is capped at 240px (scrollable); `.is-expanded` lifts the cap.
+   ===================================================================================== */
+
+/* Wrapper inside an expanded ToolRow: boxes stack with a small gap, no extra frame around them */
+.tool-body.step-boxes {
+  max-height: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: inherit;
+  background: transparent;
+}
+
+.tool-row .tool-body.step-boxes {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.work-group-body .tool-row .tool-body.step-boxes {
+  margin: 2px 0 8px;
+  border: none;
+  padding: 0;
+}
+
+.tool-body.step-boxes.standalone {
+  padding: 8px 10px 10px;
+}
+
+.step-boxes .inline-media-list {
+  margin-bottom: 0;
+}
+
+.step-box {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  overflow: hidden;
+}
+
+.step-box-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 4px 3px 9px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11.6px;
+  user-select: none;
+}
+
+.step-box-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+
+.step-box-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.step-box-name,
+.step-box-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-box-name {
+  flex: 0 1 auto;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
+}
+
+.step-box-sub {
+  flex: 0 3 auto;
+  font-family: var(--code-font);
+  font-size: 10.8px;
+  color: var(--muted);
+}
+
+.step-box-meta {
+  flex: none;
+  font-family: var(--code-font);
+  font-size: 10.8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.step-box-add {
+  color: var(--success);
+}
+
+.step-box-del {
+  color: var(--danger);
+}
+
+.step-box-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+
+.step-box-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.step-box-btn:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.step-box-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.step-box-body {
+  max-height: 240px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+
+.step-box.is-expanded .step-box-body {
+  max-height: none;
+}
+
+.step-box-inner {
+  min-width: 0;
+  padding: 7px 10px 8px;
+}
+
+.step-box-pre {
+  margin: 0;
+  font-family: var(--code-font);
+  font-size: 11.8px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
+}
+
+.step-box-pre.is-prose {
+  font-family: var(--ui-font);
+  font-size: 12.4px;
+  line-height: 1.5;
+}
+
+.step-box-diff > div {
+  margin: 0 -10px;
+  padding: 0 10px;
+}
+
+.step-box-diff .diff-ctx {
+  color: var(--muted);
+}
+
+.step-box-diff .diff-gap {
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.step-box-note {
+  font-family: var(--ui-font);
+  font-size: 11.6px;
+  color: var(--muted);
+}
+
+.step-box-diff .step-box-note {
+  padding-top: 4px;
+}
+
+.step-box-files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.step-box-files:last-child {
+  margin-bottom: 0;
+}
+
+.step-box-file {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11.6px;
+  text-align: left;
+}
+
+.step-box-section + .step-box-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--hairline);
+}
+
+.step-box-section-label {
+  margin-bottom: 4px;
+  font-family: var(--ui-font);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Reasoning renders as prose (markdown), not monospace */
+.step-box-body.prose .step-box-inner {
+  padding: 6px 12px 8px;
+}
+
+/* Narrow containers (side panels, phone): keep icon-only actions (they carry tooltips) and drop the path */
+@container (max-width: 520px) {
+  .step-box-btn-label,
+  .step-box-sub {
+    display: none;
+  }
+
+  .step-box-btn {
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 600px) {
+  .step-box-btn-label,
+  .step-box-sub {
+    display: none;
+  }
+}
