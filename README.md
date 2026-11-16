@@ -48,7 +48,7 @@ Modern AI-assisted engineering often splits context across disconnected CLI term
 
 ### 1. Multi-Agent ACP Hub & 1-Click Registry
 
-- **First-class built-in adapters:** Ships ready for **Claude Code** (`@agentclientprotocol/claude-agent-acp`), **Codex** (`@agentclientprotocol/codex-acp`), and **Google Antigravity** (`agy acp`), automatically reusing existing CLI logins, models, and reasoning effort levels.
+- **First-class built-in agents & Olympus CLI:** Ships ready for **Claude Code** (`@agentclientprotocol/claude-agent-acp`), **Codex** (`@agentclientprotocol/codex-acp`), and **Google Antigravity** (`agy acp`), reusing existing CLI logins, models, and reasoning effort levels. It also lists **Olympus** (`oly acp`), our multi-model agent for OpenRouter, Vercel AI Gateway, any OpenAI-compatible key, or local Ollama. Install it separately from [olympus-coder-cli](https://github.com/martianacademy/olympus-coder-cli).
 - **46-agent ACP Registry:** Browse, auto-detect on `PATH`, or 1-click install official ACP agents (`gemini`, `opencode`, `goose`, `cursor-agent`, `qwen`, `copilot`, and more) via `local`, `npx`, `uvx`, or `sha256`-verified binary archives into `~/.agents/agents/`.
 - **Custom providers & commands:** Point any compatible agent at custom Anthropic- or OpenAI-compatible API gateways (`src/main/acpProviders.ts`) with OS-encrypted API keys, or register arbitrary stdio ACP binaries.
 - **Mid-chat agent handoff & CLI session import:** Switching the agent selector mid-thread automatically synthesizes prior goals, turns, and modified files for the incoming agent. Existing CLI conversations can also be browsed and imported via native ACP `session/list` and `session/load`.
