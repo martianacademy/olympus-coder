@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { GitBranch, GitCommit, GitFileChange, GitStash, GitStatus } from '@shared/types';
 import { api } from '../api';
+import { PanelSkeleton } from './Skeleton';
 import { keys } from '../platform';
 
 export function DiffView({ text }: { text: string }) {
@@ -107,7 +108,7 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
     await refresh();
   }
 
-  if (!st) return <div className="empty muted"><Loader2 size={16} className="spin" /></div>;
+  if (!st) return msg && !msg.ok ? <div className="empty muted">{msg.text}</div> : <PanelSkeleton />;
   if (!st.isRepo)
     return (
       <div className="empty">

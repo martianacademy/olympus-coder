@@ -18,10 +18,12 @@ import {
   preferReadOnlyMode,
   runState,
   sendPrompt,
+  sessionView,
+  canSteer,
   setTurnEndListener,
 } from './agents';
 import { agentName, canLearnAboutUser, canOrchestrate, sessionRole, threadFilePath } from './guide';
-import { isMuted, muteChat, notifyAgent, unmuteChat } from './appmsg';
+import { isMuted, muteChat, notifyAgent, steerAgent, unmuteChat } from './appmsg';
 import {
   ToolError,
   assertAgentQuotaAvailable,
@@ -40,8 +42,9 @@ import { nativeSubagentSummary } from './nativeSubagents';
 import { createThread, deleteThread, findThread, getProject, getSettings, listThreads, threadMeta } from './store';
 import { openTerminal, readTerminal, terminalProject } from './terminals';
 import { acpMcp, mcpStatus } from './acpConfigService';
-import { lastTaskIndex, outcomeLine, resultItem } from './subtaskOutcome';
+import { lastTaskIndex, resultItem } from './subtaskOutcome';
 import { DisposableTracker } from './disposableSubsessions';
+import { LIVE_STATES, buildResultMessage, decideDelivery, doneKey, pickFresh, type FinishedInfo } from './subsessionNotify';
 
 /**
  * Orchestration: the main session's agent spawns and steers sub-sessions through the `olympus` MCP server.
@@ -59,9 +62,11 @@ export function initOrchestrator(fn: Emit) {
   setTurnEndListener((threadId) => {
     const t = findThread(threadId);
     if (!t) return;
-    // A sub-session finished, or the main session itself went idle: either may complete the picture.
+    // A sub-session finished (tell its parent), or this session's own turn ended (results that waited for it go now).
+    // Both, so a sub-session that has sub-sessions of its own is told the same way.
     setTimeout(() => {
-      maybeWake(t.spawnedBy ?? t.id);
+      if (t.spawnedBy) maybeWake(t.spawnedBy);
+      maybeWake(t.id);
       void cleanupDisposable(t.id);
     }, 400);
   });
@@ -89,7 +94,7 @@ function reportsRead(parent: Thread, views: SubTaskView[]) {
 async function cleanupDisposable(parentId: string) {
   if (!disposables.size || isActive(parentId)) return;
   const parent = findThread(parentId);
-  if (!parent || !canOrchestrate(parent)) return;
+  if (!parent) return;
   const due = disposables.due(
     childrenOf(parent, true).map((k) => {
       const v = summarize(k);
@@ -104,18 +109,34 @@ async function cleanupDisposable(parentId: string) {
 }
 
 /**
- * Waking the orchestrator: whenever a main session is idle and one or more of its sub-sessions have finished since
- * it last looked, the app sends it one short message (naming the ones still running) so it can check that work and
- * move on without waiting for slower siblings or for the user to ask. Sub-sessions that finish while it is busy are
- * picked up in one batch when its turn ends. A finished state ("id@endedAt") counts as seen once the orchestrator
- * read it, and wakes it at most once.
+ * Telling the parent: the moment a sub-session finishes, the app sends its parent session the result (status, agent,
+ * time, changed files, the report up to ~1,500 characters, and which ones still run; src/main/subsessionNotify.ts).
+ * Idle parent: a new turn. Busy parent whose agent takes mid-turn input: into the running turn. Otherwise at the end
+ * of its turn, unless it read the result itself by then. Results it already read (wait_for_subsessions,
+ * get_subsession) and the targets of a wait_for_subsessions call it is inside are never sent; each result goes once.
+ * Settings → General "Tell the main session when a sub-session finishes" (`notifyParentOnSubsessionEnd`, default on).
  */
 const seen = new Set<string>();
-const woken = new Set<string>();
+const sent = new Set<string>();
 const APP_STARTED = Date.now();
+/** Parent id → sub-session id → how many wait_for_subsessions calls of that parent wait for it right now. */
+const waiting = new Map<string, Map<string, number>>();
 
-const doneKey = (v: SubTaskView) => `${v.meta.id}@${v.resultId ?? v.endedAt ?? 0}`;
-const LIVE_STATES = new Set<SubTaskView['status']>(['starting', 'running', 'waiting-permission']);
+function waitStarted(parentId: string, ids: string[]) {
+  const m = waiting.get(parentId) ?? new Map<string, number>();
+  for (const id of ids) m.set(id, (m.get(id) ?? 0) + 1);
+  waiting.set(parentId, m);
+}
+function waitEnded(parentId: string, ids: string[]) {
+  const m = waiting.get(parentId);
+  if (!m) return;
+  for (const id of ids) {
+    const n = (m.get(id) ?? 1) - 1;
+    if (n > 0) m.set(id, n);
+    else m.delete(id);
+  }
+  if (!m.size) waiting.delete(parentId);
+}
 
 /** The user pressed Stop / wrote a message: automatic messages pause / resume (see appmsg.ts). */
 export function userCancelled(threadId: string) {
@@ -126,33 +147,68 @@ export function userSent(threadId: string) {
   unmuteChat(threadId);
 }
 
-function maybeWake(parentId: string) {
-  const parent = findThread(parentId);
-  if (!parent || !canOrchestrate(parent) || isMuted(parentId) || isActive(parentId)) return;
-  const kids = childrenOf(parent, true);
-  if (!kids.length) return;
-  const views = kids.map((k) => summarize(k));
-  // Only work that finished in this run of the app: what is seen / woken is kept in memory, so after a restart
-  // sub-sessions that finished long ago would otherwise wake the parent again.
-  const fresh = views.filter((v) => !LIVE_STATES.has(v.status) && v.endedAt && v.endedAt > APP_STARTED && !seen.has(doneKey(v)) && !woken.has(doneKey(v)));
-  if (!fresh.length) return;
-  for (const v of fresh) woken.add(doneKey(v));
-  // Off by default: the parent checks its sub-sessions itself (wait_for_subsessions, get_subsession, set_timer).
-  if (!getSettings().notifyAgentsWhenWorkEnds) return;
-
-  const running = views.filter((v) => LIVE_STATES.has(v.status));
-  const stillRunning = running.length
-    ? ` Still running: ${running.map((v) => `"${v.meta.title}"`).join(', ')} — you will get another message when more finish.`
-    : ' No other sub-sessions are running.';
-  const blocked = fresh.filter((v) => v.status === 'quota-exceeded' || v.status === 'needs-login');
-  const list = fresh.map((v) => `"${v.meta.title}" (id ${v.meta.id}, ${v.status})`).join(', ');
-  const outcomes = fresh.map((v) => `- "${v.meta.title}" (id ${v.meta.id}) — ${outcomeLine(v)}`).join('\n');
-  const text = blocked.length
-    ? `[Olympus Coder] Sub-session ${list} stopped due to an agent quota limit or login issue.${stillRunning} ${fallbackAgentsSummary(blocked[0].meta.agentId)} Use configure_subsession or message_subsession (with "agent"/"model") to switch it and continue from its existing context.`
-    : `[Olympus Coder] ${fresh.length > 1 ? `${fresh.length} sub-sessions have` : 'A sub-session has'} a new result:\n${outcomes}\n${stillRunning.trim()} Read the full report${fresh.length > 1 ? 's' : ''} with get_subsession, verify the parts that matter yourself, and start any follow-up work that no longer depends on the running ones.`;
-  notifyAgent(parentId, text);
+/** The model a sub-session runs on: its model setting, else what its last reply reported. */
+function modelOf(t: Thread): string | undefined {
+  const sv = sessionView(t.id);
+  const opt = sv.configOptions.find((o) => o.category === 'model' || o.id === 'model');
+  const name = opt ? (opt.options.find((o) => o.value === opt.currentValue)?.name ?? opt.currentValue) : undefined;
+  if (name) return name;
+  for (let i = t.items.length - 1; i >= 0; i--) {
+    const it = t.items[i];
+    if (it.kind === 'agent' && it.usage?.model) return it.usage.model;
+  }
+  return sv.usage?.model;
 }
 
+function finishedInfo(t: Thread, v: SubTaskView): FinishedInfo {
+  const task = t.items[lastTaskIndex(t.items)];
+  const blocked = v.status === 'quota-exceeded' || v.status === 'needs-login';
+  const errorLike = v.status === 'failed' || blocked;
+  return {
+    id: t.id,
+    title: t.title,
+    status: v.status,
+    agent: agentName(t.agentId),
+    model: modelOf(t),
+    durationMs: task && v.endedAt ? v.endedAt - task.ts : undefined,
+    files: v.filesTouched,
+    report: errorLike ? (v.error ?? v.lastReply) : v.lastReply,
+    fallback: blocked ? fallbackAgentsSummary(t.agentId) : undefined,
+  };
+}
+
+function maybeWake(parentId: string) {
+  if (getSettings().notifyParentOnSubsessionEnd === false) return;
+  const parent = findThread(parentId);
+  if (!parent) return;
+  const route = decideDelivery({ busy: isActive(parentId), canSteer: canSteer(parentId), muted: isMuted(parentId) });
+  if (route === 'none' || route === 'later') return;
+  const kids = childrenOf(parent, true);
+  if (!kids.length) return;
+  // The whole reply (not the usual 600 characters), so the message can tell whether it carried all of it.
+  const views = kids.map((k) => summarize(k, 1_000_000));
+  const fresh = pickFresh(views, { seen, sent, waitingFor: new Set(waiting.get(parentId)?.keys() ?? []), appStarted: APP_STARTED });
+  if (!fresh.length) return;
+  for (const v of fresh) sent.add(doneKey(v));
+  const running = views.filter((v) => LIVE_STATES.has(v.status)).map((v) => ({ id: v.meta.id, title: v.meta.title }));
+  const { text, fullReport } = buildResultMessage(
+    fresh.map((v) => finishedInfo(kids.find((k) => k.id === v.meta.id)!, v)),
+    running,
+  );
+  // Counts as read only once the parent's agent really got it: a disposable one goes after that turn, never before.
+  const delivered = () => {
+    const whole = fresh.filter((v) => fullReport.includes(v.meta.id));
+    for (const v of whole) seen.add(doneKey(v));
+    reportsRead(parent, whole);
+  };
+  if (route === 'turn') return notifyAgent(parentId, text, delivered);
+  void steerAgent(parentId, text).then((ok) => {
+    if (ok) return delivered();
+    // Not taken into the turn (it just ended, or the agent refused): give them back to the normal path.
+    for (const v of fresh) sent.delete(doneKey(v));
+    if (!isActive(parentId)) maybeWake(parentId);
+  });
+}
 
 /** Sub-sessions of a session: the ones it spawned, and (unless `spawnedOnly`) the user's forks of it. */
 export function childrenOf(parent: Pick<Thread, 'id' | 'projectId'>, spawnedOnly = false): Thread[] {
@@ -425,7 +481,7 @@ async function spawn(parent: Thread, args: any): Promise<string> {
   void sendPrompt(child.id, task, [], { fromAgent: parent.agentId }).catch(() => {});
   starting.delete(child.id);
   const life = keep ? 'Kept until you delete it.' : 'Disposable: deleted automatically after you read its final report and your turn ends.';
-  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}. The user can watch it in the Tasks panel. ${life} Call wait_for_subsessions to get its report.`;
+  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}. The user can watch it in the Tasks panel. ${life} Olympus sends you its result the moment it finishes; call wait_for_subsessions only if you need it in this turn.`;
 }
 
 async function waitFor(parent: Thread, args: any, closed: () => boolean): Promise<string> {
@@ -438,6 +494,17 @@ async function waitFor(parent: Thread, args: any, closed: () => boolean): Promis
     reportsRead(parent, all);
     return all.length ? `No sub-sessions are running. Latest state:\n\n${all.map((v) => describe(v, true)).join('\n\n')}` : 'This session has no sub-sessions.';
   }
+  // While this call waits, a target's result comes back in its answer; it is not sent as a message as well.
+  const waitIds = targets.map((t) => t.id);
+  waitStarted(parent.id, waitIds);
+  try {
+    return await waitLoop(parent, targets, timeout, closed);
+  } finally {
+    waitEnded(parent.id, waitIds);
+  }
+}
+
+async function waitLoop(parent: Thread, targets: Thread[], timeout: number, closed: () => boolean): Promise<string> {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline && !closed()) {
     const active = targets.filter((t) => isActive(t.id));

@@ -1,7 +1,7 @@
 {
   "name": "olympus-coder",
   "productName": "Olympus Coder",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Olympus Coder: one desktop app for Claude Code, Antigravity CLI, Codex and other ACP coding agents, with shared memory.",
   "main": "out/main/index.js",
   "private": true,
@@ -90,7 +90,7 @@
       "identity": "-",
       "hardenedRuntime": false,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Olympus Coder does not use the microphone.",
+        "NSMicrophoneUsageDescription": "Olympus Coder records your voice only while the mic button is on, to turn it into text with the voice engine you chose in Settings → Voice.",
         "NSAppleEventsUsageDescription": "Lets agents open files and apps you ask them to."
       },
       "files": [

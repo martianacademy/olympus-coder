@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { AgentStatus, AppState, DeskEvents, Project, SessionView, Thread, ThreadItem, ThreadMeta, UiMode } from '@shared/types';
+import { withItem } from '@shared/itemOrder';
 import { onEvent, terminalAskedRecently } from './api';
 import { addTerminal, type WorkbenchTab } from './components/Workbench';
 import type { SettingsTab } from './components/Settings';
 import { isRemoteBrowser, WORKBENCH_SHEET_BP } from './responsive';
 import { applyTheme, onSystemThemeChange } from './theme';
+import { useVisibleInterval } from './visibility';
 import type { AgentsInfo } from './App';
 
 export interface AppSyncParams {
@@ -82,10 +84,8 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
   const tasksShown = useRef<Set<string>>(new Set());
   const bumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const t = setInterval(() => setClock((c) => c + 1), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  // Relative times ("2m ago") tick every 30 s while the window is on screen (and refresh at once when it is back).
+  useVisibleInterval(() => setClock((c) => c + 1), 30_000);
 
   // Dismiss open mobile navigation drawer or mobile workbench sheet on Escape.
   useEffect(() => {
@@ -167,12 +167,8 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
           if (payload.threadId !== activeIdRef.current) break;
           const item = payload.item as ThreadItem;
           if (item.kind === 'tool' && item.status === 'completed') bump();
-          setActive((t) => {
-            if (!t) return t;
-            const i = t.items.findIndex((x) => x.id === item.id);
-            const items = i >= 0 ? t.items.map((x, j) => (j === i ? item : x)) : [...t.items, item];
-            return { ...t, items };
-          });
+          // Same order as the saved chat: agent items go above a waiting Olympus confirm card (shared/itemOrder.ts).
+          setActive((t) => (t ? { ...t, items: withItem(t.items, item) } : t));
           break;
         }
         case 'thread:meta': {

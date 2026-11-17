@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Brain, FileCode, FolderOpen, GitBranch, Laptop, RotateCw } from 'lucide-react';
 import type { AgentDef, AgentStatus, GitStatus, MemoryView, PortInfo, Project, SessionView, Thread } from '@shared/types';
 import { api } from '../api';
+import { PanelSkeleton } from './Skeleton';
 import { AgentLogo } from '../logos';
 import { isRemoteBrowser } from '../responsive';
 import { canCompact, CompactButton, isCompacting } from './CompactButton';
@@ -50,7 +51,7 @@ function PortsCard() {
           <RotateCw size={12} />
         </button>
       </div>
-      {ports === null && <div className="small muted">Looking…</div>}
+      {ports === null && <PanelSkeleton rows={3} head={false} />}
       {ports !== null && !list.length && <div className="small muted">No program is listening on a port.</div>}
       {shown.map((p) => (
         <div key={`${p.pid}:${p.port}`} className="info-row port-row" title={`${p.command}\npid ${p.pid} · ${p.address}`}>

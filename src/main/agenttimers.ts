@@ -59,7 +59,7 @@ const TIMERS_PER_CHAT = 20;
 export const setTimerToolDef = {
   name: 'set_timer',
   title: 'Set timer',
-  description: 'Wake this chat later with "[Olympus Coder] Timer: <note>", e.g. to check work you left running. Olympus does not tell you when background work ends.',
+  description: 'Wake this chat later with "[Olympus Coder] Timer: <note>", e.g. to check a terminal or background command you left running (Olympus does not tell you when those end; sub-session results arrive by themselves).',
   inputSchema: {
     type: 'object',
     properties: {

@@ -215,7 +215,7 @@ ${writeBackRule}`,
 2. Investigate the live code and reproduce a bug before fixing it; find the root cause.
 3. Make the smallest clean change that fully solves it, in the style of the surrounding code.
 4. Verify: type-check, build, run the tests or the app — whatever actually proves it works. Then re-read your own diff.
-   Run anything that may take over ~8 s (a server, watcher, build, log tail, SSH or network transfer) with \`run_in_terminal\` (a PTY the user watches; check it with \`read_terminal\`): built-in shell tools stop waiting after ~10 s. Give network commands explicit timeouts (\`ssh -4 -o ConnectTimeout=5 -o BatchMode=yes\`, \`curl --connect-timeout 5 --max-time 30\`) and never chain \`sleep\` in a synchronous shell call. Don't count on Olympus telling you when background work ends: before ending a turn with work pending, wait for it (\`read_terminal\`) when it's short, use your own background mode that notifies you when the command exits, or call \`set_timer\` to check back.
+   Run anything that may take over ~8 s (a server, watcher, build, log tail, SSH or network transfer) with \`run_in_terminal\` (a PTY the user watches; check it with \`read_terminal\`): built-in shell tools stop waiting after ~10 s. Give network commands explicit timeouts (\`ssh -4 -o ConnectTimeout=5 -o BatchMode=yes\`, \`curl --connect-timeout 5 --max-time 30\`) and never chain \`sleep\` in a synchronous shell call. Olympus doesn't tell you when a terminal or background command ends: before ending a turn with one pending, wait for it (\`read_terminal\`) when it's short, use your own background mode that notifies you when the command exits, or call \`set_timer\` to check back.
 5. End with the report described below.`,
     );
   } else {
@@ -241,7 +241,7 @@ ${writeBackRule}`,
 5. Verify: type-check, build, run the tests or the app — whatever actually proves it works. Then re-read your own diff.
    When the user wants to watch a command, or it may take longer than ~8 seconds (a server, a watcher, a build, a training run, a log tail, or remote SSH/network transfers), run it with the \`run_in_terminal\` tool: it opens a real PTY terminal in the user's right panel with live output and Stop/Pause controls. Check on it with \`read_terminal\`. Prefer \`run_in_terminal\` over your built-in synchronous shell tool for anything >8s, because built-in agent shell tools cap synchronous wait around 10s (\`WaitMsBeforeAsync <= 10000\`) and push longer commands into hidden background limbo.
    **Shell & network hygiene (prevent hangs):** Always pass explicit connection/request timeouts on network commands (e.g. \`ssh -4 -o ConnectTimeout=5 -o BatchMode=yes\`, \`scp -4 -o ConnectTimeout=5\`, \`curl --connect-timeout 5 --max-time 30\`) so macOS IPv6 half-open TCP SYN retransmissions (~75s–420s) never stall a command, and never chain \`sleep\` inside synchronous shell tool calls.
-   **Pending work:** don't count on Olympus telling you when background work ends. Before ending a turn with work pending (a \`run_in_terminal\` command, a background command, sub-sessions): wait for it in this turn when it's short (\`read_terminal\`, \`wait_for_subsessions\`), or use your own background mode that notifies you when the command exits (e.g. Claude Code's \`run_in_background\`), or call \`set_timer\` to check back yourself — then end your turn; never sleep in a loop waiting. Don't hand the user a command to run themselves when you can run it there.${
+   **Pending work:** results of sub-sessions you spawned reach you by themselves, but Olympus doesn't tell you when a terminal or background command ends. Before ending a turn with one pending (a \`run_in_terminal\` command, a background command): wait for it in this turn when it's short (\`read_terminal\`), or use your own background mode that notifies you when the command exits (e.g. Claude Code's \`run_in_background\`), or call \`set_timer\` to check back yourself — then end your turn; never sleep in a loop waiting. Don't hand the user a command to run themselves when you can run it there.${
       !thread.spawnedBy && !thread.secondOpinion
         ? `\n   For persistent recurring or future tasks across app sessions (once at a date/time, interval, daily or weekly prompts that open a project chat in the Scheduled tab), use \`list_schedules\`, \`save_schedule\`, \`delete_schedule\` and \`run_schedule\` on the \`${server}\` MCP server. To add or remove CLI agents when the user asks, use \`search_agent_registry\`, \`add_agent\`, \`add_custom_agent\` and \`remove_agent\` (the user approves each change in the chat).`
         : ''
@@ -279,15 +279,16 @@ Writing a task — the sub-session sees nothing else (not this chat, not your re
 - What to report back.
 
 While they run:
-- Call wait_for_subsessions to wait for them. It returns after about 50 seconds at most; call it again while they are still running. Don't poll with sleep.
-- If one is waiting for a permission, tell the user in one line that it needs their approval in the Tasks panel, then keep waiting — they can approve while you wait.
-- Before ending your turn with sub-sessions still running, keep calling wait_for_subsessions, or call set_timer to check back yourself; when one finishes, check its report, start follow-up work that no longer waits on the others, and keep going.
+- The moment one finishes, Olympus sends you its result as an "[Olympus Coder] Sub-session … finished" message: status, agent, time, changed files, its report (long ones cut, with the get_subsession call for the rest) and which ones still run. It arrives as a new turn when you are idle, or inside your running turn when your agent supports that. So you may end your turn while they run; no timer or polling needed.
+- To wait inside a turn (when your next step needs the result), call wait_for_subsessions; it returns after about 50 seconds at most, and a result it returns is not sent to you again. Don't poll with sleep.
+- If one is waiting for a permission, tell the user in one line that it needs their approval in the Tasks panel — they can approve while you wait.
+- When one finishes, check its report, start follow-up work that no longer waits on the others, and keep going.
 - For a follow-up or a correction, use message_subsession on the finished sub-session rather than spawning a new one.
 
 When they finish:
 - A sub-session's report is a claim, not proof. Check the parts that matter yourself (read the diff, run the build or tests) before telling the user it is done.
 - Save any durable architectural facts or bug fixes into Shared Memory (\`${mem}/\`), then give the user one concise summary.
-- Sub-sessions are disposable by default: once one finished and you read its final report (wait_for_subsessions or get_subsession), it is deleted when your turn ends. Messaging it first keeps it for that round. Spawn with \`keep: true\` only when you expect to message it later (a phase-2 follow-up, a fix round), and remove kept ones with \`delete_subsession\` when done. Quota-stopped ones stay so you can switch their agent.`,
+- Sub-sessions are disposable by default: once one finished and you got its whole final report (the finish message, wait_for_subsessions or get_subsession), it is deleted when your turn ends. Messaging it first keeps it for that round. Spawn with \`keep: true\` only when you expect to message it later (a phase-2 follow-up, a fix round), and remove kept ones with \`delete_subsession\` when done. Quota-stopped ones stay so you can switch their agent.`,
     );
   } else if (role === 'worker') {
     out.push(

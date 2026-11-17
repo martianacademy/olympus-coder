@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('desk', {
       return '';
     }
   },
+  /** Starts the OS's own dictation into the focused composer (src/main/dictation.ts). */
+  dictate: () => ipcRenderer.invoke('desk:dictate'),
+  /** Settings → Voice and the recording mic (src/main/voice). Desktop window only. */
+  voice: (method: string, ...args: unknown[]) => ipcRenderer.invoke('desk:voice', method, args),
   on: (fn: Listener) => {
     listeners.add(fn);
     return () => listeners.delete(fn);

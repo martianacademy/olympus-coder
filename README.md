@@ -14,7 +14,7 @@
   <img src="docs/screenshots/hero-code-mode.png" alt="Olympus Coder — Code Mode workspace with Antigravity, collapsible step timeline, inline diff, and CodeMirror 6 editor" width="100%" />
 </picture>
 
-> **Status:** v0.2.1, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
+> **Status:** v0.3.0, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
 
 ## Download
 
@@ -22,7 +22,7 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | [`Olympus.Coder-0.2.1-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.2.1-arm64.dmg) |
+| macOS, Apple silicon | [`Olympus.Coder-0.3.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.0-arm64.dmg) |
 | macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
 | Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
 | Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |
@@ -81,6 +81,31 @@ A page left open while the relay is redeployed now reloads into the new version 
 - Explorer rows (right-click, or the project header) offer **Open in** your installed editors, **Open with default app**, **Reveal in Finder**, **Copy relative path**, **Rename** and **Move to Trash**.
 - The working indicator sits in the same logo box as the agent logos.
 - In Code mode the composer no longer shows the Compact chip; the context ring opens the Info panel, where Compact is.
+
+---
+
+## What's new in 0.3
+
+**Saying where a bug is, out loud, still meant typing.**
+Settings → **Voice** adds a transcription engine behind the mic button next to **Send**: **System dictation** (the OS's own, the default — nothing is recorded by Olympus), **Whisper on this computer** (whisper.cpp is auto-detected on your machine — never downloaded — with its models listed and an *Add model file…* picker), **OpenRouter** (reuses an agent's key or one you save here) and **Custom / local server** (any OpenAI-compatible `/v1/audio/transcriptions`). A **Language** list includes **Hinglish (Roman letters)**, and **Record 5 s** tests an engine right in the panel. Recording engines work only on the desktop window — the phone page never touches the mic — and macOS asks once for microphone permission.
+
+<img src="docs/screenshots/voice-settings-whisper.png" alt="Settings, Voice: whisper engines detected on this computer with model paths, language and a Record 5 s test" width="100%" />
+
+**The right panel had its own grey, so the three panels looked like three apps.**
+The workbench (files, editor, terminal, Git) now uses the same surface as the sidebar — matching panel colour in light and dark, and the same macOS translucency when it's on — while the chat column stays its own surface in the middle.
+
+<img src="docs/screenshots/unified-panels-dark.png" alt="The workbench panel now matches the sidebar's background in dark mode" width="100%" />
+
+**Sidebar rows were squeezed together with no way to space them out.**
+Settings → Appearance → Theme & Colors → **Sidebar** adds **Project spacing**, **Session spacing** (sessions and sub-sessions) and **Sidebar text size**, applied live to projects, sessions and sub-sessions alike.
+
+<img src="docs/screenshots/sidebar-spacing-settings.png" alt="Settings, Appearance: Sidebar project spacing, session spacing and text size sliders" width="100%" />
+
+**A slow chat switch briefly showed the previous chat, and background windows kept polling.**
+Switching chats now shows a loading skeleton instead of the previous chat's messages. Polls (thread status, terminals, sub-sessions) run only while the page is actually visible — a hidden window or a background phone page stops them and gets one fresh run the moment it comes back.
+
+**You had to keep an eye on the Tasks panel to learn a sub-session had finished.**
+The moment a sub-session finishes, Olympus tells its parent session the result — status, agent, time, changed files and the report (up to ~1,500 characters) — even mid-turn. Settings → General → **Tell the main session when a sub-session finishes** turns it off.
 
 ---
 

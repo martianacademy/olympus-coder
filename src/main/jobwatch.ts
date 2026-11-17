@@ -10,7 +10,8 @@ import { readTerminal } from './terminals';
  * or a command it left running in its own background. Only jobs that ran at least ~10 seconds count (the
  * agent handles quick ones itself), and not while the agent is still in the very turn that started the job
  * (it is watching). The message waits in the queue if the agent is busy (appmsg.ts).
- * Off by default (Settings → General, `notifyAgentsWhenWorkEnds`): agents check their own pending work.
+ * Off by default (Settings → General, `notifyAgentsWhenWorkEnds`): agents check their own commands. Sub-session
+ * results have their own setting (`notifyParentOnSubsessionEnd`, on by default; orchestrator.ts `maybeWake`).
  */
 
 interface Job {

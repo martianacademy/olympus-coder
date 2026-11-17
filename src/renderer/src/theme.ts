@@ -48,6 +48,10 @@ export function applyTheme(theme: ThemeSettings) {
   root.style.setProperty('--steps-scale', String(Math.round((chatSize / 14) * stepsFactor * 1000) / 1000));
   root.style.setProperty('--steps-factor', String(stepsFactor));
   root.style.setProperty('--chat-width', `${CHAT_WIDTHS.find((w) => w.id === t.chatWidth)?.px ?? 780}px`);
+  // Sidebar spacing and text (defaults reproduce the original look: 2px under each project, rows touching, app font size).
+  root.style.setProperty('--sb-project-gap', `${t.sidebarProjectGap ?? 2}px`);
+  root.style.setProperty('--sb-row-gap', `${t.sidebarRowGap ?? 0}px`);
+  root.style.setProperty('--sb-font-size', t.sidebarFontSize ? `${t.sidebarFontSize}px` : 'var(--font-size)');
   root.style.setProperty('--line-height', String(t.lineHeight));
   root.style.setProperty('--code-size', `${t.codeFontSize}px`);
   root.style.setProperty('--thinking-style', t.thinkingItalic ? 'italic' : 'normal');

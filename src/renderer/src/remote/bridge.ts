@@ -52,7 +52,10 @@ let viewTimer: number | undefined;
 let sendViewNow: (v: Record<string, unknown>) => void = () => {};
 
 function viewBody() {
-  const body = { threads: [...watched.thread.keys()], ptys: [...watched.pty.keys()], patch: true, resync: [...resync] };
+  // In the background (another app, screen off) terminals get no output; their scrollback is sent when the page is
+  // back. Chats on screen stay watched, so nothing they did meanwhile is missed.
+  const ptys = document.visibilityState === 'hidden' ? [] : [...watched.pty.keys()];
+  const body = { threads: [...watched.thread.keys()], ptys, patch: true, resync: [...resync] };
   resync = new Set();
   return body;
 }
@@ -60,6 +63,13 @@ const pushView = () => {
   clearTimeout(viewTimer);
   viewTimer = window.setTimeout(() => sendViewNow(viewBody()), 0);
 };
+
+// Sent at once, not on a timer: a phone may freeze the page right after hiding it.
+document.addEventListener('visibilitychange', () => {
+  if (!watched.pty.size) return;
+  clearTimeout(viewTimer);
+  sendViewNow(viewBody());
+});
 
 /** A new connection: the Mac starts over (full items, everything until it gets our view). */
 function resetStream() {

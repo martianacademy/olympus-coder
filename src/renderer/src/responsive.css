@@ -314,6 +314,8 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
   position: fixed;
   inset: 0;
   z-index: 75;
+  /* Opaque like the drawer sidebar: a full-screen sheet must never let the chat show through the glass. */
+  background: var(--panel);
   width: 100% !important;
   min-width: 0 !important;
   height: 100vh;

@@ -29,7 +29,20 @@ html[data-density='compact'] .tool-group.work-group {
   }
 
   html[data-density='compact'] .project-head,
-  html[data-density='compact'] .thread-row {
+  html[data-density='compact'] .thread-row,
+  html[data-density='compact'] .sk-list .sk-row {
     height: 28px;
   }
 }
+
+/* ---------- Settings → Appearance → Sidebar (vars set by theme.ts) ----------
+   --sb-font-size: project, session and sub-session names (sessions keep their 0.94em, so they scale with it).
+   --sb-project-gap: space under each project group. --sb-row-gap: space between rows, sessions and sub-sessions alike.
+   The fallbacks are the original values, so the look is unchanged until a slider moves. */
+.sidebar .sidebar-scroll { font-size: var(--sb-font-size, inherit); }
+.sidebar .project { margin-bottom: var(--sb-project-gap, 2px); }
+.sidebar .project > * + *,
+.sidebar .thread-children > * + *,
+.sidebar .thread-row + .thread-row { margin-top: var(--sb-row-gap, 0px); }
+/* The loading skeleton keeps the same rhythm as the real rows. */
+.sidebar .sk-list { gap: var(--sb-row-gap, 0px); }

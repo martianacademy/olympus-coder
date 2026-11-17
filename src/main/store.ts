@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentDefaults: {},
   remote: { enabled: false, port: 47816 },
   notifyAgentsWhenWorkEnds: false,
+  notifyParentOnSubsessionEnd: true,
   updateMode: 'notify',
   updateWifiOnly: false,
   updateInstallOnQuit: true,
@@ -143,6 +144,15 @@ export function setSecret(key: string, value: string | null): void {
   if (value) all[key] = safeStorage.encryptString(value).toString('base64');
   else delete all[key];
   writeJson(secretsFile(), all);
+}
+
+/** Owners (the part before `:`) of every saved secret named `${owner}:${varName}`, e.g. agents with OPENROUTER_API_KEY. */
+export function secretOwners(varName: string): string[] {
+  const all = readJson<Record<string, string>>(secretsFile(), {});
+  const suffix = `:${varName}`;
+  return Object.keys(all)
+    .filter((k) => k.endsWith(suffix) && Boolean(all[k]))
+    .map((k) => k.slice(0, -suffix.length));
 }
 
 /** Names of environment variables saved under `${agentId}:<VAR>` (values stay encrypted until `getSecret`). */

@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { CheckCircle2, Copy, ExternalLink, KeyRound, Loader2, QrCode, RotateCcw, ShieldAlert, Smartphone, Trash2, Wifi, XCircle } from 'lucide-react';
 import type { LockState, RemoteStatus } from '@shared/types';
 import { api } from '../../api';
+import { pageVisible, useVisibleInterval } from '../../visibility';
 import { PasswordForm, type SettingsTab } from '../Settings';
 import { copyText as writeClipboardText } from '../../clipboard';
 
@@ -80,18 +81,15 @@ export function PhoneSettings({ lock, onLock }: { onTab: (t: SettingsTab) => voi
   };
 
   const [relayInput, setRelayInput] = useState<string | null>(null);
-  useEffect(() => {
-    if (!st?.enabled || remoteClient) return;
-    const t = setInterval(load, 4000);
-    return () => clearInterval(t);
-  }, [st?.enabled, remoteClient]);
+  // Paired phones and their status, while this screen is open and the window is on screen.
+  useVisibleInterval(load, 4000, Boolean(st?.enabled) && !remoteClient);
 
   const [, tick] = useState(0);
   useEffect(() => {
     if (!st?.pairing || remoteClient) return;
     const t = setInterval(() => {
       tick((n) => n + 1);
-      if (Date.now() > st.pairing!.expiresAt || Date.now() % 5000 < 1000) load();
+      if (pageVisible() && (Date.now() > st.pairing!.expiresAt || Date.now() % 5000 < 1000)) load();
     }, 1000);
     return () => clearInterval(t);
   }, [st?.pairing?.code, remoteClient]);

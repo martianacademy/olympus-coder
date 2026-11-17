@@ -29,8 +29,10 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 /* ---------- macOS glass sidebar ---------- */
 .vibrant, .vibrant body, .vibrant #root { background: transparent; }
 /* Mostly opaque so text stays readable whatever the system material is; the glass shows through as a tint. */
-.vibrant .sidebar { background: color-mix(in srgb, var(--panel) 86%, transparent); }
-.main, .workbench-col, .memory-panel, .vibrant .fullscreen { background: var(--bg); }
+/* The right panel (workbench) wears the sidebar's surface, so both side panels match around the chat (--bg). */
+.workbench-col { background: var(--panel); }
+.vibrant .sidebar, .vibrant .workbench-col { background: color-mix(in srgb, var(--panel) 86%, transparent); }
+.main, .memory-panel, .vibrant .fullscreen { background: var(--bg); }
 .sidebar { border-right: 1px solid var(--hairline); }
 .sidebar-foot { border-top: 1px solid var(--hairline); padding: 8px 10px 10px; }
 
@@ -260,9 +262,12 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 .workbench-tabs { border-bottom-color: var(--hairline); gap: 2px; padding: 0 10px; }
 .workbench-tabs > button:not(.btn) { height: 30px; border-radius: 8px; font-weight: 500; font-size: 13px; }
 .panel-toolbar, .editor-tabs, .editor-path, .commit-box, .tool-body, .git-diff { border-color: var(--hairline); }
-.explorer { border-right-color: var(--hairline); background: color-mix(in srgb, var(--panel) 60%, var(--bg)); }
+/* Chrome and lists sit on the panel surface; the editor and terminal stay content surfaces (--surface). */
+.explorer { border-right-color: var(--hairline); background: transparent; }
+.workbench-tabs > button:not(.btn):hover { background: var(--hover); }
+.workbench-tabs > button.active { background: var(--active); }
 .tree-row { border-radius: 6px; margin: 0 4px; }
-.editor-tabs { background: color-mix(in srgb, var(--panel) 60%, var(--bg)); }
+.editor-tabs { background: transparent; }
 .editor-tab.active { box-shadow: 0 0 0 1px var(--hairline), var(--shadow-sm); }
 .resizer::after { background: var(--hairline); }
 .git-row { border-radius: 7px; margin: 0 4px; }

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { RunningTask } from '@shared/types';
 import { api, onEvent } from './api';
+import { onPageVisibility, pageVisible } from './visibility';
 
 /**
  * What each chat is doing, for the sidebar dots and the chat's background bar: working on a turn, waiting for
@@ -114,13 +115,13 @@ function start() {
       }
     }
   });
-  // The truth from the main process: when the window (re)loads, right after an unlock (no events reach the
-  // window while the app is locked, so a tool or turn that ended meanwhile would look running for ever), and
-  // every few seconds as a safety net.
-  void resync();
+  // The truth from the main process: when the window (re)loads, when it is shown again, right after an unlock
+  // (no events reach the window while the app is locked, so a tool or turn that ended meanwhile would look running
+  // for ever), and every few seconds as a safety net — often while work is going, rarely when all is idle.
+  const resyncLoop = pacedLoop(resync, BUSY_MS, IDLE_RESYNC_MS);
   onEvent((ch, p) => ch === 'lock:state' && !p?.locked && void resync());
-  setInterval(() => void resync(), 4000);
-  // The real programs behind background work, every few seconds.
+  // The real programs behind background work (a `ps` scan in the main process, the heaviest call here): every few
+  // seconds only while some chat has work going, a program is still alive, or a terminal was just used.
   const poll = async () => {
     const list = await api.procs().catch(() => [] as RunningTask[]);
     const next = new Map<string, RunningTask[]>();
@@ -133,8 +134,69 @@ function start() {
       notify();
     }
   };
-  void poll();
-  setInterval(() => void poll(), 4000);
+  const procsLoop = pacedLoop(poll, BUSY_MS, IDLE_PROCS_MS);
+  // Something is starting: check sooner than the idle pace (a no-op when a check is already that close).
+  onEvent((ch, p) => {
+    if (ch === 'session:state') {
+      resyncLoop.wake(BUSY_MS);
+      procsLoop.wake(p.status === 'running' ? BUSY_MS : 600);
+    } else if (ch === 'thread:item' && p.item.kind === 'tool' && (p.item.status === 'in_progress' || p.item.status === 'pending')) {
+      procsLoop.wake(BUSY_MS);
+    } else if (ch === 'terminal:opened' || ch === 'terminal:changed' || ch === 'pty:exit' || ch === 'pty:data') {
+      // A terminal in use may be running a program a chat owns (an agent's run_in_terminal, a dev server).
+      activityUntil = Date.now() + ACTIVITY_MS;
+      procsLoop.wake(ch === 'pty:data' ? BUSY_MS : 600);
+    }
+  });
+}
+
+const BUSY_MS = 4000;
+const IDLE_RESYNC_MS = 15_000;
+const IDLE_PROCS_MS = 30_000;
+/** How long after a terminal was last used its programs are still checked at the busy pace. */
+const ACTIVITY_MS = 20_000;
+let activityUntil = 0;
+const anyIn = (m: Map<string, Set<string>>) => [...m.values()].some((s) => s.size > 0);
+/** Some chat is working, waiting, has a tool or program still running, or a terminal was just used. */
+const busy = () => running.size > 0 || anyIn(liveTools) || anyIn(waiting) || procsByThread.size > 0 || Date.now() < activityUntil;
+
+/**
+ * Runs `fn` now and then again and again: every `busyMs` while `busy()`, else every `idleMs`; never while the page
+ * is hidden (a background phone page, a hidden window), and once at once when it is shown again. `wake(ms)` brings
+ * the next run forward to at most `ms` from now.
+ */
+function pacedLoop(fn: () => Promise<void>, busyMs: number, idleMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let due = Infinity;
+  let inFlight = false;
+  const stop = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    due = Infinity;
+  };
+  const at = (ms: number) => {
+    stop();
+    if (!pageVisible()) return;
+    due = Date.now() + ms;
+    timer = setTimeout(run, ms);
+  };
+  const run = () => {
+    stop();
+    if (inFlight) return; // the run in progress schedules the next one
+    inFlight = true;
+    void fn().finally(() => {
+      inFlight = false;
+      if (timer === undefined) at(busy() ? busyMs : idleMs);
+    });
+  };
+  onPageVisibility((visible) => (visible ? run() : stop()));
+  run();
+  return {
+    wake(ms: number) {
+      if (!pageVisible() || due - Date.now() <= ms) return;
+      at(ms);
+    },
+  };
 }
 
 /** The chat in front: its "done" / "error" mark is cleared, since the user is looking at it. */

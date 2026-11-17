@@ -6,6 +6,7 @@ import { ChatThreadLists, ModeSwitch } from './ChatNav';
 import { ProfileButton } from './Profile';
 import type { SettingsTab } from './Settings';
 import { Sidebar } from './Sidebar';
+import { SidebarSkeleton } from './Skeleton';
 
 export type AppPage = 'thread' | 'home' | 'projects' | 'scheduled' | 'usage';
 
@@ -72,6 +73,9 @@ export function AppSidebar(props: AppSidebarProps) {
 
   // Stable between renders, so the sidebar's fold pruning and reveal effects run only when the lists change.
   const codeThreads = useMemo(() => Object.fromEntries(Object.entries(threads).map(([k, v]) => [k, v.filter((t) => modeOf(t) === 'code')])), [threads]);
+
+  // Before the first list has arrived (no project's chats loaded yet).
+  const listsLoading = Object.keys(threads).length === 0;
 
   const drawerOpen = isDrawer && !sbCollapsed;
   const closeIfDrawer = () => {
@@ -181,7 +185,9 @@ export function AppSidebar(props: AppSidebarProps) {
         </nav>
 
         <div className="sidebar-scroll">
-          {mode === 'chat' ? (
+          {listsLoading ? (
+            <SidebarSkeleton />
+          ) : mode === 'chat' ? (
             <ChatThreadLists
               threads={allThreads}
               activeId={activeId}

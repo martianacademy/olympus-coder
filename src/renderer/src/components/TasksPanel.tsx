@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Code2, CornerLeftUp, GitBranch, Loader2, ShieldAlert, Workflow, X } from 'lucide-react';
 import type { AgentDef, ContextUsage, ProcAction, RunningTask, SubTaskView, Thread } from '@shared/types';
 import { api, onEvent } from '../api';
+import { everyWhileVisible, useVisibleInterval } from '../visibility';
 import { AgentLogo } from '../logos';
 import { SessionStatsButton } from './TokenStats';
 import { agentLabel, DoneList, finishedTools, LIVE, liveNow, PlanBox, RunCard, STATUS, TaskBrief } from './TaskSteps';
 import { TaskCard } from './TaskSubagentCard';
 import { ElicitationCard } from './ElicitationCard';
+import { PanelSkeleton } from './Skeleton';
 
 export { liveNow };
-export type TasksData = { parent?: SubTaskView; children: SubTaskView[] };
+/** `loading`: this chat's list has not arrived yet (the panel shows a skeleton meanwhile). */
+export type TasksData = { parent?: SubTaskView; children: SubTaskView[]; loading?: boolean };
 
 /**
  * Live list of a session's sub-sessions (orchestrator workers, native CLI sub-agents, or user forks) and its parent.
@@ -22,13 +25,16 @@ export function useTasks(threadId: string | undefined): TasksData {
   const lastSig = useRef('');
   const load = useCallback(() => {
     if (!threadId) return;
-    void api.tasks(threadId).then((d) => {
-      ids.current = new Set(d.children.map((c) => c.meta.id));
-      const sig = JSON.stringify(d);
-      if (sig === lastSig.current) return;
-      lastSig.current = sig;
-      setData(d);
-    });
+    void api
+      .tasks(threadId)
+      .then((d) => {
+        ids.current = new Set(d.children.map((c) => c.meta.id));
+        const sig = JSON.stringify(d);
+        if (sig === lastSig.current) return;
+        lastSig.current = sig;
+        setData(d);
+      })
+      .catch(() => setData((d) => (d.loading ? { ...d, loading: false } : d)));
   }, [threadId]);
   const soon = useCallback(() => {
     if (timer.current) return;
@@ -39,7 +45,7 @@ export function useTasks(threadId: string | undefined): TasksData {
   }, [load]);
   useEffect(() => {
     lastSig.current = '';
-    setData({ children: [] });
+    setData({ children: [], loading: Boolean(threadId) });
     ids.current = new Set();
     load();
     return () => {
@@ -47,12 +53,9 @@ export function useTasks(threadId: string | undefined): TasksData {
       timer.current = null;
     };
   }, [load]);
-  // On a phone the Mac streams only the chat on screen, so sub-sessions' progress is fetched every few seconds instead.
-  useEffect(() => {
-    if (!window.desk.watch) return;
-    const t = setInterval(() => ids.current.size && load(), 2500);
-    return () => clearInterval(t);
-  }, [load]);
+  // On a phone the Mac streams only the chat on screen, so sub-sessions' progress is fetched every few seconds instead
+  // (only while the page is on screen).
+  useVisibleInterval(() => ids.current.size && load(), 2500, Boolean(window.desk.watch));
   useEffect(
     () =>
       onEvent((channel, payload) => {
@@ -69,9 +72,10 @@ export function useTasks(threadId: string | undefined): TasksData {
   return data;
 }
 
-/** The programs the app started that are running right now, refreshed every 2 s while the panel is open. */
-function useProcs(): [RunningTask[], (l: RunningTask[]) => void] {
+/** The programs the app started that are running right now, refreshed every 2 s while the panel is open and on screen. */
+function useProcs(): [RunningTask[], (l: RunningTask[]) => void, boolean] {
   const [list, setList] = useState<RunningTask[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const lastSig = useRef('[]');
   const set = useCallback((l: RunningTask[]) => {
     const sig = JSON.stringify(l);
@@ -81,15 +85,21 @@ function useProcs(): [RunningTask[], (l: RunningTask[]) => void] {
   }, []);
   useEffect(() => {
     let gone = false;
-    const load = () => void api.procs().then((l) => !gone && set(l)).catch(() => {});
-    load();
-    const t = setInterval(load, 2000);
+    const stop = everyWhileVisible(
+      () =>
+        void api
+          .procs()
+          .then((l) => !gone && set(l))
+          .catch(() => {})
+          .finally(() => !gone && setLoaded(true)),
+      2000,
+    );
     return () => {
       gone = true;
-      clearInterval(t);
+      stop();
     };
   }, [set]);
-  return [list, set];
+  return [list, set, loaded];
 }
 
 export function TasksPanel(props: {
@@ -104,7 +114,7 @@ export function TasksPanel(props: {
   const { thread, data } = props;
   const [openId, setOpenId] = useState<string | null>(null);
   const [, setTick] = useState(0);
-  const [allProcs, setProcs] = useProcs();
+  const [allProcs, setProcs, procsLoaded] = useProcs();
   const [showAllDone, setShowAllDone] = useState(false);
   const now = liveNow(thread);
   const childIdSet = new Set(data.children.map((c) => c.meta.id));
@@ -243,7 +253,8 @@ export function TasksPanel(props: {
             onOpen={p.ptyId && props.onShowTerminal ? () => props.onShowTerminal!(p.ptyId!) : undefined}
           />
         ))}
-        {!runningCount && (
+        {!runningCount && (data.loading || !procsLoaded) && <PanelSkeleton rows={2} head={false} />}
+        {!runningCount && !data.loading && procsLoaded && (
           <div className="tasks-none small muted">{props.running ? 'The agent is thinking — commands and sub-agents it runs show up here.' : 'Nothing running.'}</div>
         )}
       </div>

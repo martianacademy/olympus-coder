@@ -19,6 +19,7 @@ import { Workbench, type WorkbenchHandle, type WorkbenchTab } from './components
 import { OpenFileContext, RunCommandContext } from './fileLinks';
 import { isRemoteBrowser, useResponsiveShell } from './responsive';
 import { setActiveThread } from './threadStatus';
+import { doneOpening, markOpening } from './openingThread';
 import { useAppSync } from './useAppSync';
 
 export interface AgentsInfo {
@@ -151,8 +152,10 @@ export default function App() {
 
   const openThread = useCallback(
     async (id: string) => {
+      // Any way of opening another chat (sidebar, Home, Search, a parent link): a skeleton until it has loaded.
+      if (id !== activeId.current) markOpening(id);
       const r = await api.thread(id);
-      if (!r) return;
+      if (!r) return doneOpening(id);
       setPage('thread');
       setActive(r.thread);
       setSession(r.session);

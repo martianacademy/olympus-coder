@@ -28,6 +28,7 @@ import type {
 import { toBlocks } from './attachments';
 import { chatMediaDir, mapLocations, mapToolContent, splitLocations, toolIdentityOf, toRichContents, type MediaStore } from './acpContent';
 import { appendMessageContent } from '@shared/acpContent';
+import { insertIndex, lastStreamItem } from '@shared/itemOrder';
 import { recordUsage } from './usage';
 import { fetchAgyQuota } from './agyQuota';
 import { agentEnv, spawnable, which } from './env';
@@ -828,7 +829,8 @@ function pushItem(rt: Runtime, item: ThreadItem, throttle = false) {
 }
 
 function addItem(rt: Runtime, item: ThreadItem) {
-  rt.thread.items.push(item);
+  // The agent's text/steps go above an Olympus confirm card that is still waiting (shared/itemOrder.ts).
+  rt.thread.items.splice(insertIndex(rt.thread.items, item), 0, item);
   pushItem(rt, item);
   return item;
 }
@@ -1321,7 +1323,12 @@ export function canSteer(threadId: string): boolean {
  * "Send now" into the running turn (ACP steering extension). On `injected` the message is added to the chat and the
  * agent's next output starts a new reply below it; `promptRequired` = no turn runs any more (send it normally).
  */
-export async function steerPrompt(threadId: string, text: string, attachments: AttachmentView[] = []): Promise<{ outcome: SteerOutcome; item?: ThreadItem }> {
+export async function steerPrompt(
+  threadId: string,
+  text: string,
+  attachments: AttachmentView[] = [],
+  opts: { fromApp?: boolean } = {},
+): Promise<{ outcome: SteerOutcome; item?: ThreadItem }> {
   const rt = runtimes.get(threadId);
   if (!rt || rt.scratch || !rt.sessionId || !rt.conn?.conn || !steeringSupported(rt.conn.init)) return { outcome: 'failed' };
   if (!rt.running) return { outcome: 'promptRequired' };
@@ -1344,7 +1351,8 @@ export async function steerPrompt(threadId: string, text: string, attachments: A
     text,
     ts: Date.now(),
     ...(attachments.length ? { attachments } : {}),
-    delivery: { state: 'delivered', via: 'steer', at: Date.now() },
+    // A message from Olympus itself (a sub-session's result) shows as the app's, without the user's delivery ticks.
+    ...(opts.fromApp ? { fromApp: true as const } : { delivery: { state: 'delivered' as const, via: 'steer' as const, at: Date.now() } }),
   };
   addItem(rt, item);
   // What the agent says next answers this message: a new reply below it, not more of the one above.
@@ -2137,8 +2145,9 @@ function toolTitle(title: string | undefined, rawInput: any): string | undefined
   return `${OLYMPUS_LABEL[m[1]]}${extra}`;
 }
 
+/** The item a streamed chunk can continue: the newest one, not counting a waiting Olympus confirm card. */
 function lastItem(rt: Runtime) {
-  return rt.thread.items[rt.thread.items.length - 1];
+  return lastStreamItem(rt.thread.items);
 }
 
 const updateHost: UpdateHost = {

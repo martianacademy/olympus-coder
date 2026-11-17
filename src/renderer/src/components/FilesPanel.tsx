@@ -2,6 +2,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardR
 import { ChevronDown, ChevronRight, File, FilePlus, Folder, FolderOpen, FolderPlus, MoreHorizontal, PanelLeft, Pencil, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import type { FileEntry } from '@shared/types';
 import { api } from '../api';
+import { PanelSkeleton } from './Skeleton';
 import { keys } from '../platform';
 import { useAgentFileWrites, useReportEditorBuffers } from '../editorBuffers';
 import { CodeEditor, WrapToggle, formatTextOnSave } from './Editor';
@@ -348,7 +349,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               <MoreHorizontal size={14} />
             </button>
           </div>
-          <div className="tree">{renderDir('', 0)}</div>
+          <div className="tree">{children[''] || error ? renderDir('', 0) : <PanelSkeleton head={false} />}</div>
           {menu && (
             <ExplorerMenu
               projectId={projectId}

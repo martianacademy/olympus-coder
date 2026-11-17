@@ -3,6 +3,7 @@ import type { RichContent, ToolIdentity, ToolLocation } from './acpContent';
 
 import type { ElicitContent, ElicitSchema } from './elicitation';
 import type { QueuedPrompt, UserDelivery } from './promptQueue';
+import type { VoiceSettings } from './voice';
 
 export type AgentId = string;
 
@@ -458,6 +459,14 @@ export interface ThemeSettings {
   /** Width of the chat column, composer and banners. */
   chatWidth?: ChatWidth;
 
+  // ---------- sidebar ----------
+  /** Space in px below each project group in the sidebar (default 2). */
+  sidebarProjectGap?: number;
+  /** Space in px between chat rows in the sidebar, sessions and sub-sessions alike (default 0). */
+  sidebarRowGap?: number;
+  /** Sidebar text size in px for project, session and sub-session names (0 = same as the app font size). */
+  sidebarFontSize?: number;
+
   // ---------- code editor customization ----------
   /** Dedicated editor font family ('' = follow `codeFont`). */
   editorFontFamily?: string;
@@ -583,9 +592,12 @@ export interface Settings {
   agentDefaults: Record<string, Record<string, string>>;
   lastProjectId?: string;
   lastThreadId?: string;
-  /** Send a message into an agent's chat when its terminal command or sub-sessions finish. Off: agents check
-   *  their own pending work (read_terminal, wait_for_subsessions, set_timer). */
+  /** Send a message into an agent's chat when a terminal command it left running finishes. Off: agents check
+   *  their own pending work (read_terminal, set_timer). Sub-sessions have their own setting below. */
   notifyAgentsWhenWorkEnds?: boolean;
+  /** Tell the parent session the moment one of its sub-sessions finishes, with the result (orchestrator.ts
+   *  `maybeWake`). Default on; only an explicit `false` turns it off. */
+  notifyParentOnSubsessionEnd?: boolean;
   /** How new releases arrive (src/main/updates.ts): 'notify' shows a notice, 'auto' also downloads and checks the
    *  update in the background and installs it on restart, 'off' never asks GitHub. Default 'notify'. */
   updateMode?: UpdateMode;
@@ -597,6 +609,8 @@ export interface Settings {
   checkForUpdates?: boolean;
   /** A release version the user dismissed in the update notice: not shown again. */
   skippedUpdate?: string;
+  /** Settings → Voice: the mic button's transcription engine (src/shared/voice.ts). Missing = OS dictation. */
+  voice?: Partial<VoiceSettings>;
 }
 
 export interface ConnectorDef {
@@ -1090,4 +1104,14 @@ export interface RemoteStatus {
   devices: RemoteDevice[];
   pairing?: { code: string; expiresAt: number };
   relay: { url: string; defaultUrl: string; state: 'off' | 'connecting' | 'online' | 'error'; error?: string; phones: number; passwordSet: boolean };
+}
+
+/** Result of the composer's mic button starting the OS's own dictation (src/main/dictation.ts). */
+export interface DictationResult {
+  ok: boolean;
+  /** How it was started: macOS `startDictation:` action or Windows Voice Typing (Win+H). */
+  method?: 'mac-startDictation' | 'win-voice-typing';
+  /** A one-time tip for the user, e.g. Dictation is turned off in System Settings. */
+  hint?: string;
+  error?: string;
 }

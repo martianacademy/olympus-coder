@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { AgentDef, ProcAction, RunningTask, SubTaskView, Thread, ThreadItem } from '@shared/types';
 import { api } from '../api';
+import { everyWhileVisible } from '../visibility';
 import { copyText } from '../clipboard';
 import { stripAnsi } from '../compose';
 import { LinkedText } from '../fileLinks';
@@ -92,11 +93,10 @@ function useTerminalTail(ptyId: string | undefined, on: boolean, lines = 14): st
         const rows = stripAnsi(b.data).split('\n').map((l) => l.trimEnd());
         setText(rows.filter((l, i) => l || i > rows.length - 3).slice(-lines).join('\n'));
       });
-    load();
-    const t = setInterval(load, 1500);
+    const stop = everyWhileVisible(load, 1500);
     return () => {
       gone = true;
-      clearInterval(t);
+      stop();
     };
   }, [ptyId, on, lines]);
   return text;

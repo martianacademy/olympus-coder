@@ -45,6 +45,9 @@ import { forgetEditorClient, reportEditorBuffers } from './editorBuffers';
 import type { PromptQueueEvents } from '@shared/promptQueue';
 import * as promptQueue from './promptQueue';
 import { resumeQueues, startPromptQueue } from './promptQueueHost';
+import { startDictation } from './dictation';
+import { initVoice, shutdownVoice, voiceCall } from './voice';
+import { installPermissionHandlers } from './permissions';
 
 /** `OLYMPUS_TEST_HIDDEN=1`: an automated-test instance whose window must never take focus, clicks or screen space. */
 const TEST_HIDDEN = process.env.OLYMPUS_TEST_HIDDEN === '1';
@@ -569,6 +572,15 @@ ipcMain.handle('desk:invoke', async (_e, method: string, args: unknown[]) => {
   if (!fn) throw new Error(`Unknown method ${method}`);
   return fn(...(args ?? []));
 });
+// The composer's mic button: starts the OS's own dictation. Desktop window only (not in `handlers`, so never remote).
+ipcMain.handle('desk:dictate', (e) => (lock.isLocked() ? { ok: false, error: 'LOCKED' } : startDictation(e.sender)));
+// Settings → Voice and the recording mic (src/main/voice). Desktop window only, like desk:dictate: the phone/relay can
+// never record, transcribe or touch voice keys. Only the app's own window may call it.
+ipcMain.handle('desk:voice', (e, method: string, args: unknown[]) => {
+  if (lock.isLocked()) throw new Error('LOCKED');
+  if (!win || e.sender !== win.webContents) throw new Error('Not allowed');
+  return voiceCall(e.sender, method, args ?? []);
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -670,6 +682,9 @@ app.whenReady().then(() => {
     }
   }
   mkdirSync(store.sharedRoot(), { recursive: true });
+  // Microphone only for the app's own window, audio only (src/main/permissions.ts).
+  installPermissionHandlers(join(here, '../renderer'), process.env.ELECTRON_RENDERER_URL);
+  initVoice();
   // Native parts (vibrancy, menus, dialogs) follow the app's own light / dark choice.
   nativeTheme.themeSource = store.getSettings().theme.mode;
   lock.startLockWatchers();
@@ -757,9 +772,12 @@ app.on('before-quit', (e) => {
   stopOrchestrator();
   killAllPtys();
   acpTerminals.killAll();
+  shutdownVoice();
 });
 // The quit is certain now: a downloaded update is installed by a detached helper once this process has exited.
 app.on('will-quit', () => {
+  // The warm whisper-server never outlives the app.
+  shutdownVoice();
   try {
     onAppWillQuit();
   } catch (e) {

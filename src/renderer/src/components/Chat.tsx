@@ -35,6 +35,8 @@ import { BackgroundBar, WorkingIndicator } from './Working';
 import { ElicitationCard } from './ElicitationCard';
 import { CompactionRow, NoticeRow, PlanDocBlock } from './SessionUpdateRows';
 import { useStickToBottom } from '../useStickToBottom';
+import { doneOpening, useOpeningThread } from '../openingThread';
+import { ChatSkeleton } from './Skeleton';
 import { SentTicks } from './DeliveryTicks';
 
 export { Markdown, normalizeMath };
@@ -72,6 +74,11 @@ export function Chat(props: {
   const inner = useRef<HTMLDivElement>(null);
   const running = session?.status === 'running';
   const { away, jumpToBottom, follow, pause } = useStickToBottom(scroller, inner, thread.id, thread.items);
+  // Another chat was picked and is still loading: show a skeleton, not this chat's messages. A chat that mounts
+  // ends any wait (the picked one arrived, or an older pick is stale).
+  const opening = useOpeningThread();
+  const switching = Boolean(opening && opening !== thread.id);
+  useEffect(() => doneOpening(), [thread.id]);
   const prevBottomRef = useRef<number | null>(null);
 
   const groups = useMemo(() => groupItems(thread.items), [thread.items]);
@@ -150,7 +157,7 @@ export function Chat(props: {
       <div className="main-head">
         {props.headerLeft}
         <div className="col grow" style={{ gap: 0, minWidth: 0 }}>
-          <span className="title ellipsis">{thread.title}</span>
+          {switching ? <span className="sk" style={{ width: 180, height: 12, margin: '4px 0' }} /> : <span className="title ellipsis">{thread.title}</span>}
           {thread.parentId ? (
             <span className="small muted ellipsis link-like" onClick={() => props.onOpenThread(thread.parentId!)} title="Open parent chat">
               <CornerLeftUp size={11} /> Sub-session of: {props.parentTitle ?? 'parent chat'}
@@ -194,7 +201,8 @@ export function Chat(props: {
           </div>
         )}
         <div className="chat-inner" ref={inner}>
-          {!thread.items.length && (
+          {switching && <ChatSkeleton />}
+          {!switching && !thread.items.length && (
             <div className="muted" style={{ textAlign: 'center', marginTop: '18vh' }}>
               {agentDef && <AgentLogo def={agentDef} size={44} />}
               <p>
@@ -204,15 +212,15 @@ export function Chat(props: {
               </p>
             </div>
           )}
-          {startIdx > 0 && (
+          {!switching && startIdx > 0 && (
             <div className="chat-older-wrap">
               <button className="btn ghost small chat-load-older" onClick={loadOlder} data-testid="load-older">
                 <History size={13} /> Show earlier messages ({startIdx} older step{startIdx === 1 ? '' : 's'})
               </button>
             </div>
           )}
-          {renderedGroups}
-          {running || sending ? (
+          {!switching && renderedGroups}
+          {switching ? null : running || sending ? (
             hasLiveWorkGroup ? null : (
               <WorkingIndicator items={thread.items} agentName={agentDef?.name ?? 'the agent'} />
             )

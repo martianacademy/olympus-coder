@@ -2,7 +2,7 @@ import { PhoneSettings } from './settings/PhoneSettings';
 import { UpdateSettings } from './settings/UpdateSettings';
 import { ThemeEditor } from './settings/AppearanceSettings';
 import { useState } from 'react';
-import { Bot, Brain, FolderOpen, Loader2, Lock, LogIn, LogOut, Palette, Plug, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Bot, Brain, FolderOpen, Loader2, Lock, LogIn, LogOut, Mic, Palette, Plug, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import type { AppState, LockState, Settings } from '@shared/types';
 import type { AgentsInfo } from '../App';
 import { api } from '../api';
@@ -16,8 +16,10 @@ import { ProviderSettings } from './settings/ProviderSettings';
 import { ToolsSettings } from './settings/ToolsSettings';
 import { SkillsSettings } from './settings/SkillsSettings';
 import { MemoryEditor } from './settings/MemorySettings';
+import { VoiceSettings } from './settings/VoiceSettings';
+import { voiceApi } from '../voice';
 
-export type SettingsTab = 'general' | 'agents' | 'connectors' | 'tools' | 'skills' | 'memory' | 'appearance' | 'phone' | 'security';
+export type SettingsTab = 'general' | 'agents' | 'connectors' | 'tools' | 'skills' | 'memory' | 'appearance' | 'voice' | 'phone' | 'security';
 
 export function SettingsModal(props: {
   tab: SettingsTab;
@@ -41,6 +43,8 @@ export function SettingsModal(props: {
     { id: 'skills', label: 'Skills', icon: <Sparkles size={15} /> },
     { id: 'memory', label: 'Shared memory', icon: <Brain size={15} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={15} /> },
+    // Desktop window only: the phone page has no voice bridge.
+    ...(voiceApi ? [{ id: 'voice' as const, label: 'Voice', icon: <Mic size={15} /> }] : []),
     { id: 'phone', label: 'Phone', icon: <Smartphone size={15} /> },
     { id: 'security', label: 'App password', icon: <Lock size={15} /> },
   ];
@@ -125,11 +129,25 @@ export function SettingsModal(props: {
                       onClick={() => void update({ notifyAgentsWhenWorkEnds: !state.settings.notifyAgentsWhenWorkEnds })}
                       data-testid="notify-agents-toggle"
                     />
-                    <label>Message agents when their work finishes</label>
+                    <label>Message agents when their terminal commands finish</label>
                   </div>
                   <span className="small muted">
-                    When a command an agent left running, or a sub-session, finishes, Olympus sends a short message into that agent's chat. Off by default: agents check their own
-                    pending work and can set timers. The Tasks panel updates either way.
+                    When a terminal or background command an agent left running finishes, Olympus sends a short message into that agent's chat. Off by default: agents check their
+                    own commands and can set timers. Sub-sessions have their own setting below.
+                  </span>
+                </div>
+                <div className="field">
+                  <div className="row">
+                    <button
+                      className={`switch ${state.settings.notifyParentOnSubsessionEnd !== false ? 'on' : ''}`}
+                      onClick={() => void update({ notifyParentOnSubsessionEnd: state.settings.notifyParentOnSubsessionEnd === false })}
+                      data-testid="notify-parent-toggle"
+                    />
+                    <label>Tell the main session when a sub-session finishes</label>
+                  </div>
+                  <span className="small muted">
+                    The moment a sub-session finishes, Olympus sends its result (status, changed files, report) to the session that started it, even mid-turn when that agent
+                    supports it. The Tasks panel updates either way.
                   </span>
                 </div>
                 <UpdateSettings settings={state.settings} platform={state.platform} update={update} />
@@ -149,6 +167,7 @@ export function SettingsModal(props: {
             {props.tab === 'tools' && <ToolsSettings settings={state.settings} agentDefs={props.agents.defs} onSettings={(settings) => props.onState({ ...state, settings })} />}
             {props.tab === 'skills' && <SkillsSettings />}
             {props.tab === 'phone' && <PhoneSettings onTab={props.onTab} lock={state.lock} onLock={(lock) => props.onState({ ...state, lock })} />}
+            {props.tab === 'voice' && <VoiceSettings agentNames={Object.fromEntries(props.agents.defs.map((d) => [d.id, d.name]))} />}
             {props.tab === 'appearance' && <ThemeEditor theme={state.settings.theme} onChange={(theme) => void update({ theme })} />}
             {props.tab === 'security' && <SecuritySettings lock={state.lock} onLock={(lock) => props.onState({ ...state, lock })} />}
             {props.tab === 'memory' && (

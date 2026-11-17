@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ChevronDown, ChevronRight, CornerDownLeft, ExternalLink, FileCode2, ShieldAlert, Square } from 'lucide-react';
 import type { AgentDef, ProcAction, RunningTask, SubTaskView, Thread, ThreadItem } from '@shared/types';
+import { withItem } from '@shared/itemOrder';
 import { api, onEvent, remoteWatch } from '../api';
 import { composeInChat } from '../compose';
 import { LinkedText } from '../fileLinks';
@@ -150,11 +151,7 @@ function SubagentInspector(props: {
     const off = onEvent((channel, payload) => {
       if (channel === 'thread:item' && payload.threadId === id) {
         const item = payload.item as ThreadItem;
-        setT((cur) => {
-          if (!cur) return cur;
-          const i = cur.items.findIndex((x) => x.id === item.id);
-          return { ...cur, items: i >= 0 ? cur.items.map((x, j) => (j === i ? item : x)) : [...cur.items, item] };
-        });
+        setT((cur) => (cur ? { ...cur, items: withItem(cur.items, item) } : cur));
       } else if (channel === 'thread:meta' && payload.id === id) {
         setT((cur) => (cur ? { ...cur, ...payload } : cur));
       }

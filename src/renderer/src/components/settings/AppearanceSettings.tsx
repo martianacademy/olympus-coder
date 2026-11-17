@@ -210,6 +210,30 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               </div>
             </div>
           </div>
+          <h4 className="settings-sub">Sidebar</h4>
+          <div className="row" style={{ gap: 14 }}>
+            <div className="field grow">
+              <label>Project spacing: {t.sidebarProjectGap}px</label>
+              <input type="range" min={0} max={24} step={1} value={t.sidebarProjectGap} data-testid="sb-project-gap" onChange={(e) => set({ sidebarProjectGap: Number(e.target.value) })} />
+            </div>
+            <div className="field grow">
+              <label>Session spacing: {t.sidebarRowGap}px</label>
+              <input type="range" min={0} max={12} step={1} value={t.sidebarRowGap} data-testid="sb-row-gap" onChange={(e) => set({ sidebarRowGap: Number(e.target.value) })} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Sidebar text size: {t.sidebarFontSize ? `${t.sidebarFontSize}px` : `${theme.fontSize}px (same as app)`}</label>
+            {/* 0 = follow the app font size; picking the app size again goes back to following it. */}
+            <input
+              type="range"
+              min={11}
+              max={18}
+              step={1}
+              value={t.sidebarFontSize || theme.fontSize}
+              data-testid="sb-font-size"
+              onChange={(e) => set({ sidebarFontSize: Number(e.target.value) === theme.fontSize ? 0 : Number(e.target.value) })}
+            />
+          </div>
         </>
       )}
 

@@ -1,5 +1,6 @@
 import { clearDraft } from './drafts';
 import type {
+  DictationResult,
   UpdateCheck,
   UpdateInfo,
   LearnedNote,
@@ -50,6 +51,10 @@ declare global {
       pathForFile: (file: File) => string;
       /** Phone link only: marks a chat or terminal as on screen, so the Mac streams it (see remote/bridge.ts). */
       watch?: (kind: 'thread' | 'pty', id: string) => () => void;
+      /** Desktop window only: starts the OS's own dictation (absent on the phone page). */
+      dictate?: () => Promise<DictationResult>;
+      /** Desktop window only: Settings → Voice and the recording mic (absent on the phone page). */
+      voice?: (method: string, ...args: unknown[]) => Promise<any>;
     };
   }
 }
@@ -213,6 +218,11 @@ export const api = {
   openGlobalInstructions: () => call<void>('memory.openGlobal'),
   revealShared: () => call<void>('shared.reveal'),
   openExternal: (url: string) => call<void>('system.openExternal', url),
+  /** Mic button: the OS's own dictation. Null where there is none to start (phone page, Linux). */
+  startDictation:
+    typeof window !== 'undefined' && window.desk?.dictate && /Mac|Win/i.test(navigator.platform || navigator.userAgent)
+      ? () => window.desk.dictate!()
+      : null,
   currentUpdate: () => call<UpdateInfo | null>('updates.current'),
   skipUpdate: (version: string) => call<void>('updates.skip', version),
   checkUpdates: () => call<UpdateCheck>('updates.check'),

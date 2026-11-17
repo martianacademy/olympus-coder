@@ -1,0 +1,31 @@
+/* Loading placeholders: quiet monochrome bars with a slow shimmer, tinted from --text so they work in light and dark.
+   They take the size of what they stand in for (rows the height of real rows), so nothing jumps when data arrives. */
+.sk {
+  --sk-base: color-mix(in srgb, var(--text) 7%, transparent);
+  --sk-shine: color-mix(in srgb, var(--text) 12%, transparent);
+  display: block; border-radius: 6px; height: 10px; flex: none;
+  background: linear-gradient(90deg, var(--sk-base) 0%, var(--sk-base) 35%, var(--sk-shine) 50%, var(--sk-base) 65%, var(--sk-base) 100%);
+  background-size: 300% 100%;
+  animation: sk-shimmer 1.6s ease-in-out infinite;
+}
+.sk.round { border-radius: 50%; }
+@keyframes sk-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .sk { animation: none; background: var(--sk-base); }
+}
+.sk-wrap { display: flex; flex-direction: column; pointer-events: none; user-select: none; }
+
+/* Sidebar chat list: rows as tall as .thread-row. */
+.sk-list { gap: 0; padding: 4px 0; }
+.sk-list .sk-row { height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 10px; }
+
+/* Chat: a user bubble on the right, then reply lines. */
+.sk-chat { gap: 26px; padding-top: 6px; }
+.sk-chat .sk-turn { display: flex; flex-direction: column; gap: 10px; }
+.sk-chat .sk-user { align-self: flex-end; height: 34px; border-radius: 14px; }
+.sk-chat .sk-line { height: 11px; }
+
+/* Side panels (Files tree, Git, Tasks, Info): compact rows. */
+.sk-panel { gap: 2px; padding: 8px 10px; width: 100%; }
+.sk-panel .sk-row { height: 26px; display: flex; align-items: center; gap: 8px; }
+.sk-panel .sk-head { height: 12px; margin: 6px 0 8px; }

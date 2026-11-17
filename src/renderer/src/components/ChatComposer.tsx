@@ -5,6 +5,7 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Loader2,
+  Mic,
   ShieldAlert,
   ShieldCheck,
   Square,
@@ -12,6 +13,7 @@ import {
 import type { AgentDef, AgentStatus, SessionView } from '@shared/types';
 import { api } from '../api';
 import { useComposerResize } from '../composerResize';
+import { MAX_RECORD_SECONDS, MicRecorder, micMode, useVoiceStatus, voiceApi } from '../voice';
 import { useDraft } from '../drafts';
 import { useOpenFile } from '../fileLinks';
 import { setExpandSteps, useExpandSteps } from '../prefs';
@@ -74,6 +76,155 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   }, []);
   const slash = useSlashMenu({ text, setText, commands: session?.commands ?? NO_COMMANDS, ta });
   const queue = usePromptQueue(threadId);
+  const [dictateNote, setDictateNote] = useState<{ text: string; error?: boolean; offerSystem?: boolean } | null>(null);
+  useEffect(() => {
+    if (!dictateNote) return;
+    const t = setTimeout(() => setDictateNote(null), dictateNote.offerSystem ? 20_000 : 8000);
+    return () => clearTimeout(t);
+  }, [dictateNote]);
+  // Settings → Voice decides what the mic does: the OS dictation, or record here and transcribe with an engine.
+  const voiceStatus = useVoiceStatus();
+  const mic = micMode(voiceStatus, Boolean(api.startDictation));
+
+  // Mic: focus the box with the caret at the end, then start the OS's own dictation. Dictated words arrive as native
+  // text input, so the textarea's onChange keeps the draft (and Send) in sync like typing does.
+  // The OS doesn't say when its dictation ends, so the button shows "listening" from the click until the box loses
+  // focus, Esc, Send, a second click (which ends it by taking focus away), or 30 s without new text (macOS itself
+  // stops dictation after about 30 s of silence).
+  const [listening, setListening] = useState(false);
+  async function dictate() {
+    const el = ta.current;
+    if (!el || !api.startDictation) return;
+    if (listening) {
+      setListening(false);
+      el.blur();
+      requestAnimationFrame(() => el.focus());
+      return;
+    }
+    el.focus();
+    el.setSelectionRange(el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length);
+    const r = await api.startDictation().catch((e: unknown) => ({ ok: false, error: String(e), hint: undefined }));
+    if (!r.ok) setDictateNote({ text: `Dictation didn't start: ${r.error ?? 'unknown error'}`, error: true });
+    else if (r.hint) setDictateNote({ text: r.hint });
+    else setListening(true);
+  }
+  useEffect(() => {
+    const el = ta.current;
+    if (!listening || !el) return;
+    const stop = () => setListening(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && stop();
+    const idle = setTimeout(stop, 30_000);
+    el.addEventListener('blur', stop);
+    el.addEventListener('keydown', onKey);
+    return () => {
+      clearTimeout(idle);
+      el.removeEventListener('blur', stop);
+      el.removeEventListener('keydown', onKey);
+    };
+  }, [listening, text]);
+
+  // Recording engines (whisper-local, OpenRouter, custom server): click to record, click again to stop, then the text
+  // goes in at the caret. Esc cancels. Stops by itself after MAX_RECORD_SECONDS.
+  const [rec, setRec] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [elapsed, setElapsed] = useState(0);
+  const recorder = useRef<MicRecorder | null>(null);
+  /** Bumped on cancel so a transcription that comes back later is dropped. */
+  const recRun = useRef(0);
+  function cancelRecording() {
+    recRun.current++;
+    recorder.current?.cancel();
+    recorder.current = null;
+    setRec('idle');
+  }
+  function insertAtCaret(t: string) {
+    const el = ta.current;
+    setText((prev) => {
+      const start = el && document.activeElement === el ? (el.selectionStart ?? prev.length) : prev.length;
+      const end = el && document.activeElement === el ? (el.selectionEnd ?? start) : prev.length;
+      const before = prev.slice(0, start);
+      const after = prev.slice(end);
+      const lead = before && !/\s$/.test(before) ? ' ' : '';
+      const trail = after && !/^\s/.test(after) ? ' ' : '';
+      const next = `${before}${lead}${t}${trail}${after}`;
+      const caret = (before + lead + t).length;
+      requestAnimationFrame(() => {
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      });
+      return next;
+    });
+  }
+  async function startRecording() {
+    if (!voiceApi) return;
+    setDictateNote(null);
+    const access = await voiceApi.micAccess().catch(() => ({ granted: true, status: 'unknown' }));
+    if (!access.granted) {
+      setDictateNote({ text: 'Microphone access is off. Allow it in System Settings → Privacy & Security → Microphone.', error: true, offerSystem: Boolean(api.startDictation) });
+      return;
+    }
+    const r = new MicRecorder();
+    try {
+      await r.start();
+    } catch (e) {
+      setDictateNote({ text: `Couldn't start recording: ${e instanceof Error ? e.message : String(e)}`, error: true, offerSystem: Boolean(api.startDictation) });
+      return;
+    }
+    recorder.current = r;
+    setElapsed(0);
+    setRec('recording');
+    ta.current?.focus();
+    // A local whisper-server starts loading its model while the user speaks.
+    void voiceApi.prewarm().catch(() => {});
+  }
+  async function stopRecording() {
+    const r = recorder.current;
+    if (!r || !voiceApi) return;
+    recorder.current = null;
+    const run = ++recRun.current;
+    const wav = r.stop();
+    if (r.seconds < 0.3 && wav.length < 16_000) {
+      setRec('idle');
+      return;
+    }
+    setRec('transcribing');
+    const res = await voiceApi.transcribe(wav, threadId).catch((e: unknown) => ({ ok: false, error: String(e), text: undefined }));
+    if (run !== recRun.current) return;
+    setRec('idle');
+    if (res.ok && res.text?.trim()) insertAtCaret(res.text.trim());
+    else if (res.ok) setDictateNote({ text: 'No speech heard.' });
+    else setDictateNote({ text: `Voice engine failed: ${res.error ?? 'unknown error'}`, error: true, offerSystem: Boolean(api.startDictation) });
+  }
+  useEffect(() => {
+    if (rec === 'idle') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelRecording();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    const tick = rec === 'recording' ? setInterval(() => {
+      const secs = recorder.current?.seconds ?? 0;
+      setElapsed(secs);
+      if (secs >= MAX_RECORD_SECONDS) void stopRecording();
+    }, 250) : null;
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (tick) clearInterval(tick);
+    };
+  }, [rec]);
+  // A different chat, or the composer going away: drop any recording.
+  useEffect(() => () => cancelRecording(), [threadId]);
+  function onMic() {
+    if (mic === 'record') {
+      if (rec === 'idle') void startRecording();
+      else if (rec === 'recording') void stopRecording();
+      return;
+    }
+    void dictate();
+  }
+  const fmtElapsed = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
   useEffect(() => {
     const el = ta.current;
@@ -104,6 +255,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const canSend = Boolean(text.trim() || att.files.length);
   async function send() {
     if (!canSend) return;
+    setListening(false);
+    if (rec === 'recording') cancelRecording();
     const t = text.trim();
     const files = att.files;
     clearThreadDraft();
@@ -207,6 +360,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         <div className="composer-bar">
           <AttachButton onClick={() => void att.pick()} onFiles={att.addRawFiles} />
           {att.error && <span className="error-text small ellipsis">{att.error}</span>}
+          {dictateNote && (
+            <span className={`small ellipsis dictate-note ${dictateNote.error ? 'error-text' : 'muted'}`} title={dictateNote.text} data-testid="dictate-note">
+              {dictateNote.text}
+            </span>
+          )}
+          {dictateNote?.offerSystem && api.startDictation && (
+            <button
+              className="btn ghost small dictate-fallback"
+              type="button"
+              title="Use the operating system's dictation instead"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setDictateNote(null);
+                void dictate();
+              }}
+              data-testid="dictate-fallback"
+            >
+              System dictation
+            </button>
+          )}
           <div className="spacer" />
           {session?.status === 'starting' && (
             <span className="small muted row" style={{ gap: 4 }}>
@@ -223,6 +396,43 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           )}
           <ContextMeter usage={session?.usage} onClick={props.onUsage} />
           <div className="composer-send">
+            {mic === 'record' && rec === 'recording' && (
+              <span className="dictate-time" data-testid="dictate-time" aria-live="polite">
+                {fmtElapsed(elapsed)}
+              </span>
+            )}
+            {mic === 'record' && rec === 'transcribing' && (
+              <span className="dictate-time muted" data-testid="dictate-transcribing">
+                Transcribing…
+              </span>
+            )}
+            {mic !== 'none' && (
+              <button
+                className={`btn ghost icon dictate-btn ${listening || rec === 'recording' ? 'listening' : ''}`}
+                title={
+                  mic === 'record'
+                    ? rec === 'recording'
+                      ? 'Recording… click to stop (Esc cancels)'
+                      : rec === 'transcribing'
+                        ? 'Transcribing…'
+                        : 'Voice input (Settings → Voice)'
+                    : listening
+                      ? 'Listening… click to stop'
+                      : 'Dictate (system dictation)'
+                }
+                aria-label={mic === 'record' ? (rec === 'recording' ? 'Stop recording' : 'Voice input') : listening ? 'Stop dictation' : 'Dictate (system dictation)'}
+                aria-pressed={listening || rec === 'recording'}
+                disabled={rec === 'transcribing'}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={onMic}
+                type="button"
+                data-testid="dictate"
+                data-mode={mic}
+                data-state={mic === 'record' ? rec : listening ? 'listening' : 'idle'}
+              >
+                {rec === 'transcribing' ? <Loader2 size={17} className="spin" aria-hidden="true" /> : <Mic size={17} aria-hidden="true" />}
+              </button>
+            )}
             {running && (
               <button className="btn small stop-btn" onClick={() => void api.cancel(threadId)} title="Stop the current reply" data-testid="stop">
                 <Square size={12} fill="currentColor" /> Stop
