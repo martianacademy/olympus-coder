@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Brain, FileCode, FolderOpen, GitBranch, Laptop, RotateCw } from 'lucide-react';
 import type { AgentDef, AgentStatus, GitStatus, MemoryView, PortInfo, Project, SessionView, Thread } from '@shared/types';
 import { api } from '../api';
+import { useModelTags } from '../modelTags';
 import { PanelSkeleton } from './Skeleton';
 import { AgentLogo } from '../logos';
 import { isRemoteBrowser } from '../responsive';
@@ -104,6 +105,7 @@ export function InfoPanel(props: {
   onTab: (t: WorkbenchTab) => void;
 }) {
   const remote = isRemoteBrowser();
+  const tags = useModelTags();
   const [mem, setMem] = useState<MemoryView | null>(null);
   useEffect(() => {
     void api.memory(props.project.id).then(setMem);
@@ -157,6 +159,8 @@ export function InfoPanel(props: {
           <SessionStats
             thread={props.thread}
             usage={props.session?.usage}
+            modelValue={model?.currentValue}
+            tags={tags}
             agentDefs={{ ...(props.agentDefs ?? {}), ...(props.agentDef ? { [props.agentDef.id]: props.agentDef } : {}) }}
             action={canCompact(props.session) ? <InfoCompact thread={props.thread} session={props.session} /> : undefined}
           />

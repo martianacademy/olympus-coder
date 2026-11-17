@@ -148,11 +148,35 @@ export const codeFontCss = (name: string) => {
   return `"${trimmed}"`;
 };
 
+/**
+ * Custom colors are per mode: `accentDark` / `overridesDark` apply in dark, `accentLight` / `overridesLight`
+ * apply in light — a color set while dark stays dark's, light keeps its own. `accent` / `overrides` are the
+ * legacy global form; `migrateThemeColors` (once, on load) moves them into the dark buckets, because the
+ * usual way people set a color is in the theme they are looking at, and light must never inherit it.
+ */
+export function migrateThemeColors(theme: ThemeSettings): { theme: ThemeSettings; changed: boolean } {
+  const legacyOv = theme.overrides ?? {};
+  const legacyAccent = theme.accent;
+  if (!legacyAccent && !Object.keys(legacyOv).length) return { theme, changed: false };
+  const t: ThemeSettings = { ...theme };
+  if (legacyAccent) {
+    t.accentDark ??= legacyAccent;
+    t.accent = undefined;
+  }
+  if (Object.keys(legacyOv).length) {
+    t.overridesDark = { ...legacyOv, ...(t.overridesDark ?? {}) };
+    t.overrides = {};
+  }
+  return { theme: t, changed: true };
+}
+
 export function resolvePalette(theme: ThemeSettings, systemDark: boolean): { palette: ThemePalette; dark: boolean } {
   const preset = THEME_PRESETS.find((p) => p.id === theme.preset) ?? THEME_PRESETS[0];
   const dark = theme.mode === 'dark' || (theme.mode === 'system' && systemDark);
   const palette: ThemePalette = { ...(dark ? preset.dark : preset.light) };
-  if (theme.accent) palette.accent = theme.accent;
-  for (const [k, v] of Object.entries(theme.overrides)) if (v) palette[k as keyof ThemePalette] = v;
+  const accent = dark ? theme.accentDark : theme.accentLight;
+  if (accent) palette.accent = accent;
+  const overrides = (dark ? theme.overridesDark : theme.overridesLight) ?? {};
+  for (const [k, v] of Object.entries(overrides)) if (v) palette[k as keyof ThemePalette] = v;
   return { palette, dark };
 }

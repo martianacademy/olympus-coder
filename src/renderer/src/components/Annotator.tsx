@@ -17,6 +17,8 @@ import {
   Type,
   Undo2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import type { AttachmentView } from '@shared/types';
 import { api } from '../api';
@@ -231,6 +233,10 @@ interface EditorProps {
   onDone: (marks: Mark[]) => Promise<void>;
 }
 
+const ZOOM_MAX = 8;
+/** One press of − / + (or the keys) zooms by this much. */
+const ZOOM_STEP = 1.5;
+
 function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, onCancel, onDone }: EditorProps) {
   const hist = useHistory();
   const { marks } = hist;
@@ -249,6 +255,14 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   const live = useRef<{ mark: Mark; pointerId: number } | null>(null);
   const frame = useRef(0);
   const unit = unitFor(w, h);
+  // Zoom of the picture on screen (marks stay in image pixels: `pointAt` reads the canvas's on-screen rect).
+  const [zoom, setZoomState] = useState({ s: 1, x: 0, y: 0 });
+  const zoomNow = useRef(zoom);
+  // Canvas pixel density follows the zoom (1, 2 or 4 ×), once the zoom settles, so zoomed lines stay sharp.
+  const [sharp, setSharp] = useState(1);
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; s: number; mx: number; my: number } | null>(null);
+  const tapAction = useRef<{ pointerId: number; x: number; y: number; p: Pt } | null>(null);
 
   // Fit the image into the stage (re-measured on resize / rotation).
   useLayoutEffect(() => {
@@ -265,7 +279,9 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
     return () => ro.disconnect();
   }, [w, h]);
 
-  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const baseDpr = Math.min(3, window.devicePixelRatio || 1);
+  // Big zooms of big pictures: keep each canvas under ~24 M pixels.
+  const dpr = box ? Math.min(baseDpr * sharp, Math.sqrt(24e6 / Math.max(1, box.w * box.h))) : baseDpr;
   const sizeCanvas = useCallback(
     (c: HTMLCanvasElement | null) => {
       if (!c || !box) return null;
@@ -313,6 +329,65 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
     });
   };
 
+  /** Sets the zoom, keeping the picture over the stage (pan only as far as the zoomed picture is bigger). */
+  const applyZoom = useCallback(
+    (next: { s: number; x: number; y: number }) => {
+      const s = Math.min(ZOOM_MAX, Math.max(1, next.s));
+      let { x, y } = next;
+      const st = stage.current;
+      if (s === 1 || !st || !box) {
+        x = 0;
+        y = 0;
+      } else {
+        const mx = Math.max(0, (box.w * s - st.clientWidth) / 2);
+        const my = Math.max(0, (box.h * s - st.clientHeight) / 2);
+        x = Math.min(mx, Math.max(-mx, x));
+        y = Math.min(my, Math.max(-my, y));
+      }
+      zoomNow.current = { s, x, y };
+      setZoomState(zoomNow.current);
+    },
+    [box],
+  );
+  /** Zoom to `s` keeping the screen point (cx, cy) still. */
+  const zoomAt = useCallback(
+    (s: number, cx: number, cy: number) => {
+      const st = stage.current;
+      if (!st) return;
+      const r = st.getBoundingClientRect();
+      const px = cx - (r.left + r.width / 2);
+      const py = cy - (r.top + r.height / 2);
+      const cur = zoomNow.current;
+      const next = Math.min(ZOOM_MAX, Math.max(1, s));
+      const k = next / cur.s;
+      applyZoom({ s: next, x: px - k * (px - cur.x), y: py - k * (py - cur.y) });
+    },
+    [applyZoom],
+  );
+  const zoomBy = (k: number) => {
+    const r = stage.current?.getBoundingClientRect();
+    if (r) zoomAt(zoomNow.current.s * k, r.left + r.width / 2, r.top + r.height / 2);
+  };
+  // A new size of the stage / picture: keep the zoom inside the new bounds.
+  useEffect(() => applyZoom(zoomNow.current), [applyZoom]);
+  useEffect(() => {
+    const t = setTimeout(() => setSharp(zoom.s >= 3 ? 4 : zoom.s > 1.2 ? 2 : 1), 180);
+    return () => clearTimeout(t);
+  }, [zoom.s]);
+
+  // Trackpad: a pinch arrives as ctrl + wheel (zoom around the pointer); two-finger scroll pans once zoomed.
+  useEffect(() => {
+    const st = stage.current;
+    if (!st) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) zoomAt(zoomNow.current.s * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+      else if (zoomNow.current.s > 1) applyZoom({ ...zoomNow.current, x: zoomNow.current.x - e.deltaX, y: zoomNow.current.y - e.deltaY });
+    };
+    st.addEventListener('wheel', onWheel, { passive: false });
+    return () => st.removeEventListener('wheel', onWheel);
+  }, [zoomAt, applyZoom]);
+
   const pointAt = (e: { clientX: number; clientY: number }): Pt => toImagePoint(e.clientX, e.clientY, markCanvas.current!.getBoundingClientRect(), w, h);
 
   // The text being typed, readable synchronously (pointerdown + blur can both try to commit it).
@@ -331,6 +406,26 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0 || busy) return;
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.current.size === 2) {
+        // Two fingers: zoom / pan, not a mark. Drop what the first finger started.
+        live.current = null;
+        tapAction.current = null;
+        schedule();
+        for (const id of touches.current.keys()) {
+          try {
+            if (!e.currentTarget.hasPointerCapture(id)) e.currentTarget.setPointerCapture(id);
+          } catch {
+            /* that finger is already gone */
+          }
+        }
+        const [a, b] = [...touches.current.values()];
+        pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: zoomNow.current.s, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+        return;
+      }
+      if (touches.current.size > 2 || pinch.current) return;
+    }
     if (live.current) return; // a second finger while drawing
     if (text) {
       // Tapping elsewhere ends the text being typed.
@@ -339,6 +434,12 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       return;
     }
     const p = pointAt(e);
+    if (e.pointerType === 'touch' && (tool === 'text' || tool === 'pin')) {
+      // On touch, a pin / text box waits for the finger to lift: it may be the first finger of a pinch.
+      e.currentTarget.setPointerCapture(e.pointerId);
+      tapAction.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, p };
+      return;
+    }
     if (tool === 'text') {
       e.preventDefault();
       setText({ at: p, value: '' });
@@ -354,12 +455,26 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pz = pinch.current;
+      if (pz && touches.current.size >= 2) {
+        const [a, b] = [...touches.current.values()];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        zoomAt((pz.s * Math.hypot(a.x - b.x, a.y - b.y)) / pz.d, mx, my);
+        applyZoom({ ...zoomNow.current, x: zoomNow.current.x + mx - pz.mx, y: zoomNow.current.y + my - pz.my });
+        pz.mx = mx;
+        pz.my = my;
+        return;
+      }
+    }
     const l = live.current;
     if (!l || l.pointerId !== e.pointerId) return;
     const m = l.mark;
     if (m.kind === 'pen' || m.kind === 'highlighter' || m.kind === 'shape') {
       const evs = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : [];
-      const minStep = 1.2 / ((box?.scale ?? 1) || 1);
+      const minStep = 1.2 / (((box?.scale ?? 1) || 1) * zoomNow.current.s);
       for (const ev of evs.length ? evs : [e.nativeEvent]) {
         const p = pointAt(ev);
         const last = m.points[m.points.length - 1];
@@ -372,6 +487,22 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === 'touch') {
+      touches.current.delete(e.pointerId);
+      if (pinch.current) {
+        if (!touches.current.size) pinch.current = null;
+        return;
+      }
+      const ta = tapAction.current;
+      if (ta && ta.pointerId === e.pointerId) {
+        tapAction.current = null;
+        if (e.type !== 'pointercancel' && Math.hypot(e.clientX - ta.x, e.clientY - ta.y) < 12) {
+          if (tool === 'text') setText({ at: ta.p, value: '' });
+          else push((cur) => [...cur, { kind: 'pin', color, width, points: [ta.p], n: nextPinNumber(cur) }]);
+        }
+        return;
+      }
+    }
     const l = live.current;
     if (!l || l.pointerId !== e.pointerId) return;
     live.current = null;
@@ -440,6 +571,12 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       return;
     }
     if (cmd || e.altKey) return;
+    if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
+      e.preventDefault();
+      if (e.key === '0') applyZoom({ s: 1, x: 0, y: 0 });
+      else zoomBy(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP);
+      return;
+    }
     const t = TOOLS.find((x) => x.key === e.key.toLowerCase());
     if (t) setTool(t.id);
   };
@@ -460,6 +597,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       data-marks={marks.length}
       onKeyDown={onKeyDown}
     >
+      <div className="an-sheet">
       <div className="an-bar">
         <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={onCancel}>
           <X size={17} />
@@ -468,6 +606,18 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
           <span className="ellipsis an-name">{title}</span>
           {hint && <span className="ellipsis an-hint">{hint}</span>}
         </div>
+        <button type="button" className="an-icon an-zoom-out" title="Zoom out (−)" aria-label="Zoom out" data-testid="an-zoom-out" disabled={zoom.s <= 1} onClick={() => zoomBy(1 / ZOOM_STEP)}>
+          <ZoomOut size={16} />
+        </button>
+        {zoom.s !== 1 && (
+          <button type="button" className="an-icon an-zoom-pct mono" title="Reset zoom (0)" data-testid="an-zoom-reset" onClick={() => applyZoom({ s: 1, x: 0, y: 0 })}>
+            {Math.round(zoom.s * 100)}%
+          </button>
+        )}
+        <button type="button" className="an-icon" title="Zoom in (+) — or pinch on the trackpad" aria-label="Zoom in" data-testid="an-zoom-in" disabled={zoom.s >= ZOOM_MAX} onClick={() => zoomBy(ZOOM_STEP)}>
+          <ZoomIn size={16} />
+        </button>
+        <span className="an-bar-sep" aria-hidden="true" />
         <button type="button" className="an-icon" title={`Undo (${mod()}Z)`} aria-label="Undo" data-testid="an-undo" disabled={!hist.canUndo} onClick={hist.undo}>
           <Undo2 size={16} />
         </button>
@@ -485,7 +635,12 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
 
       <div className="an-stage" ref={stage}>
         {box && (
-          <div className="an-canvas-box" style={{ width: box.w, height: box.h }}>
+          <div
+            className="an-canvas-box"
+            data-testid="an-canvas-box"
+            data-zoom={zoom.s.toFixed(2)}
+            style={{ width: box.w, height: box.h, transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.s})` }}
+          >
             <canvas ref={baseCanvas} className="an-canvas" style={{ width: box.w, height: box.h }} aria-hidden="true" />
             <canvas
               ref={markCanvas}
@@ -594,6 +749,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
           {error && <span className="error-text small ellipsis">{error}</span>}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -663,6 +819,7 @@ function Shell({ title, children, onClose }: { title: string; children?: React.R
         }
       }}
     >
+      <div className="an-sheet">
       <div className="an-bar">
         <button type="button" className="an-icon" title="Close (Esc)" aria-label="Close" data-testid="an-cancel" onClick={onClose}>
           <X size={17} />
@@ -672,6 +829,7 @@ function Shell({ title, children, onClose }: { title: string; children?: React.R
         </div>
       </div>
       <div className="an-stage an-center">{children ?? <Loader2 size={20} className="spin muted" />}</div>
+      </div>
     </div>
   );
 }
@@ -684,7 +842,8 @@ function ImageAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
   const { dataUrl, error } = useSource(src);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [keep, setKeep] = useState(true);
+  // Off by default: people mark up a picture to replace it; they tick the box when the agent should see both.
+  const [keep, setKeep] = useState(false);
   useEffect(() => {
     if (!dataUrl) return;
     const i = new Image();
@@ -744,7 +903,8 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
   const [range, setRange] = useState<{ start?: number; end?: number }>({});
   const [mode, setMode] = useState<VideoMode>({ kind: 'pick' });
   const [outputs, setOutputs] = useState<Output[]>([]);
-  const [keep, setKeep] = useState(true);
+  // Off by default: people mark up a picture to replace it; they tick the box when the agent should see both.
+  const [keep, setKeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -839,6 +999,7 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
           }
         }}
       >
+        <div className="an-sheet">
         <div className="an-bar">
           <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={closeAnnotator}>
             <X size={17} />
@@ -945,6 +1106,7 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
             </div>
           )}
           {note && <span className="error-text small ellipsis">{note}</span>}
+        </div>
         </div>
       </div>
       {mode.kind === 'frame' && (

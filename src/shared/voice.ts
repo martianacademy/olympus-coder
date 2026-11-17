@@ -24,6 +24,12 @@ export interface VoiceSettings {
   openrouterKeyFrom?: string;
   customBaseUrl?: string;
   customModel?: string;
+  /** whisper-local only: live text while speaking, auto-stop after 5 s of silence, "over" ends it. Missing = on. */
+  live?: boolean;
+  /** whisper-local only: listen for "Hey Oly" while an Olympus window is focused. Missing = off. */
+  wakeWord?: boolean;
+  /** Recording engines: a short sound when the mic opens and when it closes. Missing = on. */
+  sounds?: boolean;
 }
 
 export const DEFAULT_VOICE: VoiceSettings = { engine: 'system', language: 'auto' };
@@ -68,11 +74,19 @@ export function engineLanguage(language: string): string | undefined {
 /** Whisper's prompt window is ~224 tokens; keep the hint well under it (~ 600 characters). */
 export const MAX_PROMPT_CHARS = 600;
 
-/** The prompt sent with a clip: the Hinglish example (for that preset) plus project words, short. */
-export function buildVoicePrompt(language: string, vocab: string[]): string {
+/** Previous text sent along in live mode (whisper reads the prompt as what came before). */
+export const MAX_CONTEXT_CHARS = 200;
+
+/**
+ * The prompt sent with a clip: the Hinglish example (for that preset) plus project words, short. In live mode the
+ * session's last committed words go last (`context`, closest to the audio), and the project words make room for them.
+ */
+export function buildVoicePrompt(language: string, vocab: string[], context = ''): string {
   const base = language === 'hinglish' ? HINGLISH_PROMPT : '';
+  let ctx = context.replace(/\s+/g, ' ').trim();
+  if (ctx.length > MAX_CONTEXT_CHARS) ctx = ctx.slice(-MAX_CONTEXT_CHARS).replace(/^\S*\s/, '');
   const words: string[] = [];
-  let len = base.length;
+  let len = base.length + (ctx ? ctx.length + 1 : 0);
   for (const w of vocab) {
     const t = w.trim();
     if (!t || words.includes(t)) continue;
@@ -80,7 +94,7 @@ export function buildVoicePrompt(language: string, vocab: string[]): string {
     words.push(t);
     len += t.length + 2;
   }
-  return [base, words.length ? `${words.join(', ')}.` : ''].filter(Boolean).join(' ');
+  return [base, words.length ? `${words.join(', ')}.` : '', ctx].filter(Boolean).join(' ');
 }
 
 /** Settings saved before voice existed (or partly): fill the defaults. The engine stays 'system' unless picked. */
@@ -128,6 +142,8 @@ export interface TranscribeRequest {
   threadId?: string;
   /** Override the saved engine/settings (Settings → Voice → Test before saving). */
   settings?: Partial<VoiceSettings>;
+  /** Live mode: the session's recent committed text, appended to the prompt. */
+  context?: string;
 }
 
 export interface TranscribeResult {
@@ -144,6 +160,21 @@ export interface TranscribeResult {
  * What the composer's mic does: 'record' with an in-app engine, 'system' for the OS dictation, 'none' hides it
  * (Linux without a recording engine, or a page without the desktop voice bridge such as the phone page).
  */
+/** Live mode (streaming text, auto-stop, "over") is for the local engine only: nothing streams to a paid/remote API. */
+export function liveModeFor(settings: Pick<VoiceSettings, 'engine' | 'live'> | undefined): boolean {
+  return settings?.engine === 'whisper-local' && settings.live !== false;
+}
+
+/** "Hey Oly" listening: local engine only (it transcribes every short thing said while Olympus is focused). */
+export function wakeWordFor(settings: Pick<VoiceSettings, 'engine' | 'wakeWord'> | undefined): boolean {
+  return settings?.engine === 'whisper-local' && settings.wakeWord === true;
+}
+
+/** Mic open/close sounds: recording engines only (the OS dictation makes its own), on unless turned off. */
+export function micSoundsFor(settings: Pick<VoiceSettings, 'engine' | 'sounds'> | undefined): boolean {
+  return Boolean(settings && RECORDING_ENGINES.includes(settings.engine) && settings.sounds !== false);
+}
+
 export function micModeFor(engine: VoiceEngineId | undefined, hasVoiceBridge: boolean, systemAvailable: boolean): 'record' | 'system' | 'none' {
   if (hasVoiceBridge && engine && engine !== 'system') return 'record';
   return systemAvailable ? 'system' : 'none';

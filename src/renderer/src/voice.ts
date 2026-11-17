@@ -20,6 +20,8 @@ export const voiceApi =
         prewarm: (settings?: Partial<VoiceSettings>) => call<{ ok: boolean; error?: string }>('prewarm', settings),
         micAccess: () => call<{ granted: boolean; status: string }>('micAccess'),
         transcribe: (wav: Uint8Array, threadId?: string, settings?: Partial<VoiceSettings>) => call<TranscribeResult>('transcribe', { wav, threadId, settings }),
+        /** Live mode / "Hey Oly": a short clip, local whisper only (main refuses other engines). */
+        transcribeLive: (wav: Uint8Array, threadId?: string, context?: string) => call<TranscribeResult>('transcribeLive', { wav, threadId, context }),
       }
     : null;
 
@@ -51,13 +53,23 @@ export function useVoiceStatus(): VoiceStatus | null {
   return s;
 }
 
+export interface MicRecorderOpts {
+  /** Every ~85 ms: the new audio as 16 kHz mono (live mode, wake word). */
+  onChunk?: (samples16k: Float32Array) => void;
+  /** Keep the audio for `stop()` (default true; live mode streams only). */
+  keep?: boolean;
+}
+
 /** Records the microphone until `stop()`; returns 16 kHz mono 16-bit WAV bytes. */
 export class MicRecorder {
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
   private node: ScriptProcessorNode | null = null;
   private chunks: Float32Array[] = [];
+  private samples = 0;
   private rate = 48_000;
+
+  constructor(private readonly opts: MicRecorderOpts = {}) {}
 
   async start(): Promise<void> {
     const ask = navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
@@ -79,7 +91,12 @@ export class MicRecorder {
     const src = this.ctx.createMediaStreamSource(this.stream);
     // ScriptProcessor is simple and fine for speech; an AudioWorklet would need a separate module file.
     this.node = this.ctx.createScriptProcessor(4096, 1, 1);
-    this.node.onaudioprocess = (e) => this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    this.node.onaudioprocess = (e) => {
+      const x = new Float32Array(e.inputBuffer.getChannelData(0));
+      this.samples += x.length;
+      if (this.opts.keep !== false) this.chunks.push(x);
+      this.opts.onChunk?.(resample(x, this.rate, TARGET_RATE));
+    };
     src.connect(this.node);
     // Must reach the destination for onaudioprocess to fire; the output buffer stays silent.
     this.node.connect(this.ctx.destination);
@@ -87,7 +104,7 @@ export class MicRecorder {
 
   /** Seconds recorded so far. */
   get seconds(): number {
-    return this.chunks.reduce((n, c) => n + c.length, 0) / this.rate;
+    return this.samples / this.rate;
   }
 
   private release() {
@@ -109,12 +126,14 @@ export class MicRecorder {
       o += c.length;
     }
     this.chunks = [];
+    this.samples = 0;
     return encodeWav(resample(mixToMono([all]), this.rate, TARGET_RATE), TARGET_RATE);
   }
 
   cancel() {
     this.release();
     this.chunks = [];
+    this.samples = 0;
   }
 }
 

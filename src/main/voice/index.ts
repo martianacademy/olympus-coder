@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   defaultVoiceLanguage,
+  liveModeFor,
   normalizeVoice,
   RECORDING_ENGINES,
   type TranscribeRequest,
@@ -143,7 +144,7 @@ async function vocabFor(threadId?: string): Promise<string[]> {
   return [...idents, ...stems];
 }
 
-export async function transcribe(req: TranscribeRequest): Promise<TranscribeResult> {
+export async function transcribe(req: TranscribeRequest, quiet = false): Promise<TranscribeResult> {
   const wav = req.wav instanceof Uint8Array ? req.wav : new Uint8Array(req.wav as ArrayBufferLike);
   if (wav.byteLength > MAX_WAV_BYTES) return { ok: false, error: 'Recording is too long.' };
   const h = readWavHeader(wav);
@@ -151,8 +152,26 @@ export async function transcribe(req: TranscribeRequest): Promise<TranscribeResu
   const settings = { ...voiceSettings(), ...(req.settings ?? {}) };
   if (!RECORDING_ENGINES.includes(settings.engine)) return { ok: false, error: 'The chosen voice engine does not record.' };
   const vocab = await vocabFor(req.threadId);
-  const r = await runTranscription(wav, settings, vocab, { whisper: () => whisperFound(settings), key });
-  log(settings.engine, r.ok ? `ok ${r.ms} ms, ${r.text?.length ?? 0} chars` : `failed: ${r.error}`);
+  const r = await runTranscription(wav, settings, vocab, { whisper: () => whisperFound(settings), key }, req.context ?? '');
+  if (!quiet || !r.ok) log(settings.engine, r.ok ? `ok ${r.ms} ms, ${r.text?.length ?? 0} chars` : `failed: ${r.error}`);
+  return r;
+}
+
+/** A live 10 s window is ~320 KB; anything much bigger isn't a live chunk. */
+const MAX_LIVE_WAV_BYTES = 1024 * 1024;
+
+/**
+ * Live mode and "Hey Oly" (many short clips per minute): local whisper only, so a rolling stream of audio never goes
+ * to a remote or paid API. Same engine path as `transcribe`, plus the session's recent text as context.
+ */
+export async function transcribeLive(req: TranscribeRequest): Promise<TranscribeResult> {
+  const wav = req.wav instanceof Uint8Array ? req.wav : new Uint8Array(req.wav as ArrayBufferLike);
+  if (wav.byteLength > MAX_LIVE_WAV_BYTES) return { ok: false, error: 'Live chunk is too long.' };
+  const settings = { ...voiceSettings(), ...(req.settings ?? {}) };
+  if (!liveModeFor({ engine: settings.engine, live: true })) return { ok: false, error: 'Live voice needs Whisper on this computer.' };
+  const r = await transcribe({ ...req, wav, settings }, true);
+  // Wake checks come without context: log what was heard, so a missed "Hey Oly" can be traced (local console only).
+  if (req.context === undefined && r.ok) log('wake heard:', JSON.stringify(r.text ?? ''));
   return r;
 }
 
@@ -179,6 +198,8 @@ export async function voiceCall(sender: WebContents, method: string, args: unkno
       return micAccess();
     case 'transcribe':
       return transcribe(args[0] as TranscribeRequest);
+    case 'transcribeLive':
+      return transcribeLive(args[0] as TranscribeRequest);
     default:
       throw new Error(`Unknown voice method ${method}`);
   }

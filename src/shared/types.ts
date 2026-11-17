@@ -4,6 +4,9 @@ import type { RichContent, ToolIdentity, ToolLocation } from './acpContent';
 import type { ElicitContent, ElicitSchema } from './elicitation';
 import type { QueuedPrompt, UserDelivery } from './promptQueue';
 import type { VoiceSettings } from './voice';
+import type { ModelTags } from './modelTags';
+import type { PanelContext, PanelTool } from './panels';
+export type { ModelTags } from './modelTags';
 
 export type AgentId = string;
 
@@ -436,8 +439,15 @@ export type ChatWidth = 'narrow' | 'default' | 'wide';
 export interface ThemeSettings {
   preset: string;
   mode: ThemeMode;
+  /** Legacy global accent (pre per-mode colors). Kept for old settings files; migrated once on load. */
   accent?: string;
+  /** Legacy global color overrides, same story. */
   overrides: Partial<ThemePalette>;
+  /** Custom colors are per mode: a color set while dark stays dark's, light keeps its own (store.ts migrates the legacy ones once). */
+  accentDark?: string;
+  accentLight?: string;
+  overridesDark?: Partial<ThemePalette>;
+  overridesLight?: Partial<ThemePalette>;
   fontSize: number;
   uiFont: string;
   codeFont: string;
@@ -806,6 +816,14 @@ export interface DeskEvents {
   'update:available': UpdateInfo | null;
   /** An update check finished (Settings → General shows the result). */
   'update:checked': UpdateCheck;
+  /** The model capability tags were refreshed from the models.dev registry (src/main/modelTags.ts). */
+  'models:tags': ModelTags;
+  /** A detached Workbench tool window closed; `reattach`: by its Re-attach button (the main window shows that tab). */
+  'panel:closed': { tool: PanelTool; reattach: boolean };
+  /** The project / chat detached tool windows follow changed (the main window's current code chat). */
+  'panel:context': PanelContext | null;
+  /** A detached tool asks the main window to show a tab (and open a file, or a terminal). */
+  'panel:show': { tab: string; path?: string; line?: number; ptyId?: string; threadId?: string };
 }
 
 /** A newer Olympus Coder release found on GitHub (src/main/updates.ts). */

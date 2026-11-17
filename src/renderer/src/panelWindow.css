@@ -1,0 +1,95 @@
+/* Detached Workbench tools (src/main/panels.ts, components/PanelApp.tsx) and the tab bar's detach icon. */
+
+/* The small "open in a new window" icon: shown next to the active tab, or the tab under the pointer. It touches the
+   tab (negative margin over the bar's gap) so moving the pointer onto it never hides it. */
+.workbench-tabs > button.wb-detach:not(.btn) {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  margin-left: -2px;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+}
+.workbench-tabs > button.active + button.wb-detach:not(.btn),
+.workbench-tabs > button:hover + button.wb-detach:not(.btn),
+.workbench-tabs > button.wb-detach:not(.btn):hover,
+.workbench-tabs > button.wb-detach:not(.btn):focus-visible {
+  display: inline-flex;
+}
+.workbench-tabs > button.wb-detach:not(.btn):hover {
+  color: var(--text);
+  background: var(--hover);
+}
+/* Phones and touch: no separate windows. */
+html[data-platform='web'] .wb-detach { display: none !important; }
+
+/* ---------- a detached tool window ---------- */
+.panel-window {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, var(--bg));
+  color: var(--text);
+}
+.panel-window-head {
+  height: 38px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  -webkit-app-region: drag;
+  user-select: none;
+}
+/* macOS keeps the window buttons inside the page (hiddenInset title bar). */
+html[data-platform='darwin'] .panel-window-head { padding-left: 80px; }
+.panel-window-head > * { -webkit-app-region: no-drag; }
+.panel-window-head .panel-window-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-app-region: drag;
+}
+.panel-window-head .panel-window-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+  -webkit-app-region: drag;
+}
+.panel-window-head .spacer { flex: 1; -webkit-app-region: drag; align-self: stretch; }
+.panel-window-head .panel-reattach {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.panel-window-head .panel-reattach:hover { color: var(--text); background: var(--hover); }
+.panel-window-body { flex: 1; min-height: 0; display: flex; }
+.panel-window-empty {
+  margin: auto;
+  max-width: 320px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}

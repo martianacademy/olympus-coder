@@ -32,6 +32,7 @@ import * as skills from './skills';
 import { forgetPty, killAllPtys, killPty, ptyBuffer, resizePty, startPty, writePty } from './pty';
 import * as schedules from './schedules';
 import * as store from './store';
+import { modelTags, startModelTags } from './modelTags';
 import { cancelDownload, checkNow, currentUpdate, installAndRestart, lastUpdateCheck, onAppWillQuit, skipUpdate, startUpdateChecker, updateSettingChanged } from './updates';
 import * as acpSessions from './acpSessionService';
 import * as acpConfig from './acpConfigService';
@@ -48,6 +49,8 @@ import { resumeQueues, startPromptQueue } from './promptQueueHost';
 import { startDictation } from './dictation';
 import { initVoice, shutdownVoice, voiceCall } from './voice';
 import { installPermissionHandlers } from './permissions';
+import { initPanels, isAppSender, panelCall, panelWindows } from './panels';
+import { hardenWindow, showWhenReady } from './windowGuards';
 
 /** `OLYMPUS_TEST_HIDDEN=1`: an automated-test instance whose window must never take focus, clicks or screen space. */
 const TEST_HIDDEN = process.env.OLYMPUS_TEST_HIDDEN === '1';
@@ -79,6 +82,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 let win: BrowserWindow | null = null;
 
+/** Every app window: the main one and each detached Workbench tool (src/main/panels.ts). */
+const allWindows = (): BrowserWindow[] => [...(win && !win.isDestroyed() ? [win] : []), ...panelWindows()];
+/** Sends one desk:event to every app window. Callers apply the lock rule; the phone is NOT sent here (remoteBroadcast). */
+const sendToWindows = (channel: string, payload: unknown) => {
+  for (const w of allWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('desk:event', channel, payload);
+};
+
 const emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) => {
   // Nothing but the lock state reaches the window while the app is locked.
   // (Phones are handled on their own: one that typed the password keeps working while this window is locked.)
@@ -86,7 +96,7 @@ const emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) =>
   // The send-while-busy queue follows session state and new items from the same events (src/main/promptQueue.ts).
   promptQueue.observe(channel, payload);
   if (lock.isLocked() && channel !== 'lock:state') return;
-  win?.webContents.send('desk:event', channel, payload);
+  sendToWindows(channel, payload);
 };
 agents.setEmitter(emit);
 // Every deletion in main (sidebar, delete_subsession, disposable sub-sessions) tells the window and the phone.
@@ -97,13 +107,13 @@ setTerminalEmitter(emit);
 const emitAcp = <K extends keyof AcpClientEvents>(channel: K, payload: AcpClientEvents[K]) => {
   remoteBroadcast(channel, payload);
   if (lock.isLocked()) return;
-  win?.webContents.send('desk:event', channel, payload);
+  sendToWindows(channel, payload);
 };
 acpTerminalStore.setEmitter(emitAcp);
 startPromptQueue(emit, <K extends keyof PromptQueueEvents>(channel: K, payload: PromptQueueEvents[K]) => {
   remoteBroadcast(channel, payload);
   if (lock.isLocked()) return;
-  win?.webContents.send('desk:event', channel, payload);
+  sendToWindows(channel, payload);
 });
 /** Config / MCP status / login events (src/main/acpConfigService.ts): same channel and lock rule. */
 acpConfig.initAcpConfigService({
@@ -111,7 +121,7 @@ acpConfig.initAcpConfigService({
   emit: <K extends keyof AcpConfigEvents>(channel: K, payload: AcpConfigEvents[K]) => {
     remoteBroadcast(channel, payload);
     if (lock.isLocked()) return;
-    win?.webContents.send('desk:event', channel, payload);
+    sendToWindows(channel, payload);
   },
 });
 setAgentWriteEmitter(({ content: _text, ...w }) => {
@@ -130,7 +140,7 @@ setAgentWriteEmitter(({ content: _text, ...w }) => {
   emitAcp('editor:agentWrite', { ...w, projects });
 });
 lock.onLockChange((s) => {
-  win?.webContents.send('desk:event', 'lock:state', s);
+  sendToWindows('lock:state', s);
 });
 
 function appState(): AppState {
@@ -548,6 +558,8 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'updates.cancel': () => cancelDownload(),
   /** "Restart to update": quits (the running-work warning still asks); a helper swaps the app and relaunches it. */
   'updates.install': () => installAndRestart(),
+  /** Model capability tags (Free / Vision / Reasoning / Tools) for the model picker (src/main/modelTags.ts). */
+  'models.tags': () => modelTags(),
   'system.openExternal': (url: string) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
   },
@@ -581,6 +593,22 @@ ipcMain.handle('desk:voice', (e, method: string, args: unknown[]) => {
   if (!win || e.sender !== win.webContents) throw new Error('Not allowed');
   return voiceCall(e.sender, method, args ?? []);
 });
+// Detached Workbench tool windows (src/main/panels.ts). App windows only (not in `handlers`, so never remote).
+initPanels({
+  preload: join(here, '../preload/index.mjs'),
+  rendererHtml: join(here, '../renderer/index.html'),
+  devUrl: process.env.ELECTRON_RENDERER_URL,
+  testHidden: TEST_HIDDEN,
+  mainWindow: () => win,
+  send: (channel, payload) => {
+    if (!lock.isLocked()) sendToWindows(channel, payload);
+  },
+});
+ipcMain.handle('desk:panels', (e, method: string, args: unknown[]) => {
+  if (lock.isLocked()) throw new Error('LOCKED');
+  if (!isAppSender(e.sender)) throw new Error('Not allowed');
+  return panelCall(e.sender, method, args ?? []);
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -606,39 +634,25 @@ function createWindow() {
       webviewTag: true,
     },
   });
-  // A web preview may only show a local dev server, with no Node, no preload and its own session.
-  win.webContents.on('will-attach-webview', (e, prefs, params) => {
-    delete (prefs as any).preload;
-    prefs.nodeIntegration = false;
-    prefs.contextIsolation = true;
-    prefs.sandbox = true;
-    if (!isLocalUrl(params.src)) e.preventDefault();
-  });
-  win.once('ready-to-show', () => {
-    if (!win) return;
-    if (!TEST_HIDDEN) return win.show();
-    // Automated tests: render normally but never take the user's keyboard focus or clicks, never sit on top of their
-    // work, and stay out of the Dock / Mission Control (an opacity-0 window still steals focus and input).
-    win.setFocusable(false);
-    win.setIgnoreMouseEvents(true);
-    win.setOpacity(0);
-    win.setSkipTaskbar(true);
-    if (process.platform === 'darwin') win.setHiddenInMissionControl(true);
-    win.showInactive();
-  });
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
-  win.webContents.on('will-navigate', (e, url) => {
-    if (url !== win?.webContents.getURL()) {
-      e.preventDefault();
-      if (/^https?:\/\//.test(url)) shell.openExternal(url);
-    }
-  });
+  // A web preview may only show a local dev server (no Node, no preload, own session); links go to the browser.
+  hardenWindow(win);
+  // OLYMPUS_TEST_HIDDEN: shown without focus, clicks or screen space (src/main/windowGuards.ts).
+  showWhenReady(win, TEST_HIDDEN);
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else win.loadFile(join(here, '../renderer/index.html'));
   win.on('closed', () => (win = null));
+}
+
+/**
+ * Menu commands reach every app window (a detached Files window needs Cmd+S); each window ignores the ones it has no
+ * use for. Save goes only to the focused app window when there is one, so the main editor and a detached one never
+ * both save on one key press.
+ */
+function sendMenu(cmd: string, focused?: Electron.BaseWindow) {
+  if (lock.isLocked()) return;
+  const target = cmd === 'save' ? allWindows().find((w) => w === focused) : undefined;
+  if (target) target.webContents.send('desk:event', 'menu', cmd);
+  else sendToWindows('menu', cmd);
 }
 
 function buildMenu() {
@@ -649,14 +663,14 @@ function buildMenu() {
       {
         label: 'File',
         submenu: [
-          { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => win?.webContents.send('desk:event', 'menu', 'new-chat') },
-          { label: 'Search Chats', accelerator: 'CmdOrCtrl+K', click: () => win?.webContents.send('desk:event', 'menu', 'search') },
-          { label: 'Chat Mode', accelerator: 'CmdOrCtrl+1', click: () => win?.webContents.send('desk:event', 'menu', 'mode-chat') },
-          { label: 'Code Mode', accelerator: 'CmdOrCtrl+2', click: () => win?.webContents.send('desk:event', 'menu', 'mode-code') },
-          { label: 'Save File', accelerator: 'CmdOrCtrl+S', click: () => win?.webContents.send('desk:event', 'menu', 'save') },
-          { label: 'Toggle Terminal', accelerator: 'Ctrl+`', click: () => win?.webContents.send('desk:event', 'menu', 'terminal') },
-          { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: () => win?.webContents.send('desk:event', 'menu', 'sidebar') },
-          { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => win?.webContents.send('desk:event', 'menu', 'settings') },
+          { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: (_i, w) => sendMenu('new-chat', w) },
+          { label: 'Search Chats', accelerator: 'CmdOrCtrl+K', click: (_i, w) => sendMenu('search', w) },
+          { label: 'Chat Mode', accelerator: 'CmdOrCtrl+1', click: (_i, w) => sendMenu('mode-chat', w) },
+          { label: 'Code Mode', accelerator: 'CmdOrCtrl+2', click: (_i, w) => sendMenu('mode-code', w) },
+          { label: 'Save File', accelerator: 'CmdOrCtrl+S', click: (_i, w) => sendMenu('save', w) },
+          { label: 'Toggle Terminal', accelerator: 'Ctrl+`', click: (_i, w) => sendMenu('terminal', w) },
+          { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: (_i, w) => sendMenu('sidebar', w) },
+          { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: (_i, w) => sendMenu('settings', w) },
           { type: 'separator' },
           { label: `Lock ${APP_NAME}`, accelerator: 'CmdOrCtrl+L', click: () => lock.lockNow() },
           { type: 'separator' },
@@ -690,6 +704,8 @@ app.whenReady().then(() => {
   lock.startLockWatchers();
   schedules.startScheduler(emit);
   startUpdateChecker(emit);
+  // Model capability tags: cached registry, refreshed in the background when older than 7 days.
+  startModelTags(emit);
   // Plan limits of every ready agent, without a chat: at start, every 5 minutes and right after each reset time.
   agents.limitsService.start(4000);
   buildMenu();
@@ -702,19 +718,10 @@ app.whenReady().then(() => {
   // Messages still queued when the app last closed go out once their agent connects (src/main/promptQueue.ts).
   setTimeout(() => resumeQueues(), 1500);
   app.on('activate', () => {
-    if (!BrowserWindow.getAllWindows().length) createWindow();
+    // The main window, even when a detached tool window is still open.
+    if (!win) createWindow();
   });
 });
-
-/** http(s) on this machine: localhost, 127.x, 0.0.0.0, [::1] — the only pages the Web tab will show. */
-const isLocalUrl = (url: string) => {
-  try {
-    const u = new URL(url);
-    return /^https?:$/.test(u.protocol) && /^(localhost|127(\.\d+){3}|0\.0\.0\.0|\[::1\]|[\w-]+\.localhost)$/i.test(u.hostname);
-  } catch {
-    return false;
-  }
-};
 
 // Inside a web preview, links that open new windows go to the user's browser.
 app.on('web-contents-created', (_e, wc) => {

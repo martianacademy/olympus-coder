@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
-import type { AgentDef, AgentStatus, AppState, AttachmentView, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
-import { api, remoteWatch } from './api';
+import type { AgentDef, AgentStatus, AppState, AttachmentView, DeskEvents, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
+import { api, onEvent, remoteWatch } from './api';
 import { acpSessionsApi } from './acpSessionsApi';
 import { DeleteChatDialog } from './components/DeleteChatDialog';
 import { ImportSessionsDialog } from './components/ImportSessionsDialog';
@@ -15,7 +15,8 @@ import { LockScreen } from './components/LockScreen';
 import { Onboarding } from './components/Onboarding';
 import { type SettingsTab } from './components/Settings';
 import { ChatTasksWorkbench } from './components/TasksPanel';
-import { Workbench, type WorkbenchHandle, type WorkbenchTab } from './components/Workbench';
+import { addTerminal, Workbench, type WorkbenchHandle, type WorkbenchTab } from './components/Workbench';
+import type { PanelTool } from '@shared/panels';
 import { OpenFileContext, RunCommandContext } from './fileLinks';
 import { isRemoteBrowser, useResponsiveShell } from './responsive';
 import { setActiveThread } from './threadStatus';
@@ -338,6 +339,39 @@ export default function App() {
     if (cmd === 'sidebar') toggleSidebar();
   };
 
+  // Detached Workbench tool windows (src/main/panels.ts) follow this window's current code project and chat.
+  const panelProjectId = mode === 'code' && page === 'thread' && active && modeOf(active) === 'code' && active.projectId !== 'general' ? active.projectId : undefined;
+  useEffect(() => {
+    if (!panelProjectId || !api.panels.available()) return;
+    api.panels.setContext({ projectId: panelProjectId, ...(activeId.current ? { threadId: activeId.current } : {}) }).catch(() => {});
+  }, [panelProjectId, active?.id]);
+  const panelShow = useRef<(d: DeskEvents['panel:show']) => void>(() => {});
+  panelShow.current = (d) => {
+    if (d.threadId) void openThread(d.threadId);
+    setWbOpen(true);
+    // Wait a frame so the Workbench is mounted (it may have been closed) before it opens a file or a page.
+    requestAnimationFrame(() => {
+      if (d.ptyId && active?.projectId) addTerminal(active.projectId, d.ptyId);
+      if (d.tab === 'files' && d.path) return workbench.current?.openFile(d.path, d.line);
+      if (d.tab === 'web' && d.path) return void window.dispatchEvent(new CustomEvent('olympus:web-preview', { detail: { url: d.path } }));
+      setWbTab(d.tab as WorkbenchTab);
+    });
+  };
+  useEffect(
+    () =>
+      onEvent((channel, payload) => {
+        if (channel === 'panel:closed' && (payload as DeskEvents['panel:closed']).reattach) {
+          setWbTab((payload as DeskEvents['panel:closed']).tool);
+          setWbOpen(true);
+        }
+        if (channel === 'panel:show') panelShow.current(payload as DeskEvents['panel:show']);
+      }),
+    [],
+  );
+  const detachTool = useCallback((tool: PanelTool, url?: string) => {
+    api.panels.detach(tool, url).catch((e) => alert(e?.message ?? String(e)));
+  }, []);
+
   const agentDefs = useMemo(() => Object.fromEntries(agents.defs.map((d) => [d.id, d])), [agents.defs]);
   const activeProjectId = active?.projectId;
   const runCommand = useCallback((cmd: string) => {
@@ -491,6 +525,7 @@ export default function App() {
                     onClose={() => setWbOpen(false)}
                     dark={dark}
                     refreshKey={refreshKey}
+                    onDetach={api.panels.available() ? detachTool : undefined}
                   />
                 ) : (
                   active && (

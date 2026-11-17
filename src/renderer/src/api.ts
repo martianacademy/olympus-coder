@@ -1,7 +1,9 @@
 import { clearDraft } from './drafts';
+import type { PanelContext, PanelTool } from '@shared/panels';
 import type {
   DictationResult,
   UpdateCheck,
+  ModelTags,
   UpdateInfo,
   LearnedNote,
   ProjectStats,
@@ -55,6 +57,8 @@ declare global {
       dictate?: () => Promise<DictationResult>;
       /** Desktop window only: Settings → Voice and the recording mic (absent on the phone page). */
       voice?: (method: string, ...args: unknown[]) => Promise<any>;
+      /** Desktop windows only: detached Workbench tool windows (absent on the phone page). */
+      panels?: (method: string, ...args: unknown[]) => Promise<any>;
     };
   }
 }
@@ -229,6 +233,8 @@ export const api = {
   lastUpdateCheck: () => call<UpdateCheck | null>('updates.lastCheck'),
   cancelUpdateDownload: () => call<void>('updates.cancel'),
   installUpdate: () => call<void>('updates.install'),
+  /** Model capability tags for the model picker (refreshed in the background; live updates come as 'models:tags'). */
+  modelTags: () => call<ModelTags>('models.tags'),
   preview: (ref: string, projectId?: string) => call<FilePreview>('preview.open', ref, projectId),
   previewSaveAs: (ref: string, projectId?: string) => call<{ saved: boolean; path?: string }>('preview.saveAs', ref, projectId),
   previewRaw: (ref: string, projectId?: string) =>
@@ -265,7 +271,22 @@ export const api = {
   writeGlobalInstructions: (text: string) => call<void>('memory.writeGlobal', text),
   previewOpenDefault: (path: string) => call<void>('preview.openDefault', path),
   previewReveal: (path: string) => call<void>('preview.reveal', path),
+  /** Detached Workbench tool windows (src/main/panels.ts). Desktop windows only: undefined-safe no-ops on the phone. */
+  panels: {
+    available: () => Boolean(window.desk.panels),
+    list: () => panelCall<PanelTool[]>('list'),
+    detach: (tool: PanelTool, url?: string) => panelCall<PanelTool[]>('detach', tool, ...(url ? [url] : [])),
+    reattach: (tool: PanelTool) => panelCall<PanelTool[]>('reattach', tool),
+    context: () => panelCall<PanelContext | null>('context'),
+    setContext: (c: PanelContext | null) => panelCall<PanelContext | null>('setContext', c),
+    showInMain: (a: { tab: string; path?: string; line?: number; ptyId?: string; threadId?: string }) => panelCall<boolean>('showInMain', a),
+  },
 };
+
+function panelCall<T>(method: string, ...args: unknown[]): Promise<T> {
+  if (!window.desk.panels) return Promise.reject(new Error('Detached windows are only available in the desktop app.'));
+  return window.desk.panels(method, ...args);
+}
 
 export const onEvent = (fn: (channel: string, payload: any) => void) => window.desk.on(fn);
 

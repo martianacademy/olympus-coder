@@ -1,0 +1,4 @@
+/* Live voice (ChatComposer): the interim line and the "Hey Oly" hint. Minimal and monochrome. */
+.live-interim { flex: 1 1 auto; min-width: 0; color: var(--muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wake-hint { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); align-self: center; white-space: nowrap; padding: 0 2px; }
+.wake-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: 0.7; }

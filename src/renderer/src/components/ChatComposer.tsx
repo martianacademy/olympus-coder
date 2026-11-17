@@ -13,7 +13,12 @@ import {
 import type { AgentDef, AgentStatus, SessionView } from '@shared/types';
 import { api } from '../api';
 import { useComposerResize } from '../composerResize';
+import { LiveSession, type LiveStopReason } from '@shared/liveVoice';
+import { liveModeFor, micSoundsFor, wakeWordFor } from '@shared/voice';
+import { playEarcon } from '../earcons';
 import { MAX_RECORD_SECONDS, MicRecorder, micMode, useVoiceStatus, voiceApi } from '../voice';
+import { useWakeWord } from '../wakeWord';
+import '../liveVoice.css';
 import { useDraft } from '../drafts';
 import { useOpenFile } from '../fileLinks';
 import { setExpandSteps, useExpandSteps } from '../prefs';
@@ -125,15 +130,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   // Recording engines (whisper-local, OpenRouter, custom server): click to record, click again to stop, then the text
   // goes in at the caret. Esc cancels. Stops by itself after MAX_RECORD_SECONDS.
+  // Live mode (whisper-local, Settings → Voice → Live transcription): text appears while speaking (muted interim line),
+  // each phrase is committed at a silence gap, 5 s of silence or saying "over" stops it (src/shared/liveVoice.ts).
   const [rec, setRec] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [elapsed, setElapsed] = useState(0);
   const recorder = useRef<MicRecorder | null>(null);
+  const live = useRef<LiveSession | null>(null);
+  const [interim, setInterim] = useState('');
   /** Bumped on cancel so a transcription that comes back later is dropped. */
   const recRun = useRef(0);
+  /** Mic open/close sound (Settings → Voice → Sounds). The open sound ends before capture starts, so it isn't recorded. */
+  const sound = (id: 'start' | 'stop') => (micSoundsFor(voiceStatus?.settings) ? playEarcon(id) : Promise.resolve());
   function cancelRecording() {
     recRun.current++;
+    if (recorder.current) void sound('stop');
     recorder.current?.cancel();
     recorder.current = null;
+    live.current?.stop('cancel');
+    live.current = null;
+    setInterim('');
     setRec('idle');
   }
   function insertAtCaret(t: string) {
@@ -155,15 +170,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return next;
     });
   }
-  async function startRecording() {
+  async function startRecording(forceLive = false) {
     if (!voiceApi) return;
     setDictateNote(null);
+    if (forceLive || liveModeFor(voiceStatus?.settings)) return startLive();
     const access = await voiceApi.micAccess().catch(() => ({ granted: true, status: 'unknown' }));
     if (!access.granted) {
       setDictateNote({ text: 'Microphone access is off. Allow it in System Settings → Privacy & Security → Microphone.', error: true, offerSystem: Boolean(api.startDictation) });
       return;
     }
     const r = new MicRecorder();
+    await sound('start');
     try {
       await r.start();
     } catch (e) {
@@ -177,12 +194,72 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     // A local whisper-server starts loading its model while the user speaks.
     void voiceApi.prewarm().catch(() => {});
   }
+  async function startLive() {
+    if (!voiceApi) return;
+    const access = await voiceApi.micAccess().catch(() => ({ granted: true, status: 'unknown' }));
+    if (!access.granted) {
+      setDictateNote({ text: 'Microphone access is off. Allow it in System Settings → Privacy & Security → Microphone.', error: true, offerSystem: Boolean(api.startDictation) });
+      return;
+    }
+    const run = ++recRun.current;
+    const mine = () => run === recRun.current;
+    const session = new LiveSession(
+      {
+        transcribe: async (wav, context) => {
+          const r = await voiceApi!.transcribeLive(wav, threadId, context);
+          if (!r.ok) throw new Error(r.error ?? 'transcription failed');
+          return r.text ?? '';
+        },
+        onInterim: (t) => mine() && setInterim(t),
+        onCommit: (t) => mine() && insertAtCaret(t),
+        onWantStop: (reason) => mine() && stopLive(reason),
+        onEnd: (reason) => {
+          if (!mine()) return;
+          live.current = null;
+          setInterim('');
+          setRec('idle');
+          if (reason === 'silence') setDictateNote({ text: 'Stopped after 5 s of silence.' });
+        },
+        onError: (m) => mine() && setDictateNote({ text: `Voice engine failed: ${m}`, error: true, offerSystem: Boolean(api.startDictation) }),
+      },
+      { maxSeconds: MAX_RECORD_SECONDS },
+    );
+    const r = new MicRecorder({ keep: false, onChunk: (x) => session.push(x) });
+    await sound('start');
+    if (!mine()) return;
+    try {
+      await r.start();
+    } catch (e) {
+      setDictateNote({ text: `Couldn't start recording: ${e instanceof Error ? e.message : String(e)}`, error: true, offerSystem: Boolean(api.startDictation) });
+      return;
+    }
+    if (!mine()) return r.cancel();
+    recorder.current = r;
+    live.current = session;
+    setInterim('');
+    setElapsed(0);
+    setRec('recording');
+    ta.current?.focus();
+    void voiceApi.prewarm().catch(() => {});
+  }
+  /** Mic off now; the last phrase is still being transcribed until the session ends. */
+  function stopLive(reason: LiveStopReason) {
+    const session = live.current;
+    if (!session) return;
+    if (recorder.current) void sound('stop');
+    recorder.current?.cancel();
+    recorder.current = null;
+    setRec('transcribing');
+    session.stop(reason);
+  }
   async function stopRecording() {
+    if (live.current) return stopLive('manual');
     const r = recorder.current;
     if (!r || !voiceApi) return;
     recorder.current = null;
     const run = ++recRun.current;
     const wav = r.stop();
+    void sound('stop');
     if (r.seconds < 0.3 && wav.length < 16_000) {
       setRec('idle');
       return;
@@ -224,6 +301,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     void dictate();
   }
+  // "Hey Oly" (Settings → Voice): listens only while this window is focused and the mic is free.
+  const wake = useWakeWord(mic === 'record' && wakeWordFor(voiceStatus?.settings), rec !== 'idle', threadId, (rest) => {
+    const el = ta.current;
+    el?.focus();
+    if (el) el.setSelectionRange(el.value.length, el.value.length);
+    if (rest) insertAtCaret(rest);
+    void startRecording(true);
+  });
   const fmtElapsed = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
   useEffect(() => {
@@ -360,6 +445,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         <div className="composer-bar">
           <AttachButton onClick={() => void att.pick()} onFiles={att.addRawFiles} />
           {att.error && <span className="error-text small ellipsis">{att.error}</span>}
+          {interim && (
+            <span className="small live-interim" title={interim} data-testid="live-interim" aria-live="polite">
+              {interim.length > 90 ? `…${interim.slice(-90)}` : interim}
+            </span>
+          )}
           {dictateNote && (
             <span className={`small ellipsis dictate-note ${dictateNote.error ? 'error-text' : 'muted'}`} title={dictateNote.text} data-testid="dictate-note">
               {dictateNote.text}
@@ -406,13 +496,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 Transcribing…
               </span>
             )}
+            {mic === 'record' && rec === 'idle' && wake.listening && (
+              <span className="wake-hint" title="Listening for “Hey Oly” while Olympus is focused (Settings → Voice)" data-testid="wake-hint">
+                <span className="wake-dot" aria-hidden="true" />
+                Hey Oly
+              </span>
+            )}
             {mic !== 'none' && (
               <button
                 className={`btn ghost icon dictate-btn ${listening || rec === 'recording' ? 'listening' : ''}`}
                 title={
                   mic === 'record'
                     ? rec === 'recording'
-                      ? 'Recording… click to stop (Esc cancels)'
+                      ? live.current
+                        ? 'Live… click to stop, or say “over” (stops after 5 s of silence, Esc cancels)'
+                        : 'Recording… click to stop (Esc cancels)'
                       : rec === 'transcribing'
                         ? 'Transcribing…'
                         : 'Voice input (Settings → Voice)'
@@ -429,6 +527,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 data-testid="dictate"
                 data-mode={mic}
                 data-state={mic === 'record' ? rec : listening ? 'listening' : 'idle'}
+                data-live={mic === 'record' && liveModeFor(voiceStatus?.settings) ? 'on' : undefined}
               >
                 {rec === 'transcribing' ? <Loader2 size={17} className="spin" aria-hidden="true" /> : <Mic size={17} aria-hidden="true" />}
               </button>

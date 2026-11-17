@@ -104,7 +104,32 @@
   max-height: 100%;
   border-radius: 6px;
   background: #000;
+  transform-origin: center center;
+  will-change: transform;
 }
+.mv-zoom-stage.is-zoomed .mv-video { cursor: grab; border-radius: 0; }
+.mv-zoom-stage.is-zoomed .mv-video:active { cursor: grabbing; }
+.mv-btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+/* A zoomed video's play / seek bar (its native controls would be scaled off screen). */
+.mv-vbar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.86);
+  touch-action: auto;
+}
+.mv-seek { flex: 1; min-width: 0; accent-color: #fff; }
+.mv-time { flex: none; font-size: 11.5px; color: rgba(255, 255, 255, 0.7); }
 .mv-audio {
   width: min(460px, 100%);
   padding: 22px;
@@ -164,6 +189,8 @@
 
 @media (max-width: 600px) {
   .mv-bar { padding-left: 12px; padding-right: 4px; }
+  /* Room for the file name: − only once something is zoomed (pinch and double tap work anyway). */
+  .mv-zoom-out:disabled { display: none; }
   .mv-root.is-media .mv-center { padding: 0 0 env(safe-area-inset-bottom, 0px); }
   .mv-img, .mv-video { border-radius: 0; }
   .mv-doc-wrap { padding: 0 0 env(safe-area-inset-bottom, 0px); }
@@ -212,3 +239,14 @@
   .attach-dl.attach-add { opacity: 0; }
   .attach-chip:hover .attach-dl.attach-add, .attach-dl.attach-add:focus-visible { opacity: 1; }
 }
+
+/* Side panel: a tap on the image (or the Zoom button) opens the zoomable viewer. */
+.img-preview, .video-preview-stage { position: relative; }
+.fp-zoomable { cursor: zoom-in; }
+.fp-zoom-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px;
+  border: 1px solid var(--hairline, var(--border)); border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--muted); font: inherit; font-size: .82em; cursor: pointer;
+}
+.fp-zoom-btn:hover { color: var(--text); }

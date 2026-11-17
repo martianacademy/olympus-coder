@@ -2,13 +2,18 @@ import { Fragment } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ConfigOptionView } from '@shared/types';
 import { boolValue, groupedChoices, isBooleanOption, isOn, optionPillLabel, toggleTooltip } from '@shared/acpConfig';
+import { ConfigSelectMenu } from './ConfigSelectMenu';
 import '../acpConfig.css';
+
+/** From this many choices on, the pill opens the searchable popup (ConfigSelectMenu) instead of the native menu. */
+export const MENU_MIN_CHOICES = 25;
 
 /**
  * Pill that is exactly as wide as the chosen value. A native <select> is laid over it (invisible), so the menu,
  * keyboard use and accessibility stay native. Grouped choices (e.g. models by provider) get `<optgroup>` headers.
  */
 export function ConfigSelect({ option, disabled, title, onChange }: { option: ConfigOptionView; disabled?: boolean; title?: string; onChange: (v: string) => void }) {
+  if (option.options.length >= MENU_MIN_CHOICES) return <ConfigSelectMenu option={option} disabled={disabled} title={title} onChange={onChange} />;
   const current = option.options.find((x) => x.value === option.currentValue);
   const sections = groupedChoices(option);
   const item = (x: { value: string; name: string; description?: string }) => (

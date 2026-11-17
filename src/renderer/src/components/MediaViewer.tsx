@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Check, ChevronLeft, ChevronRight, Download, FolderOpen, Loader2, MessageSquarePlus, PanelRight, PenLine, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Download, FolderOpen, Loader2, MessageSquarePlus, PanelRight, Pause, PenLine, Play, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { FilePreview } from '@shared/types';
 import { api } from '../api';
 import { OpenFileContext, RefBaseContext } from '../fileLinks';
@@ -14,7 +14,7 @@ import '../mediaViewer.css';
 
 /**
  * In-chat viewer: images, videos and documents from the chat open in an overlay over the chat instead of the side
- * panel. Images zoom (wheel, pinch, double-click) and pan; ←/→ or a swipe step through the chat's images and videos;
+ * panel. Images and videos zoom (wheel, pinch, double-click / double tap, the bar's − / + buttons, keys + − 0) and pan; ←/→ or a swipe step through the chat's images and videos;
  * documents reuse the panel's renderers (`PreviewBody`). Rendered in its own root on `document.body`, so any
  * component can open it with `openViewer()` without a provider.
  *
@@ -143,7 +143,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
   const [data, setData] = useState<FilePreview | null>(null);
   const [error, setError] = useState('');
   const [zoom, setZoom] = useState(1);
-  const [resetKey, setResetKey] = useState(0);
+  const zoomer = useRef<ZoomHandle | null>(null);
   const [saved, setSaved] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
   const item = items[index];
@@ -219,6 +219,10 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       step(e.key === 'ArrowLeft' ? -1 : 1);
+    } else if (zoomer.current && !e.metaKey && !e.ctrlKey && !e.altKey && ['+', '=', '-', '0'].includes(e.key)) {
+      e.preventDefault();
+      if (e.key === '0') zoomer.current.reset();
+      else zoomer.current.zoomBy(e.key === '-' ? 1 / ZOOM_STEP : ZOOM_STEP);
     }
   };
 
@@ -269,10 +273,20 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
             </span>
           )}
         </div>
-        {kind === 'image' && zoom !== 1 && (
-          <button type="button" className="mv-btn mv-zoom mono" title="Reset zoom" onClick={() => setResetKey((k) => k + 1)}>
-            {Math.round(zoom * 100)}%
-          </button>
+        {(kind === 'image' || kind === 'video') && (
+          <>
+            <button type="button" className="mv-btn mv-zoom-out" title="Zoom out (−)" aria-label="Zoom out" data-testid="viewer-zoom-out" disabled={zoom <= MIN} onClick={() => zoomer.current?.zoomBy(1 / ZOOM_STEP)}>
+              <ZoomOut size={16} />
+            </button>
+            {zoom !== 1 && (
+              <button type="button" className="mv-btn mv-zoom mono" title="Reset zoom (0)" data-testid="viewer-zoom-reset" onClick={() => zoomer.current?.reset()}>
+                {Math.round(zoom * 100)}%
+              </button>
+            )}
+            <button type="button" className="mv-btn" title="Zoom in (+)" aria-label="Zoom in" data-testid="viewer-zoom-in" disabled={zoom >= MAX} onClick={() => zoomer.current?.zoomBy(ZOOM_STEP)}>
+              <ZoomIn size={16} />
+            </button>
+          </>
         )}
         {hasFile && (
           <button type="button" className="mv-btn" title="Download" aria-label="Download" data-testid="viewer-download" onClick={() => void download()}>
@@ -343,12 +357,8 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
           <Backdrop className="mv-center">
             <Loader2 size={20} className="spin mv-spinner" />
           </Backdrop>
-        ) : kind === 'image' && data.dataUrl ? (
-          <ZoomImage key={`${data.path}#${resetKey}`} src={data.dataUrl} alt={name} onZoom={setZoom} onStep={many ? step : undefined} />
-        ) : kind === 'video' && data.dataUrl ? (
-          <Backdrop className="mv-center" onStep={many ? step : undefined}>
-            <video key={data.path} src={data.dataUrl} poster={data.thumbUrl} controls autoPlay playsInline className="mv-video" data-testid="viewer-video" />
-          </Backdrop>
+        ) : (kind === 'image' || kind === 'video') && data.dataUrl ? (
+          <ZoomMedia key={data.path} kind={kind} src={data.dataUrl} poster={data.thumbUrl} alt={name} onZoom={setZoom} onStep={many ? step : undefined} handle={zoomer} />
         ) : kind === 'audio' && data.dataUrl ? (
           <Backdrop className="mv-center" onStep={many ? step : undefined}>
             <div className="mv-audio">
@@ -429,12 +439,49 @@ function Backdrop({ className, onStep, children }: { className: string; onStep?:
 
 const MIN = 1;
 const MAX = 8;
+/** One press of − / + (or the keys) zooms by this much. */
+const ZOOM_STEP = 1.5;
 
-/** An image fitted to the stage: wheel / pinch / double-click zoom around the pointer, drag to pan, swipe to step. */
-function ZoomImage({ src, alt, onZoom, onStep }: { src: string; alt: string; onZoom: (z: number) => void; onStep?: (d: number) => void }) {
+/** What the viewer's bar and keys use to zoom the image or video on screen. */
+interface ZoomHandle {
+  reset: () => void;
+  zoomBy: (k: number) => void;
+}
+
+const clock = (sec: number) => {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+/**
+ * An image or video fitted to the stage: wheel / pinch / double-click (double tap) zoom around the pointer, drag to
+ * pan, swipe to step. A video at its normal size keeps its native controls (no pointer capture, so they get the
+ * clicks); zoomed, the native controls would be scaled off screen, so a small play / seek bar takes their place.
+ */
+function ZoomMedia({
+  kind,
+  src,
+  poster,
+  alt,
+  onZoom,
+  onStep,
+  handle,
+}: {
+  kind: 'image' | 'video';
+  src: string;
+  poster?: string;
+  alt: string;
+  onZoom: (z: number) => void;
+  onStep?: (d: number) => void;
+  handle: React.MutableRefObject<ZoomHandle | null>;
+}) {
   const stage = useRef<HTMLDivElement>(null);
-  const img = useRef<HTMLImageElement>(null);
+  const img = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
+  const video = kind === 'video';
   const [t, setT] = useState({ s: 1, x: 0, y: 0 });
+  const [vt, setVt] = useState({ cur: 0, dur: 0, playing: false });
   const tr = useRef(t);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ sx: number; sy: number; moved: boolean; onImage: boolean; pinch?: { d: number; s: number }; lastTap?: number; tapToggled?: number; closeOnClick?: boolean }>({
@@ -494,16 +541,45 @@ function ZoomImage({ src, alt, onZoom, onStep }: { src: string; alt: string; onZ
     return () => st.removeEventListener('wheel', onWheel);
   }, [zoomAt]);
 
+  useEffect(() => {
+    handle.current = {
+      reset: () => apply({ s: 1, x: 0, y: 0 }),
+      zoomBy: (k) => {
+        const r = stage.current?.getBoundingClientRect();
+        if (r) zoomAt(tr.current.s * k, r.left + r.width / 2, r.top + r.height / 2);
+      },
+    };
+    return () => {
+      handle.current = null;
+    };
+  }, [apply, zoomAt, handle]);
+
+  // The zoomed video's own bar follows the player.
+  useEffect(() => {
+    const v = img.current;
+    if (!video || !(v instanceof HTMLVideoElement)) return;
+    const sync = () => setVt({ cur: v.currentTime, dur: v.duration, playing: !v.paused && !v.ended });
+    const evs = ['timeupdate', 'play', 'pause', 'ended', 'loadedmetadata', 'durationchange', 'seeked'];
+    for (const ev of evs) v.addEventListener(ev, sync);
+    sync();
+    return () => {
+      for (const ev of evs) v.removeEventListener(ev, sync);
+    };
+  }, [video, src]);
+
   const toggleAt = (cx: number, cy: number) => zoomAt(tr.current.s > 1 ? 1 : 2.5, cx, cy);
+  const player = () => (img.current instanceof HTMLVideoElement ? img.current : null);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    if ((e.target as Element).closest('.mv-vbar')) return;
     // Read the target before capturing: once captured, later events target the stage.
     const onImage = e.target === img.current;
-    e.currentTarget.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gesture.current;
     if (pointers.current.size === 1) {
+      // A video at its normal size keeps its native controls working: no capture, so their clicks reach them.
+      if (!(video && onImage && tr.current.s === 1)) e.currentTarget.setPointerCapture(e.pointerId);
       g.sx = e.clientX;
       g.sy = e.clientY;
       g.moved = false;
@@ -511,6 +587,13 @@ function ZoomImage({ src, alt, onZoom, onStep }: { src: string; alt: string; onZ
       g.onImage = onImage;
       g.pinch = undefined;
     } else if (pointers.current.size === 2) {
+      for (const id of pointers.current.keys()) {
+        try {
+          if (!e.currentTarget.hasPointerCapture(id)) e.currentTarget.setPointerCapture(id);
+        } catch {
+          /* that pointer is already gone */
+        }
+      }
       const [a, b] = [...pointers.current.values()];
       g.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: tr.current.s };
       g.moved = true;
@@ -543,7 +626,8 @@ function ZoomImage({ src, alt, onZoom, onStep }: { src: string; alt: string; onZ
     if (wasPinch) return;
     const dx = e.clientX - g.sx;
     const dy = e.clientY - g.sy;
-    if (tr.current.s === 1 && onStep && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    // On a video's own controls a sideways drag is seeking, not a swipe.
+    if (tr.current.s === 1 && onStep && !(video && g.onImage) && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       onStep(dx < 0 ? 1 : -1);
       return;
     }
@@ -581,19 +665,74 @@ function ZoomImage({ src, alt, onZoom, onStep }: { src: string; alt: string; onZ
         // Captured pointers retarget dblclick to the stage, so hit-test; a touch double tap was already handled.
         const g = gesture.current;
         if (g.tapToggled && Date.now() - g.tapToggled < 600) return;
+        // An unzoomed video leaves double-click to its player (full screen); wheel, pinch and + zoom it.
+        if (video && tr.current.s === 1) return;
         if (document.elementFromPoint(e.clientX, e.clientY) === img.current) toggleAt(e.clientX, e.clientY);
       }}
     >
-      <img
-        ref={img}
-        src={src}
-        alt={alt}
-        draggable={false}
-        className="mv-img"
-        data-testid="viewer-image"
-        data-zoom={t.s.toFixed(2)}
-        style={{ transform: `translate3d(${t.x}px, ${t.y}px, 0) scale(${t.s})` }}
-      />
+      {video ? (
+        <video
+          ref={(n) => {
+            img.current = n;
+          }}
+          src={src}
+          poster={poster}
+          controls={t.s === 1}
+          autoPlay
+          playsInline
+          className="mv-video"
+          data-testid="viewer-video"
+          data-zoom={t.s.toFixed(2)}
+          style={{ transform: `translate3d(${t.x}px, ${t.y}px, 0) scale(${t.s})` }}
+        />
+      ) : (
+        <img
+          ref={(n) => {
+            img.current = n;
+          }}
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="mv-img"
+          data-testid="viewer-image"
+          data-zoom={t.s.toFixed(2)}
+          style={{ transform: `translate3d(${t.x}px, ${t.y}px, 0) scale(${t.s})` }}
+        />
+      )}
+      {video && t.s > 1 && (
+        <div className="mv-vbar" data-testid="viewer-video-bar" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="mv-btn"
+            title={vt.playing ? 'Pause' : 'Play'}
+            aria-label={vt.playing ? 'Pause' : 'Play'}
+            data-testid="viewer-video-play"
+            onClick={() => {
+              const v = player();
+              if (v) void (v.paused || v.ended ? v.play().catch(() => {}) : v.pause());
+            }}
+          >
+            {vt.playing ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+          <input
+            type="range"
+            className="mv-seek"
+            aria-label="Seek"
+            data-testid="viewer-video-seek"
+            min={0}
+            max={Number.isFinite(vt.dur) && vt.dur > 0 ? vt.dur : 0}
+            step={0.01}
+            value={Math.min(vt.cur, Number.isFinite(vt.dur) ? vt.dur : vt.cur)}
+            onChange={(e) => {
+              const v = player();
+              if (v) v.currentTime = Number(e.target.value);
+            }}
+          />
+          <span className="mv-time mono">
+            {clock(vt.cur)} / {clock(vt.dur)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

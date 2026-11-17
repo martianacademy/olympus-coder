@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,12 +25,23 @@ let current: Running | null = null;
 let idleTimer: NodeJS.Timeout | null = null;
 let pidFile: string | null = null;
 
-/** Where the server's pid is kept, so a server left by a crashed run is stopped on the next start. */
+/** Every plausible pid in the pid file's text. Two app instances sharing one userData once raced this file into
+ *  "6766855360" (one pid glued to another), so never trust its content as a single number. */
+export function pidsInFile(text: string): number[] {
+  const out: number[] = [];
+  for (const m of text.match(/\d+/g) ?? []) {
+    const pid = Number(m);
+    // A real pid is small (Linux allows up to 4194304); anything bigger is corrupted junk.
+    if (pid > 0 && pid <= 4_194_304 && !out.includes(pid)) out.push(pid);
+  }
+  return out;
+}
+
+/** Where the server's pid is kept, so servers left by a crashed run are stopped on the next start. */
 export function initWhisperPidFile(file: string) {
   pidFile = file;
   try {
-    const pid = Number(readFileSync(file, 'utf8').trim());
-    if (pid > 0) {
+    for (const pid of pidsInFile(readFileSync(file, 'utf8'))) {
       execFile('ps', ['-p', String(pid), '-o', 'command='], (err, out) => {
         if (!err && /whisper-server/.test(out)) {
           log('stopping a whisper-server left by an earlier run', pid);
@@ -45,6 +56,19 @@ export function initWhisperPidFile(file: string) {
     unlinkSync(file);
   } catch {
     /* none */
+  }
+}
+
+/** Records the server's pid atomically (tmp + rename): a plain write from two app instances sharing one userData
+ *  once left one pid glued to another, which the next run could not stop. */
+function writePidFile(pid: number) {
+  if (!pidFile) return;
+  try {
+    const tmp = `${pidFile}.${process.pid}.tmp`;
+    writeFileSync(tmp, String(pid));
+    renameSync(tmp, pidFile);
+  } catch {
+    /* best effort: the leftover server is still killed on graceful quit */
   }
 }
 

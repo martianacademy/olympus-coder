@@ -30,6 +30,14 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
   const expandSteps = useExpandSteps();
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const { palette, dark } = resolvePalette(t, systemDark);
+  // Colors are stored per mode: the pickers below write the bucket of the theme the user is looking at,
+  // so a color set in dark never shows up in light (and the other way round).
+  const colorBucketKey = dark ? 'overridesDark' : 'overridesLight';
+  const colorBucket = dark ? t.overridesDark : t.overridesLight;
+  const accentKey = dark ? 'accentDark' : 'accentLight';
+  const accentValue = dark ? t.accentDark : t.accentLight;
+  const setAccent = (value: string) => set({ [accentKey]: value } as Partial<ThemeSettings>);
+  const clearCustomColors = { accent: undefined, overrides: {}, accentDark: undefined, accentLight: undefined, overridesDark: {}, overridesLight: {} };
 
   if (compact) {
     return (
@@ -48,9 +56,9 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
           <label>Theme</label>
           <div className="preset-grid">
             {THEME_PRESETS.map((p) => {
-              const pal = resolvePalette({ ...theme, preset: p.id, accent: undefined, overrides: {} }, systemDark).palette;
+              const pal = resolvePalette({ ...theme, preset: p.id, ...clearCustomColors }, systemDark).palette;
               return (
-                <div key={p.id} className={`preset ${theme.preset === p.id ? 'active' : ''}`} onClick={() => set({ preset: p.id, accent: undefined, overrides: {} })}>
+                <div key={p.id} className={`preset ${theme.preset === p.id ? 'active' : ''}`} onClick={() => set({ preset: p.id, ...clearCustomColors })}>
                   <div className="preset-swatch">
                     <span style={{ background: pal.panel }} />
                     <span style={{ background: pal.bg }} />
@@ -68,10 +76,10 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
         <div className="field">
           <label>Accent color</label>
           <div className="row">
-            <input type="color" value={palette.accent} onChange={(e) => set({ accent: e.target.value })} />
+            <input type="color" value={palette.accent} onChange={(e) => setAccent(e.target.value)} />
             <span className="small muted">{palette.accent}</span>
-            {theme.accent && (
-              <button className="btn small ghost" onClick={() => set({ accent: undefined })}>
+            {accentValue && (
+              <button className="btn small ghost" onClick={() => set({ [accentKey]: undefined } as Partial<ThemeSettings>)}>
                 Reset
               </button>
             )}
@@ -115,9 +123,9 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
             <label>Theme preset</label>
             <div className="preset-grid">
               {THEME_PRESETS.map((p) => {
-                const pal = resolvePalette({ ...theme, preset: p.id, accent: undefined, overrides: {} }, systemDark).palette;
+                const pal = resolvePalette({ ...theme, preset: p.id, ...clearCustomColors }, systemDark).palette;
                 return (
-                  <div key={p.id} className={`preset ${theme.preset === p.id ? 'active' : ''}`} onClick={() => set({ preset: p.id, accent: undefined, overrides: {} })}>
+                  <div key={p.id} className={`preset ${theme.preset === p.id ? 'active' : ''}`} onClick={() => set({ preset: p.id, ...clearCustomColors })}>
                     <div className="preset-swatch">
                       <span style={{ background: pal.panel }} />
                       <span style={{ background: pal.bg }} />
@@ -135,10 +143,10 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
           <div className="field">
             <label>Accent color</label>
             <div className="row">
-              <input type="color" value={palette.accent} onChange={(e) => set({ accent: e.target.value })} />
+              <input type="color" value={palette.accent} onChange={(e) => setAccent(e.target.value)} />
               <span className="small muted">{palette.accent}</span>
-              {theme.accent && (
-                <button className="btn small ghost" onClick={() => set({ accent: undefined })}>
+              {accentValue && (
+                <button className="btn small ghost" onClick={() => set({ [accentKey]: undefined } as Partial<ThemeSettings>)}>
                   Reset
                 </button>
               )}
@@ -149,14 +157,23 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
             <div className="color-row">
               {THEME_TOKENS.filter((tok) => tok !== 'accent').map((tok) => (
                 <label key={tok}>
-                  <input type="color" value={palette[tok]} onChange={(e) => set({ overrides: { ...theme.overrides, [tok]: e.target.value } })} />
+                  <input
+                    type="color"
+                    value={palette[tok]}
+                    onChange={(e) => set({ [colorBucketKey]: { ...colorBucket, [tok]: e.target.value } } as Partial<ThemeSettings>)}
+                  />
                   {TOKEN_LABELS[tok]}
                 </label>
               ))}
             </div>
-            {Object.keys(theme.overrides).length > 0 && (
+            <span className="small muted">A color you set applies to the theme you are looking at — dark and light keep separate colors.</span>
+            {Object.keys(colorBucket ?? {}).length > 0 && (
               <div>
-                <button className="btn small" onClick={() => set({ overrides: {} })}>
+                <button
+                  className="btn small"
+                  title="Restore this theme's custom colors to the preset defaults"
+                  onClick={() => set({ [colorBucketKey]: {} } as Partial<ThemeSettings>)}
+                >
                   <RotateCcw size={13} /> Reset custom colors
                 </button>
               </div>
@@ -338,7 +355,7 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
           onClick={() => {
             setExpandSteps(false);
             setWrapLines(true);
-            onChange({ ...DEFAULT_THEME, overrides: {} });
+            onChange({ ...DEFAULT_THEME });
           }}
           title="Restore theme, colors, code editor, terminal, and chat appearance to factory defaults"
         >

@@ -181,6 +181,22 @@ export function VoiceSettings({ agentNames }: { agentNames: Record<string, strin
         </div>
       )}
 
+      {engine === 'whisper-local' && (
+        <div className="field">
+          <label>Live mode</label>
+          <label className="check-item">
+            <input type="checkbox" checked={s.live !== false} onChange={(e) => void save({ live: e.target.checked })} data-testid="voice-live" />
+            Live transcription
+          </label>
+          <span className="small muted">Words appear while you speak. Say “over” or stay quiet for 5 seconds to stop. Off: record, then transcribe once.</span>
+          <label className="check-item">
+            <input type="checkbox" checked={s.wakeWord === true} onChange={(e) => void save({ wakeWord: e.target.checked })} data-testid="voice-wake" />
+            “Hey Oly” wake word
+          </label>
+          <span className="small muted">Listens only while an Olympus window is focused; the mic closes when you switch away. Audio stays on this computer.</span>
+        </div>
+      )}
+
       {engine === 'openrouter' && (
         <div className="field">
           <span className="small voice-warn">Audio leaves this computer and goes to OpenRouter.</span>
@@ -309,6 +325,16 @@ export function VoiceSettings({ agentNames }: { agentNames: Record<string, strin
               ? 'Hindi and English mixed, written in Roman letters. File names and code words from the chat are passed as hints.'
               : 'File names and code words from the chat are passed as hints.'}
           </span>
+        </div>
+      )}
+
+      {recording && (
+        <div className="field">
+          <label>Sounds</label>
+          <label className="check-item">
+            <input type="checkbox" checked={s.sounds !== false} onChange={(e) => void save({ sounds: e.target.checked })} data-testid="voice-sounds" />
+            Play a sound when the mic opens and closes
+          </label>
         </div>
       )}
 

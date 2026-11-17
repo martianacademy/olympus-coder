@@ -289,7 +289,10 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 
 /* files */
 .files-panel { flex: 1; display: flex; min-height: 0; }
-.explorer { width: 230px; flex: none; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); min-height: 0; }
+.explorer { width: var(--explorer-w, 230px); flex: none; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--panel); min-height: 0; position: relative; }
+.explorer-resize { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 5; touch-action: none; border-radius: 3px; }
+.explorer-resize:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+body.explorer-resizing, body.explorer-resizing * { cursor: col-resize !important; user-select: none !important; }
 /* A narrow explorer (170px) keeps every toolbar button: the title gives way first. */
 .explorer .panel-toolbar { gap: 2px; padding-right: 4px; min-width: 0; }
 .explorer .panel-toolbar .btn { flex: none; }
@@ -996,12 +999,14 @@ button.orch-target:hover { color: var(--accent); text-decoration: underline; }
 .msg-agent pre, .msg-agent table { max-width: 100%; overflow-x: auto; }
 .msg-agent table { display: block; }
 
-/* File tree: never scrolls sideways; a long name wraps onto the next line, icons stay with its first line. */
+/* File tree: rows stay single-line with an ellipsis; hover actions float over the row end so the name never
+   reflows on hover, and the explorer column is resizable (FilesPanel.tsx) to reach long names. */
 .tree { overflow-x: hidden; }
-.tree-row { white-space: normal; height: auto; min-height: 26px; align-items: flex-start; padding-top: 4px; padding-bottom: 4px; }
-.tree-row > svg, .tree-row > span:not(.tree-name) { flex: none; margin-top: 1px; }
-.tree-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
-.tree-row .row-actions { margin-top: -3px; }
+.tree-row { position: relative; white-space: nowrap; height: 26px; }
+.tree-row > svg, .tree-row > span:not(.tree-name) { flex: none; }
+.tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tree-row .row-actions { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); margin: 0; background: inherit; padding: 1px 2px; border-radius: calc(var(--radius) - 4px); }
+.tree-row:has(.rename-input) .row-actions, .tree-row:has(.rename-input) .git-mark { display: none; }
 .editor-path { display: flex; align-items: center; gap: 6px; padding-top: 2px; padding-bottom: 2px; }
 .wrap-toggle { padding: 3px !important; color: var(--muted); }
 .wrap-toggle.on { color: var(--accent); }

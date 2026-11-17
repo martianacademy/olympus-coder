@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('desk', {
   dictate: () => ipcRenderer.invoke('desk:dictate'),
   /** Settings → Voice and the recording mic (src/main/voice). Desktop window only. */
   voice: (method: string, ...args: unknown[]) => ipcRenderer.invoke('desk:voice', method, args),
+  /** Detached Workbench tool windows (src/main/panels.ts). Desktop windows only. */
+  panels: (method: string, ...args: unknown[]) => ipcRenderer.invoke('desk:panels', method, args),
   on: (fn: Listener) => {
     listeners.add(fn);
     return () => listeners.delete(fn);

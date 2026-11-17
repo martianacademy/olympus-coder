@@ -70,6 +70,27 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<(ExplorerMenuTarget & { entry?: FileEntry }) | null>(null);
   const [error, setError] = useState('');
+  // Explorer column width: dragged from the edge handle, remembered in localStorage (the ≤620px container keeps 170px).
+  const [explorerW, setExplorerW] = useState(() => {
+    const n = Number(localStorage.getItem('olympus.explorerWidth'));
+    return Number.isFinite(n) && n >= 150 && n <= 480 ? n : 230;
+  });
+  useEffect(() => {
+    localStorage.setItem('olympus.explorerWidth', String(explorerW));
+  }, [explorerW]);
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const start = { x: e.clientX, w: explorerW };
+    document.body.classList.add('explorer-resizing');
+    const move = (ev: MouseEvent) => setExplorerW(Math.min(480, Math.max(150, start.w + ev.clientX - start.x)));
+    const up = () => {
+      document.body.classList.remove('explorer-resizing');
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
   const filesRef = useRef(files);
   filesRef.current = files;
   const childrenRef = useRef(children);
@@ -322,7 +343,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
   return (
     <div className="files-panel">
       {showTree && (
-        <div className="explorer">
+        <div className="explorer" style={{ '--explorer-w': `${explorerW}px` } as React.CSSProperties}>
           <div className="panel-toolbar">
             <span className="small muted explorer-title" style={{ fontWeight: 600 }}>
               EXPLORER
@@ -360,6 +381,16 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               onTrash={menu.entry ? () => void trash(menu.entry!) : undefined}
             />
           )}
+          <div
+            className="explorer-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize explorer"
+            title="Drag to resize — double-click to reset"
+            onMouseDown={startResize}
+            onDoubleClick={() => setExplorerW(230)}
+            data-testid="explorer-resize"
+          />
         </div>
       )}
       <div className="editor-area">

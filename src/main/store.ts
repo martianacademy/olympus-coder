@@ -5,7 +5,7 @@ import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
 import type { Project, SearchHit, Settings, Thread, ThreadItem, ThreadMeta, UserProfile } from '@shared/types';
-import { DEFAULT_THEME } from '@shared/themes';
+import { DEFAULT_THEME, migrateThemeColors } from '@shared/themes';
 import { chatMediaDir, removeChatMedia } from './acpContent';
 import { defaultSharedRoot, migrateLegacySharedRoot } from './sharedMigration';
 import { relocateOnDisk } from './relocate';
@@ -91,13 +91,16 @@ export function getSettings(): Settings {
       },
     });
     if (migrateUpdateMode(saved)) writeJson(settingsFile(), saved);
+    // Once: global custom colors become dark-mode custom colors (light must never inherit a color set in dark).
+    const migratedTheme = migrateThemeColors({ ...DEFAULT_THEME, ...(saved.theme ?? {}) });
     settings = {
       ...DEFAULT_SETTINGS,
       ...saved,
-      theme: { ...DEFAULT_THEME, ...(saved.theme ?? {}), overrides: { ...(saved.theme?.overrides ?? {}) } },
+      theme: migratedTheme.theme,
       profile: { ...DEFAULT_PROFILE, ...(saved.profile ?? {}) },
       orchestrator: { ...DEFAULT_SETTINGS.orchestrator, ...(saved.orchestrator ?? {}) },
     };
+    if (migratedTheme.changed) writeJson(settingsFile(), settings);
     // Design v2: move people still on the old default fonts to the bundled Inter / JetBrains Mono, once.
     if ((settings.designVersion ?? 0) < 2) {
       if (settings.theme.uiFont === 'system') settings.theme.uiFont = 'inter';

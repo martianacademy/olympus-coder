@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Brain, Clock, Coins, Database, DatabaseZap, Sigma } from 'lucide-react';
 import type { AgentDef, ContextUsage, PromptUsage, ReplyUsage, Thread } from '@shared/types';
+import { contextLimit, type ModelTags } from '@shared/modelTags';
 import { contextLevel } from '../contextLevel';
 import { AgentLogo } from '../logos';
 import { fmtCost, fmtTokens } from './Usage';
@@ -123,10 +124,40 @@ export function sessionTotals(thread: Thread): Totals {
   return t;
 }
 
-/** The whole chat at a glance: context window, input / cache / output split, every turn, every agent. */
-export function SessionStats({ thread, usage, agentDefs, action }: { thread: Thread; usage?: ContextUsage; agentDefs: Record<string, AgentDef>; action?: ReactNode }) {
+/** The whole chat at a glance: context window, input / cache / output split, every turn, every agent.
+ *  When the agent doesn't report context (opencode doesn't), it is estimated from the last turn's prompt tokens,
+ *  with the model's context-window size from the models.dev registry when it publishes one. */
+export function SessionStats({
+  thread,
+  usage,
+  modelValue,
+  tags,
+  agentDefs,
+  action,
+}: {
+  thread: Thread;
+  usage?: ContextUsage;
+  modelValue?: string;
+  tags?: ModelTags | null;
+  agentDefs: Record<string, AgentDef>;
+  action?: ReactNode;
+}) {
   const t = sessionTotals(thread);
-  const ctx = usage?.size ? Math.min(1, usage.used / usage.size) : 0;
+  // The last user turn's prompt tokens ≈ the context size at that point (input + cache read + cache write).
+  let lastPrompt: number | undefined;
+  for (let k = thread.items.length - 1; k >= 0; k--) {
+    const i = thread.items[k];
+    if (i.kind === 'user' && i.usage) {
+      lastPrompt = i.usage.prompt;
+      break;
+    }
+  }
+  const shown: { used: number; size?: number; est: boolean } | undefined = usage?.size
+    ? { used: usage.used, size: usage.size, est: false }
+    : lastPrompt
+      ? { used: lastPrompt, size: modelValue && tags ? contextLimit(tags.limits, modelValue) : undefined, est: true }
+      : undefined;
+  const ctx = shown?.size ? Math.min(1, shown.used / shown.size) : 0;
   const R = 34;
   const C = 2 * Math.PI * R;
   const split = [
@@ -144,16 +175,25 @@ export function SessionStats({ thread, usage, agentDefs, action }: { thread: Thr
         <div className="stats-ring">
           <svg width="84" height="84" viewBox="0 0 84 84">
             <circle cx="42" cy="42" r={R} className="ring-bg" />
-            <circle cx="42" cy="42" r={R} className={`ring-fg ${usage?.size ? `ctx-${contextLevel(ctx)}` : ''}`} strokeDasharray={C} strokeDashoffset={C * (1 - ctx)} transform="rotate(-90 42 42)" />
+            <circle cx="42" cy="42" r={R} className={`ring-fg ${shown?.size ? `ctx-${contextLevel(ctx)}` : ''}`} strokeDasharray={C} strokeDashoffset={C * (1 - ctx)} transform="rotate(-90 42 42)" />
           </svg>
           <div className="stats-ring-label">
-            <b>{usage?.size ? `${ctx < 0.01 && usage.used ? '<1' : Math.round(ctx * 100)}%` : '—'}</b>
+            <b>{shown?.size ? `${ctx < 0.01 && shown.used ? '<1' : Math.round(ctx * 100)}%` : '—'}</b>
             <span>context</span>
           </div>
         </div>
         <div className="col" style={{ gap: 4, minWidth: 0 }}>
-          <div className="stats-big">{usage?.size ? `${fmtTokens(usage.used)} / ${fmtTokens(usage.size)}` : 'Context unknown'}</div>
-          <div className="small muted">Tokens currently in the context window{usage?.model ? ` · ${usage.model}` : ''}</div>
+          <div className="stats-big">
+            {shown?.size
+              ? `${fmtTokens(shown.used)} / ${fmtTokens(shown.size)}${shown.est ? ' (est.)' : ''}`
+              : shown
+                ? `≈ ${fmtTokens(shown.used)} (est.)`
+                : 'Context unknown'}
+          </div>
+          <div className="small muted">
+            Tokens currently in the context window{usage?.model ? ` · ${usage.model}` : ''}
+            {shown?.est ? ' · estimated from the last turn' : ''}
+          </div>
           <div className="small muted">
             {t.turns} {t.turns === 1 ? 'turn' : 'turns'} · {fmtDur(t.durationMs)} agent time
           </div>

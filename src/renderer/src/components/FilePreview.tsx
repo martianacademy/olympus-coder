@@ -15,6 +15,7 @@ import {
   Folder,
   FolderOpen,
   Loader2,
+  Maximize2,
   PencilLine,
   RefreshCw,
   SquareArrowOutUpRight,
@@ -28,6 +29,7 @@ import { CodeEditor, WrapToggle } from './Editor';
 import { Markdown } from './Chat';
 import { buildDocSrcDoc, downloadFileRef } from './InlineFilePreviews';
 import { parseTurnRef, TurnChangesView } from './TurnChanges';
+import { openViewer } from './MediaViewer';
 import { copyText } from '../clipboard';
 
 export interface PreviewTarget {
@@ -234,6 +236,7 @@ function FilePane(props: PaneProps) {
                 pdfUrl={pdfUrl}
                 onOpen={openInside}
                 onDownload={() => void handleDownload()}
+                onZoom={() => openViewer({ ref: data.path, name: data.name, mime: data.mime, projectId: cur.projectId, openInPanel: openInside })}
               />
             </RefBaseContext.Provider>
           </OpenFileContext.Provider>
@@ -267,6 +270,7 @@ export function PreviewBody({
   pdfUrl,
   onOpen,
   onDownload,
+  onZoom,
 }: {
   data: Preview;
   source: boolean;
@@ -275,6 +279,8 @@ export function PreviewBody({
   pdfUrl: string | null;
   onOpen: (ref: string) => void;
   onDownload: () => void;
+  /** Side panel only: opens the image / video in the zoomable viewer (MediaViewer.tsx). */
+  onZoom?: () => void;
 }) {
   switch (data.kind) {
     case 'markdown':
@@ -290,12 +296,22 @@ export function PreviewBody({
     case 'image':
       return (
         <div className="img-preview">
-          <img src={data.dataUrl} alt={data.name} />
+          {onZoom && (
+            <button type="button" className="fp-zoom-btn" title="Open full screen to zoom" data-testid="preview-zoom" onClick={onZoom}>
+              <Maximize2 size={13} /> Zoom
+            </button>
+          )}
+          <img src={data.dataUrl} alt={data.name} className={onZoom ? 'fp-zoomable' : undefined} onClick={onZoom} />
         </div>
       );
     case 'video':
       return (
         <div className="video-preview-stage">
+          {onZoom && (
+            <button type="button" className="fp-zoom-btn" title="Open full screen to zoom" data-testid="preview-zoom" onClick={onZoom}>
+              <Maximize2 size={13} /> Zoom
+            </button>
+          )}
           <video src={data.dataUrl} poster={data.thumbUrl} controls className="video-preview-el" />
         </div>
       );

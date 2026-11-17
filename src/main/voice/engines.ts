@@ -74,11 +74,11 @@ function hostOf(u: string) {
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export async function runTranscription(wav: Uint8Array, settings: VoiceSettings, vocab: string[], deps: EngineDeps): Promise<TranscribeResult> {
+export async function runTranscription(wav: Uint8Array, settings: VoiceSettings, vocab: string[], deps: EngineDeps, context = ''): Promise<TranscribeResult> {
   const now = deps.now ?? Date.now;
   const t0 = now();
   const language = engineLanguage(settings.language);
-  const prompt = buildVoicePrompt(settings.language, vocab);
+  const prompt = buildVoicePrompt(settings.language, vocab, context);
   const done = (text: string, model: string): TranscribeResult => ({ ok: true, text, engine: settings.engine, model, ms: Math.round(now() - t0) });
   const fail = (error: string): TranscribeResult => ({ ok: false, engine: settings.engine, error, ms: Math.round(now() - t0) });
   try {
