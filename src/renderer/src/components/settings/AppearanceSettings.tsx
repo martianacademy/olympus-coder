@@ -1,11 +1,13 @@
 import { type ReactNode, useState } from 'react';
-import { Brain, ChevronDown, Code2, FileText, MessageSquareText, Palette, RotateCcw, SquareTerminal } from 'lucide-react';
-import { THEME_TOKENS, type ThemeSettings, type ThemeToken } from '@shared/types';
-import { CHAT_WIDTHS, CODE_FONTS, DEFAULT_THEME, resolvePalette, STEPS_SIZES, THEME_PRESETS, UI_FONTS } from '@shared/themes';
+import { Brain, ChevronDown, Code2, FileText, MessageSquareText, Palette, RotateCcw, Smartphone, SquareTerminal } from 'lucide-react';
+import { THEME_TOKENS, type EditorSyntaxTheme, type ThemeSettings, type ThemeToken } from '@shared/types';
+import { CHAT_WIDTHS, CODE_FONTS, DEFAULT_THEME, EDITOR_SYNTAX_THEMES, resolvePalette, STEPS_SIZES, THEME_PRESETS, UI_FONTS, withPhoneTheme } from '@shared/themes';
 import { setExpandSteps, setWrapLines, useExpandSteps } from '../../prefs';
+import { isRemoteBrowser } from '../../responsive';
 import { EditorSettingsSection, TerminalSettingsSection } from './EditorSettingsPanel';
+import { PhoneAppearance } from './PhoneAppearance';
 
-type AppearanceSection = 'theme' | 'editor' | 'terminal' | 'reading';
+type AppearanceSection = 'phone' | 'theme' | 'editor' | 'terminal' | 'reading';
 
 const TOKEN_LABELS: Record<ThemeToken, string> = {
   bg: 'Background',
@@ -23,13 +25,16 @@ const TOKEN_LABELS: Record<ThemeToken, string> = {
 };
 
 export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings; onChange: (t: ThemeSettings) => void; compact?: boolean }) {
-  const [section, setSection] = useState<AppearanceSection>('theme');
+  // The Phone tab exists only on a phone (or a browser connected to this Mac), and opens first there.
+  const remote = isRemoteBrowser();
+  const [section, setSection] = useState<AppearanceSection>(remote ? 'phone' : 'theme');
   const t: ThemeSettings = { ...DEFAULT_THEME, ...theme };
   const set = (patch: Partial<ThemeSettings>) => onChange({ ...theme, ...patch });
 
   const expandSteps = useExpandSteps();
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const { palette, dark } = resolvePalette(t, systemDark);
+  // On a phone the color pickers edit the colors of the mode the phone is showing (its own mode may differ from the Mac's).
+  const { palette, dark } = resolvePalette(remote ? { ...t, mode: withPhoneTheme(t).mode } : t, systemDark);
   // Colors are stored per mode: the pickers below write the bucket of the theme the user is looking at,
   // so a color set in dark never shows up in light (and the other way round).
   const colorBucketKey = dark ? 'overridesDark' : 'overridesLight';
@@ -38,6 +43,8 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
   const accentValue = dark ? t.accentDark : t.accentLight;
   const setAccent = (value: string) => set({ [accentKey]: value } as Partial<ThemeSettings>);
   const clearCustomColors = { accent: undefined, overrides: {}, accentDark: undefined, accentLight: undefined, overridesDark: {}, overridesLight: {} };
+  const hasCustomColors = Object.keys(colorBucket ?? {}).length > 0;
+  const [showCustomColors, setShowCustomColors] = useState(hasCustomColors);
 
   if (compact) {
     return (
@@ -93,6 +100,11 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
     <>
       <h3>Appearance</h3>
       <div className="seg appearance-tabs" role="tablist" aria-label="Appearance sections">
+        {remote && (
+          <button className={section === 'phone' ? 'active' : ''} data-testid="appearance-phone-tab" onClick={() => setSection('phone')}>
+            <Smartphone size={13} /> Phone
+          </button>
+        )}
         <button className={section === 'theme' ? 'active' : ''} onClick={() => setSection('theme')}>
           <Palette size={13} /> Theme &amp; Colors
         </button>
@@ -106,6 +118,14 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
           <MessageSquareText size={13} /> Chat &amp; Reading
         </button>
       </div>
+
+      {remote && section !== 'phone' && (
+        <p className="small muted" data-testid="appearance-mac-hint" style={{ margin: '0 0 10px' }}>
+          Changes here apply to the Mac too. Sizes and mode just for this phone are under Phone.
+        </p>
+      )}
+
+      {section === 'phone' && <PhoneAppearance theme={theme} onChange={onChange} preview={<ReadingPreview />} />}
 
       {section === 'theme' && (
         <>
@@ -140,45 +160,73 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               })}
             </div>
           </div>
-          <div className="field">
-            <label>Accent color</label>
-            <div className="row">
-              <input type="color" value={palette.accent} onChange={(e) => setAccent(e.target.value)} />
-              <span className="small muted">{palette.accent}</span>
-              {accentValue && (
-                <button className="btn small ghost" onClick={() => set({ [accentKey]: undefined } as Partial<ThemeSettings>)}>
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="field">
-            <label>Customize palette tokens</label>
-            <div className="color-row">
-              {THEME_TOKENS.filter((tok) => tok !== 'accent').map((tok) => (
-                <label key={tok}>
-                  <input
-                    type="color"
-                    value={palette[tok]}
-                    onChange={(e) => set({ [colorBucketKey]: { ...colorBucket, [tok]: e.target.value } } as Partial<ThemeSettings>)}
-                  />
-                  {TOKEN_LABELS[tok]}
-                </label>
-              ))}
-            </div>
-            <span className="small muted">A color you set applies to the theme you are looking at — dark and light keep separate colors.</span>
-            {Object.keys(colorBucket ?? {}).length > 0 && (
-              <div>
+          <div className="row" style={{ gap: 14, alignItems: 'flex-end' }}>
+            <div className="field grow">
+              <label>Accent color</label>
+              <div className="row">
+                <input type="color" value={palette.accent} onChange={(e) => setAccent(e.target.value)} />
+                <span className="small muted">{palette.accent}</span>
+                {accentValue && (
+                  <button className="btn small ghost" onClick={() => set({ [accentKey]: undefined } as Partial<ThemeSettings>)}>
+                    Reset
+                  </button>
+                )}
                 <button
-                  className="btn small"
-                  title="Restore this theme's custom colors to the preset defaults"
-                  onClick={() => set({ [colorBucketKey]: {} } as Partial<ThemeSettings>)}
+                  type="button"
+                  className="btn small ghost"
+                  data-testid="toggle-custom-colors"
+                  onClick={() => setShowCustomColors((v) => !v)}
+                  style={{ marginLeft: 'auto', gap: 4 }}
                 >
-                  <RotateCcw size={13} /> Reset custom colors
+                  Custom colors{hasCustomColors ? ` (${Object.keys(colorBucket ?? {}).length})` : ''}
+                  <ChevronDown size={13} style={{ transform: showCustomColors ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                 </button>
               </div>
-            )}
+            </div>
+            <div className="field grow">
+              <label>Syntax colors</label>
+              <select
+                className="select"
+                data-testid="theme-syntax-colors"
+                value={t.editorSyntaxTheme ?? 'auto'}
+                onChange={(e) => set({ editorSyntaxTheme: e.target.value as EditorSyntaxTheme })}
+              >
+                {EDITOR_SYNTAX_THEMES.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+          {showCustomColors && (
+            <div className="field" data-testid="custom-colors-panel">
+              <div className="color-row">
+                {THEME_TOKENS.filter((tok) => tok !== 'accent').map((tok) => (
+                  <label key={tok}>
+                    <input
+                      type="color"
+                      value={palette[tok]}
+                      onChange={(e) => set({ [colorBucketKey]: { ...colorBucket, [tok]: e.target.value } } as Partial<ThemeSettings>)}
+                    />
+                    {TOKEN_LABELS[tok]}
+                  </label>
+                ))}
+              </div>
+              <span className="small muted">A color you set applies to the theme you are looking at — dark and light keep separate colors.</span>
+              {hasCustomColors && (
+                <div>
+                  <button
+                    className="btn small"
+                    title="Restore this theme's custom colors to the preset defaults"
+                    onClick={() => set({ [colorBucketKey]: {} } as Partial<ThemeSettings>)}
+                  >
+                    <RotateCcw size={13} /> Reset custom colors
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="row" style={{ gap: 14 }}>
             <div className="field grow">
               <label>UI font</label>
@@ -225,6 +273,17 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+          <div className="field">
+            <label>Reduce motion</label>
+            <div className="seg" data-testid="reduce-motion">
+              <button className={(t.reduceMotion ?? 'system') === 'system' ? 'active' : ''} onClick={() => set({ reduceMotion: 'system' })}>
+                Follow system
+              </button>
+              <button className={t.reduceMotion === 'on' ? 'active' : ''} onClick={() => set({ reduceMotion: 'on' })}>
+                On
+              </button>
             </div>
           </div>
           <h4 className="settings-sub">Sidebar</h4>
@@ -289,6 +348,30 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               ))}
             </div>
           </div>
+          <div className="row" style={{ gap: 14 }}>
+            <div className="field grow">
+              <label>Your messages</label>
+              <div className="seg" data-testid="user-msg-style">
+                <button className={(t.userMessageStyle ?? 'bubble') === 'bubble' ? 'active' : ''} onClick={() => set({ userMessageStyle: 'bubble' })}>
+                  Bubble
+                </button>
+                <button className={t.userMessageStyle === 'plain' ? 'active' : ''} onClick={() => set({ userMessageStyle: 'plain' })}>
+                  Plain
+                </button>
+              </div>
+            </div>
+            <div className="field grow">
+              <label>Message times</label>
+              <div className="seg" data-testid="show-msg-times">
+                <button className={!t.showMessageTimes ? 'active' : ''} onClick={() => set({ showMessageTimes: false })}>
+                  Hidden
+                </button>
+                <button className={Boolean(t.showMessageTimes) ? 'active' : ''} onClick={() => set({ showMessageTimes: true })}>
+                  Show on hover
+                </button>
+              </div>
+            </div>
+          </div>
           <h4 className="settings-sub">Thinking &amp; tool steps</h4>
           <div className="row" style={{ gap: 14 }}>
             <div className="field grow">
@@ -334,35 +417,45 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               ))}
             </div>
           </div>
-          <div className="appearance-preview">
-            <div className="small muted" style={{ marginBottom: 6 }}>
-              Preview
-            </div>
-            <div className="msg-agent">
-              <p>
-                A reply reads like this, with <b>bold words</b> and <code>inline code</code>.
-              </p>
-            </div>
-            <div className="thought msg-agent">Thinking looks like this — quieter, so the answer stands out.</div>
-            <StepsPreview />
-          </div>
+          <ReadingPreview />
         </>
       )}
 
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hairline)' }}>
-        <button
-          className="btn"
-          onClick={() => {
-            setExpandSteps(false);
-            setWrapLines(true);
-            onChange({ ...DEFAULT_THEME });
-          }}
-          title="Restore theme, colors, code editor, terminal, and chat appearance to factory defaults"
-        >
-          <RotateCcw size={13} /> Reset all appearance to defaults
-        </button>
-      </div>
+      {/* Hidden on the Phone tab: it resets the Mac. The phone's own look has its own reset there. */}
+      {section !== 'phone' && (
+        <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hairline)' }}>
+          <button
+            className="btn"
+            onClick={() => {
+              setExpandSteps(false);
+              setWrapLines(true);
+              onChange({ ...DEFAULT_THEME, phone: theme.phone });
+            }}
+            title="Restore theme, colors, code editor, terminal, and chat appearance to factory defaults"
+          >
+            <RotateCcw size={13} /> Reset all appearance to defaults
+          </button>
+        </div>
+      )}
     </>
+  );
+}
+
+/** Live sample of chat text, thinking and steps, drawn with the sizes this screen is using right now. */
+function ReadingPreview() {
+  return (
+    <div className="appearance-preview" data-testid="reading-preview">
+      <div className="small muted" style={{ marginBottom: 6 }}>
+        Preview
+      </div>
+      <div className="msg-agent">
+        <p>
+          A reply reads like this, with <b>bold words</b> and <code>inline code</code>.
+        </p>
+      </div>
+      <div className="thought msg-agent">Thinking looks like this — quieter, so the answer stands out.</div>
+      <StepsPreview />
+    </div>
   );
 }
 

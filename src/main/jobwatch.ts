@@ -53,6 +53,10 @@ function describe(j: Job): string {
 
 /** One check (every 3 s via startJobWatch; exported for the unit test). */
 export async function tick() {
+  if (!getSettings().notifyAgentsWhenWorkEnds) {
+    if (jobs.size) jobs.clear();
+    return;
+  }
   const tasks = (await runningTasks().catch(() => [] as RunningTask[])).filter((t) => t.threadId);
   const now = Date.now();
   const seen = new Set<string>();
@@ -80,7 +84,6 @@ export async function tick() {
     }
     finished.set(j.threadId, [...(finished.get(j.threadId) ?? []), j]);
   }
-  if (!getSettings().notifyAgentsWhenWorkEnds) return;
   for (const [threadId, list] of finished) {
     const body = list.map(describe).join('\n\n');
     notifyAgent(threadId, `[Olympus Coder] ${body}\n\nCheck the result and carry on with what you told the user you would do next; if nothing more is needed, give the user a short update.`);

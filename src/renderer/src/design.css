@@ -100,8 +100,8 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 .thread-row.active { background: var(--active); color: var(--text); font-weight: 500; }
 .thread-row .row-actions .btn.icon { padding: 3px; }
 .thread-children { border-left-color: var(--hairline); margin-left: 16px; }
-.mode-switch { background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid var(--hairline); padding: 2px; border-radius: 10px; }
-.mode-switch button { width: 34px; height: 26px; border-radius: 8px; transition: background .15s, color .15s; }
+.mode-switch { background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid var(--hairline); padding: 2px; border-radius: var(--radius); }
+.mode-switch button { width: 34px; height: 26px; border-radius: calc(var(--radius) * 0.8); transition: background .15s, color .15s; }
 .mode-switch button.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
 .profile-btn { border-radius: 11px; padding: 7px 8px; }
 .profile-btn:hover { background: var(--hover); }
@@ -260,7 +260,7 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 
 /* ---------- workbench ---------- */
 .workbench-tabs { border-bottom-color: var(--hairline); gap: 2px; padding: 0 10px; }
-.workbench-tabs > button:not(.btn) { height: 30px; border-radius: 8px; font-weight: 500; font-size: 13px; }
+.workbench-tabs > button:not(.btn) { height: 30px; border-radius: calc(var(--radius) * 0.8); font-weight: 500; font-size: 13px; }
 .panel-toolbar, .editor-tabs, .editor-path, .commit-box, .tool-body, .git-diff { border-color: var(--hairline); }
 /* Chrome and lists sit on the panel surface; the editor and terminal stay content surfaces (--surface). */
 .explorer { border-right-color: var(--hairline); background: transparent; }
@@ -328,16 +328,16 @@ html:not([data-platform='darwin']) .main-head, html:not([data-platform='darwin']
 /* ---------- agent catalog (onboarding, Settings → Agents) ---------- */
 .catalog { display: flex; flex-direction: column; gap: 6px; }
 .catalog-title { font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 2px; gap: 8px; }
-.catalog-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface); }
+.catalog-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: calc(var(--radius) * 1.2); background: var(--surface); }
 .catalog-more { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
 .ok-chip { color: var(--success); }
-.mini-method { border: 1px solid var(--hairline); background: transparent; color: var(--muted); border-radius: 7px; padding: 3px 6px; font-size: 12px; }
+.mini-method { border: 1px solid var(--hairline); background: transparent; color: var(--muted); border-radius: calc(var(--radius) * 0.7); padding: 3px 6px; font-size: 12px; }
 
 /* ---------- appearance & code editor studio (Settings → Appearance) ---------- */
 .appearance-tabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 12px; width: 100%; }
 .appearance-tabs button { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .editor-preview-card {
-  border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: var(--surface); margin-bottom: 8px;
+  border: 1px solid var(--hairline); border-radius: calc(var(--radius) * 1.2); overflow: hidden; background: var(--surface); margin-bottom: 8px;
   box-shadow: var(--shadow-sm);
 }
 .editor-preview-head {
@@ -354,7 +354,7 @@ html:not([data-platform='darwin']) .main-head, html:not([data-platform='darwin']
 }
 .check-item {
   display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text);
-  padding: 6px 10px; border-radius: 9px; border: 1px solid var(--hairline);
+  padding: 6px 10px; border-radius: calc(var(--radius) * 0.9); border: 1px solid var(--hairline);
   background: color-mix(in srgb, var(--text) 2%, var(--surface)); cursor: pointer; user-select: none;
 }
 .check-item:hover { background: color-mix(in srgb, var(--text) 4.5%, var(--surface)); }

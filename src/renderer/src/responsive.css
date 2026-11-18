@@ -299,7 +299,7 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
 }
 
 .app.drawer-layout .main-head .picker-btn .picker-name {
-  font-size: 14.5px !important;
+  font-size: calc(14.5px * var(--ui-scale, 1)) !important;
   font-weight: 600;
   min-width: 0;
 }
@@ -398,7 +398,7 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
   .workbench-tabs .wb-tab {
     height: 36px;
     padding: 0 11px;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
   }
 
   .workbench-tabs [data-testid='wb-close'],
@@ -630,7 +630,7 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
   .thread-row .row-actions,
   .tree-row .row-actions,
   .git-row .row-actions,
-  .project-head > .btn.icon,
+  .project-actions .btn.icon,
   .port-stop,
   .learned-note .learned-del {
     opacity: 1;
@@ -639,5 +639,18 @@ html[data-platform='darwin'] .app.drawer-layout .main-head .picker-btn {
 
   .kbd {
     display: none;
+  }
+}
+
+/* Keep "Same as Mac" on one line inside Phone Appearance mode selector on 360–420px phones. */
+[data-testid='phone-mode'] button {
+  white-space: nowrap;
+  padding-inline: 8px;
+}
+
+@media (max-width: 420px) {
+  [data-testid='phone-mode'] button {
+    font-size: 0.86em;
+    padding-inline: 6px;
   }
 }

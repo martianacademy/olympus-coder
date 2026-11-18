@@ -11,6 +11,7 @@ import { McpStatusSection } from './McpStatusSection';
 import { usePromptQueue } from '../promptQueueApi';
 import { SessionStats } from './TokenStats';
 import { LimitBars, LimitsFreshness } from './Usage';
+import { VerifyGateSection } from './VerifyGateSection';
 import type { WorkbenchTab } from './Workbench';
 
 /** "Compact context" under the context ring (only for agents that advertise `compact`). */
@@ -169,7 +170,8 @@ export function InfoPanel(props: {
       {(props.agentStatus?.plan || props.agentStatus?.limits?.length) && (
         <div className="info-section">
           <div className="info-title">Plan{props.agentStatus?.plan ? ` · ${props.agentStatus.plan}` : ''}</div>
-          {props.agentStatus?.limits?.length ? <LimitBars limits={props.agentStatus.limits} /> : <div className="small muted">This agent does not report its limits.</div>}
+          {props.agentStatus?.limits?.length ? <LimitBars limits={props.agentStatus.limits} /> : <div className="small muted">{props.agentStatus?.limitsNote ?? 'This agent does not report its limits.'}</div>}
+          {props.agentStatus?.limits?.length && props.agentStatus.limitsNote ? <div className="small muted">{props.agentStatus.limitsNote}</div> : null}
           <LimitsFreshness status={props.agentStatus} agentName={props.agentDef?.name} />
         </div>
       )}
@@ -198,6 +200,7 @@ export function InfoPanel(props: {
         {mem?.index && <pre className="info-pre">{mem.index.replace(/^# Shared memory index[\s\S]*?\n\n(?:One line[^\n]*\n\n)?/, '').trim() || '(empty)'}</pre>}
       </div>
       <PortsCard />
+      {props.project.id !== 'general' && <VerifyGateSection project={props.project} />}
       <div className="info-section">
         <div className="info-title row">
           <span className="grow">Changed files</span>

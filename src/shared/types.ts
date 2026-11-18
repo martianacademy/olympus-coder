@@ -81,6 +81,10 @@ export interface RateLimitView {
   note?: string;
   /** Its reset time has passed: counted as reset (0% used) until fresh numbers arrive (`liveLimits`). */
   expired?: boolean;
+  /** The real amounts behind `utilization` (credits in USD, or a request count), e.g. $1.39 of $10. */
+  amount?: { used: number; limit: number; unit: 'usd' | 'requests' };
+  /** Covers only one of the agent's providers (`group`): used up, it blocks only that provider's models. */
+  partial?: boolean;
 }
 
 export interface AgentStatus {
@@ -97,11 +101,30 @@ export interface AgentStatus {
   limitsError?: string;
   /** The agent can report limits without a chat (local daemon or a local `/usage`-style command). */
   limitsReadable?: boolean;
+  /** What the last read said when there is no quota to show, e.g. "LM Studio · local model, no limits". */
+  limitsNote?: string;
   detail?: string;
   version?: string;
   authMethods: AuthMethodView[];
   hasApiKey: boolean;
   canLogout: boolean;
+}
+
+export interface VerifyGateConfig {
+  /** Run automatically whenever an agent turn modifies files in this project. */
+  enabled: boolean;
+  /** Custom shell command to run in the project root (empty = auto-detected). */
+  command?: string;
+  /** Maximum consecutive auto-retry turns per user request (default 2). */
+  maxRetries?: number;
+}
+
+export interface VerifyRunResult {
+  ok: boolean;
+  command: string;
+  exitCode: number;
+  durationMs: number;
+  output: string;
 }
 
 export interface Project {
@@ -111,6 +134,8 @@ export interface Project {
   createdAt: number;
   /** The folder is gone (renamed or moved): the sidebar offers "Locate…" (projects.list only). */
   missing?: boolean;
+  /** Optional automatic post-turn verification gate (`typecheck / test / build`). */
+  verifyGate?: VerifyGateConfig;
 }
 
 /** Tokens the agent read for one turn (this message plus the whole context it carried). */
@@ -434,7 +459,7 @@ export type EditorCursorBlink = 'blink' | 'smooth' | 'solid';
 export type EditorSurface = 'surface' | 'code' | 'bg';
 export type TerminalCursorStyle = 'bar' | 'block' | 'underline';
 export type StepsSize = 'smaller' | 'default' | 'larger' | 'largest';
-export type ChatWidth = 'narrow' | 'default' | 'wide';
+export type ChatWidth = 'narrow' | 'default' | 'wide' | 'full';
 
 export interface ThemeSettings {
   preset: string;
@@ -476,6 +501,12 @@ export interface ThemeSettings {
   sidebarRowGap?: number;
   /** Sidebar text size in px for project, session and sub-session names (0 = same as the app font size). */
   sidebarFontSize?: number;
+  /** How user messages render in chat (`bubble` default vs `plain` border-left block). */
+  userMessageStyle?: 'bubble' | 'plain';
+  /** Show quiet timestamps on chat messages (hover on desktop, subtle inline on touch). */
+  showMessageTimes?: boolean;
+  /** Motion preference (`system` honors OS `prefers-reduced-motion`; `on` suppresses animations/transitions). */
+  reduceMotion?: 'system' | 'on';
 
   // ---------- code editor customization ----------
   /** Dedicated editor font family ('' = follow `codeFont`). */
@@ -540,7 +571,16 @@ export interface ThemeSettings {
   terminalCursorBlink?: boolean;
   /** Maximum lines kept in terminal scrollback (1000–50000). */
   terminalScrollback?: number;
+  /**
+   * Used only on phones and browsers connected to this Mac (LAN or relay); the Mac never applies it.
+   * A key that is not set means "same as the Mac". Stored here so every phone, the home-screen app and both
+   * connections share it, and changing it on the phone never changes the Mac.
+   */
+  phone?: PhoneTheme;
 }
+
+/** What a phone can set for itself in Settings → Appearance → Phone (see `withPhoneTheme` in themes.ts). */
+export type PhoneTheme = Partial<Pick<ThemeSettings, 'mode' | 'fontSize' | 'chatFontSize' | 'codeFontSize' | 'lineHeight' | 'stepsSize'>>;
 
 export type UiMode = 'chat' | 'code';
 
@@ -812,6 +852,8 @@ export interface DeskEvents {
   'agents:changed': { defs: AgentDef[]; statuses: AgentStatus[] };
   /** A chat was deleted (from the sidebar, by delete_subsession, or a disposable sub-session cleaned up). */
   'thread:deleted': { id: string; projectId: string; parentId?: string };
+  /** projects.json changed (the app, an agent's create_project, or any outside write): the full `projects.list`. */
+  'projects:changed': Project[];
   /** A newer release than this app exists (null: none, or it was skipped / checking is off). */
   'update:available': UpdateInfo | null;
   /** An update check finished (Settings → General shows the result). */

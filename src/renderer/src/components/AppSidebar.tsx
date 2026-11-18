@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Clock, FolderOpen, FolderPlus, PanelLeftClose, Search, Settings as SettingsIcon, SquarePen } from 'lucide-react';
 import type { AgentDef, AgentStatus, Project, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import { keys } from '../platform';
+import { useOverlayScrollbar } from '../scrollActivity';
+import '../sidebar.css';
 import { ChatThreadLists, ModeSwitch } from './ChatNav';
 import { ProfileButton } from './Profile';
 import type { SettingsTab } from './Settings';
@@ -76,6 +78,13 @@ export function AppSidebar(props: AppSidebarProps) {
 
   // Before the first list has arrived (no project's chats loaded yet).
   const listsLoading = Object.keys(threads).length === 0;
+
+  // Thin overlay scrollbar over `.sidebar-scroll` (shows on pointer enter, scroll, or thumb drag without layout shift).
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  useOverlayScrollbar({ wrapRef, scrollRef, trackRef, thumbRef });
 
   const drawerOpen = isDrawer && !sbCollapsed;
   const closeIfDrawer = () => {
@@ -184,58 +193,63 @@ export function AppSidebar(props: AppSidebarProps) {
           )}
         </nav>
 
-        <div className="sidebar-scroll">
-          {listsLoading ? (
-            <SidebarSkeleton />
-          ) : mode === 'chat' ? (
-            <ChatThreadLists
-              threads={allThreads}
-              activeId={activeId}
-              agentDefs={agentDefs}
-              onOpen={(id) => {
-                props.onOpenThread(id);
-                closeIfDrawer();
-              }}
-              onPin={props.onPinThread}
-              onDelete={props.onDeleteThread}
-            />
-          ) : (
-            <>
-              <div className="section-label">
-                Projects
-                <div className="spacer" />
-                <button className="btn ghost icon" title="Add project" aria-label="Add project" onClick={props.onAddProject}>
-                  <FolderPlus size={15} />
-                </button>
-              </div>
-              <Sidebar
-                projects={projects}
-                threads={codeThreads}
-                agentDefs={agentDefs}
+        <div className="sidebar-scroll-wrap" ref={wrapRef}>
+          <div className="sidebar-scroll" ref={scrollRef}>
+            {listsLoading ? (
+              <SidebarSkeleton />
+            ) : mode === 'chat' ? (
+              <ChatThreadLists
+                threads={allThreads}
                 activeId={activeId}
+                agentDefs={agentDefs}
                 onOpen={(id) => {
                   props.onOpenThread(id);
                   closeIfDrawer();
                 }}
-                onNew={(pid) => {
-                  props.onNewCodeChat(pid);
-                  closeIfDrawer();
-                }}
-                onFork={props.onForkThread}
-                onRename={props.onRenameThread}
+                onPin={props.onPinThread}
                 onDelete={props.onDeleteThread}
-                onRemoveProject={props.onRemoveProject}
-                onImport={(p) => {
-                  props.onImportProject(p);
-                  closeIfDrawer();
-                }}
-                onReveal={props.onRevealProject}
-                onLocate={props.onLocateProject}
-                onReorder={props.onReorderProjects}
-                compact={isDrawer}
               />
-            </>
-          )}
+            ) : (
+              <>
+                <div className="section-label">
+                  Projects
+                  <div className="spacer" />
+                  <button className="btn ghost icon" title="Add project" aria-label="Add project" onClick={props.onAddProject}>
+                    <FolderPlus size={15} />
+                  </button>
+                </div>
+                <Sidebar
+                  projects={projects}
+                  threads={codeThreads}
+                  agentDefs={agentDefs}
+                  activeId={activeId}
+                  onOpen={(id) => {
+                    props.onOpenThread(id);
+                    closeIfDrawer();
+                  }}
+                  onNew={(pid) => {
+                    props.onNewCodeChat(pid);
+                    closeIfDrawer();
+                  }}
+                  onFork={props.onForkThread}
+                  onRename={props.onRenameThread}
+                  onDelete={props.onDeleteThread}
+                  onRemoveProject={props.onRemoveProject}
+                  onImport={(p) => {
+                    props.onImportProject(p);
+                    closeIfDrawer();
+                  }}
+                  onReveal={props.onRevealProject}
+                  onLocate={props.onLocateProject}
+                  onReorder={props.onReorderProjects}
+                  compact={isDrawer}
+                />
+              </>
+            )}
+          </div>
+          <div className="sidebar-vbar" ref={trackRef} aria-hidden="true" data-testid="sidebar-scrollbar">
+            <div className="sidebar-vbar-thumb" ref={thumbRef} />
+          </div>
         </div>
 
         <div className="sidebar-foot">

@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import type { ThemeSettings } from '@shared/types';
-import { CHAT_WIDTHS, codeFontCss, DEFAULT_THEME, resolvePalette, STEPS_SIZES, UI_FONTS } from '@shared/themes';
+import { CHAT_WIDTHS, codeFontCss, DEFAULT_THEME, resolvePalette, STEPS_SIZES, UI_FONTS, withPhoneTheme } from '@shared/themes';
 import { applyChatSyntaxVars } from './syntaxPalettes';
+import { isRemoteBrowser } from './responsive';
 
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -25,7 +26,8 @@ export function useThemeSettings(): ThemeSettings {
 }
 
 export function applyTheme(theme: ThemeSettings) {
-  const t: ThemeSettings = { ...DEFAULT_THEME, ...theme };
+  // A phone (or any browser connected to this Mac) uses its own Appearance → Phone values on top of the Mac's.
+  const t: ThemeSettings = isRemoteBrowser() ? withPhoneTheme(theme) : { ...DEFAULT_THEME, ...theme };
   currentTheme = t;
   const { palette, dark } = resolvePalette(t, media.matches);
   const root = document.documentElement;
@@ -38,6 +40,9 @@ export function applyTheme(theme: ThemeSettings) {
   const codeFamily = `${codeFontCss(t.codeFont)}, ui-monospace, Menlo, monospace`;
   root.style.setProperty('--code-font', codeFamily);
   root.dataset.density = t.density === 'compact' ? 'compact' : 'comfortable';
+  root.dataset.userMsg = t.userMessageStyle === 'plain' ? 'plain' : 'bubble';
+  root.dataset.msgTimes = t.showMessageTimes ? 'on' : 'off';
+  root.dataset.motion = t.reduceMotion === 'on' ? 'reduce' : 'system';
   root.style.setProperty('--text-weight', String(t.textWeight));
   root.style.setProperty('--bold-weight', String(t.boldWeight));
   const chatSize = t.chatFontSize || t.fontSize;
@@ -47,7 +52,8 @@ export function applyTheme(theme: ThemeSettings) {
   const stepsFactor = STEPS_SIZES.find((s) => s.id === t.stepsSize)?.scale ?? 1;
   root.style.setProperty('--steps-scale', String(Math.round((chatSize / 14) * stepsFactor * 1000) / 1000));
   root.style.setProperty('--steps-factor', String(stepsFactor));
-  root.style.setProperty('--chat-width', `${CHAT_WIDTHS.find((w) => w.id === t.chatWidth)?.px ?? 780}px`);
+  const cw = CHAT_WIDTHS.find((w) => w.id === t.chatWidth)?.px;
+  root.style.setProperty('--chat-width', cw === 0 ? '100%' : `${cw ?? 780}px`);
   // Sidebar spacing and text (defaults reproduce the original look: 2px under each project, rows touching, app font size).
   root.style.setProperty('--sb-project-gap', `${t.sidebarProjectGap ?? 2}px`);
   root.style.setProperty('--sb-row-gap', `${t.sidebarRowGap ?? 0}px`);

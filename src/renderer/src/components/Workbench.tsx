@@ -225,6 +225,7 @@ export const Workbench = forwardRef<
             <WebPreview
               key={webUrl}
               url={webUrl}
+              projectId={props.project.id}
               onClose={() => {
                 if (only) return props.onClose();
                 setWebUrl(null);

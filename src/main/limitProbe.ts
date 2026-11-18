@@ -14,17 +14,35 @@ export type ProbeCommand = 'usage' | 'status';
 /** Local commands that print plan limits without a model call, in order of preference. */
 export const PROBE_COMMANDS: ProbeCommand[] = ['usage', 'status'];
 
-/** Built-in agents whose limits command is known before any session (`claude-agent-acp`, `codex-acp`). */
-const BUILTIN_COMMAND: Record<string, ProbeCommand> = { claude: 'usage', codex: 'status' };
+/**
+ * Which agent this is, for how its limits are read: by id for built-ins, else by the binary it runs (a custom
+ * `olympus-cli` entry still runs `oly`; `opencode-v2` from the registry still runs `opencode`).
+ */
+export type LimitsKind = 'claude' | 'codex' | 'antigravity' | 'olympus' | 'opencode';
 
-/** The limits command for an agent: from the commands it advertised, else the known one for a built-in agent. */
-export function probeCommandFor(agentId: string, advertised?: string[]): ProbeCommand | undefined {
+export function limitsKindOf(def: { id: string; command?: string; args?: string[]; registryId?: string }): LimitsKind | undefined {
+  if (def.id === 'claude' || def.id === 'codex' || def.id === 'antigravity' || def.id === 'olympus') return def.id;
+  const bin = (def.command ?? '').split(/[\\/]/).pop()?.replace(/\.(exe|cmd)$/i, '').toLowerCase() ?? '';
+  const script = (def.args ?? []).map((a) => a.split(/[\\/]/).pop()?.toLowerCase() ?? '');
+  if (bin === 'opencode' || /^opencode(-v2)?$/.test(def.registryId ?? '') || /^opencode(-v2)?$/.test(def.id)) return 'opencode';
+  if (bin === 'oly' || def.id === 'olympus-cli' || script.includes('olympus.js')) return 'olympus';
+  return undefined;
+}
+
+/** Agents whose limits command is known before any session (`claude-agent-acp`, `codex-acp`, Olympus CLI). */
+const BUILTIN_COMMAND: Partial<Record<LimitsKind, ProbeCommand>> = { claude: 'usage', codex: 'status', olympus: 'status' };
+
+/**
+ * The limits command for an agent: from the commands it advertised, else the known one for its kind.
+ * Olympus CLI: `/usage` once it implements the limits contract, else its local `/status`.
+ */
+export function probeCommandFor(agentId: string, advertised?: string[], kind: LimitsKind | undefined = limitsKindOf({ id: agentId })): ProbeCommand | undefined {
   if (advertised?.length) {
     const names = new Set(advertised.map((n) => n.replace(/^\//, '')));
     const hit = PROBE_COMMANDS.find((c) => names.has(c));
     if (hit) return hit;
   }
-  return BUILTIN_COMMAND[agentId];
+  return kind ? BUILTIN_COMMAND[kind] : undefined;
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -193,6 +211,60 @@ export function parseCodexStatus(text: string, now = Date.now()): { limits: Rate
   return { limits: dedupe(limits), ...(plan ? { plan } : {}), ...(loggedOut ? { loggedOut } : {}), ...(noData && !limits.length ? { noData } : {}) };
 }
 
+/** `$1.39 of $10` / `37 of 300 requests` inside a limit line. */
+function amountIn(text: string): RateLimitView['amount'] | undefined {
+  const usd = /\$\s*([\d,]+(?:\.\d+)?)\s+of\s+\$\s*([\d,]+(?:\.\d+)?)/i.exec(text);
+  if (usd) return { used: Number(usd[1].replace(/,/g, '')), limit: Number(usd[2].replace(/,/g, '')), unit: 'usd' };
+  const req = /([\d,]+)\s+of\s+([\d,]+)\s+requests/i.exec(text);
+  if (req) return { used: Number(req[1].replace(/,/g, '')), limit: Number(req[2].replace(/,/g, '')), unit: 'requests' };
+  return undefined;
+}
+
+const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[?::1\]?)$/i;
+
+/**
+ * Olympus CLI's `/status` (today) or `/usage` (the limits contract) → limits and an honest note.
+ * - Limit lines use Claude's `/usage` shape: `**<label>** — **<pct>%** · Resets <date>[ · $<used> of $<limit>]`.
+ * - `**Limits:** <text>` is the CLI's own word when there are none (e.g. `none (local model)`).
+ * - Without either, the gateway line decides: a local server has no limits; a remote API key has no quota the CLI
+ *   reports yet. `plan` is the gateway's name, e.g. "LM Studio (local)".
+ */
+export function parseOlympusStatus(text: string, now = Date.now()): { limits: RateLimitView[]; plan?: string; note?: string } {
+  const limits: RateLimitView[] = [];
+  let plan: string | undefined;
+  let note: string | undefined;
+  let local = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const gw = /^[-*]?\s*\*\*Gateway\*\*:\s*(.+?)\s*\(`([^`]+)`\)/.exec(line);
+    if (gw) {
+      plan = unescape(gw[1]);
+      try {
+        local = LOCAL_HOST.test(new URL(gw[2]).hostname);
+      } catch {
+        local = /\blocal\b/i.test(plan);
+      }
+      continue;
+    }
+    const lim = /^[-*]?\s*\*\*Limits:?\*\*:?\s*(.+)$/.exec(line);
+    if (lim) {
+      note = unescape(lim[1]).slice(0, 160);
+      continue;
+    }
+    const m = /^\*\*(.+?)\*\*\s*[—–-]\s*\*\*(\d+(?:\.\d+)?)%\*\*(.*)$/.exec(line);
+    if (!m) continue;
+    const { window, label } = claudeWindow(unescape(m[1]));
+    const reset = /Resets\s+(.+?)(?:\s+·\s+|$)/i.exec(m[3])?.[1];
+    const amount = amountIn(m[3]);
+    limits.push({ window, label, utilization: Math.max(0, Math.min(1, Number(m[2]) / 100)), resetsAt: reset ? parseClaudeReset(reset, now) : undefined, ...(amount ? { amount } : {}) });
+  }
+  if (!limits.length && !note && plan) {
+    const name = plan.replace(/\s*\(local\)\s*$/i, '');
+    note = local ? `${name} · local model, no limits` : `${name} · API key, pay per use · no quota reported`;
+  }
+  return { limits: dedupe(limits), ...(plan ? { plan } : {}), ...(note ? { note } : {}) };
+}
+
 function dedupe(limits: RateLimitView[]): RateLimitView[] {
   const seen = new Map<string, RateLimitView>();
   for (const l of limits) if (!seen.has(l.window)) seen.set(l.window, l);
@@ -205,11 +277,17 @@ export interface ProbeResult {
   loggedOut?: boolean;
   /** The command ran but reported no limits (e.g. Codex "data not available yet", an API-key login). */
   empty?: boolean;
+  /** Why there is nothing to show, in the agent's terms (Olympus CLI: "LM Studio · local model, no limits"). */
+  note?: string;
   command: ProbeCommand;
 }
 
-/** Parse a limits command's reply. */
-export function parseProbeReply(command: ProbeCommand, text: string, now = Date.now()): ProbeResult {
+/** Parse a limits command's reply (`kind` picks the agent's own format; Olympus CLI has one for both commands). */
+export function parseProbeReply(command: ProbeCommand, text: string, now = Date.now(), kind?: LimitsKind): ProbeResult {
+  if (kind === 'olympus') {
+    const r = parseOlympusStatus(text, now);
+    return { ...r, command, ...(r.limits.length ? {} : { empty: true }) };
+  }
   if (command === 'usage') {
     const r = parseClaudeUsage(text, now);
     return { ...r, command, ...(r.limits.length ? {} : { empty: true }) };
@@ -274,6 +352,10 @@ export interface ProbeOptions {
   command?: ProbeCommand;
   /** The agent supports `session/close`. */
   canClose: boolean;
+  /** Delete the probe session afterwards (`session/delete`): agents that keep every session on disk (Olympus CLI). */
+  deleteAfter?: boolean;
+  /** Which agent's reply format to parse (see `parseProbeReply`). */
+  kind?: LimitsKind;
   /** `_meta` for `session/new` (Claude: don't keep a transcript, don't start the user's MCP servers). */
   meta?: Record<string, unknown>;
   timeoutMs: number;
@@ -315,14 +397,15 @@ export async function runProbe(rpc: ProbeRpc, sessions: ProbeSessions, opts: Pro
           };
         });
       }
-      command = probeCommandFor(opts.agentId, c.commands);
+      command = probeCommandFor(opts.agentId, c.commands, opts.kind);
       if (!command) return null;
     }
     const reply = await withTimeout(rpc.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: `/${command}` }] }), left(), `/${command}`);
     if (reply?.stopReason && reply.stopReason !== 'end_turn') throw new Error(`/${command} ended with "${reply.stopReason}".`);
-    return parseProbeReply(command, c.text.join(''), opts.now?.() ?? Date.now());
+    return parseProbeReply(command, c.text.join(''), opts.now?.() ?? Date.now(), opts.kind);
   } finally {
     sessions.close(sessionId);
-    if (opts.canClose) await withTimeout(rpc.request('session/close', { sessionId }), 5000, 'Closing the limits session').catch(() => {});
+    if (opts.deleteAfter) await withTimeout(rpc.request('session/delete', { sessionId }), 5000, 'Deleting the limits session').catch(() => {});
+    else if (opts.canClose) await withTimeout(rpc.request('session/close', { sessionId }), 5000, 'Closing the limits session').catch(() => {});
   }
 }

@@ -26,11 +26,11 @@ delete process.env.AGENTDESK_SHARED_ROOT;
 
 // Stubs read their state from globalThis.__T (labelled mocks: electron, the agent runtime, the app's message queue).
 const stub = (src) => `data:text/javascript,${encodeURIComponent(src)}`;
-globalThis.__T = { notified: [], tasks: [], settings: { notifyAgentsWhenWorkEnds: false }, running: false, items: [] };
+globalThis.__T = { notified: [], tasks: [], scans: 0, settings: { notifyAgentsWhenWorkEnds: false }, running: false, items: [] };
 const STUBS = {
   './appmsg': stub(`export const notifyAgent = (id, text) => globalThis.__T.notified.push([id, text]); export const isMuted = () => false;`),
   './agents': stub(`export const runState = () => ({ running: globalThis.__T.running });`),
-  './processes': stub(`export const runningTasks = async () => globalThis.__T.tasks;`),
+  './processes': stub(`export const runningTasks = async () => { globalThis.__T.scans++; return globalThis.__T.tasks; };`),
   './terminals': stub(`export const readTerminal = () => '--- last 25 lines ---\\nall done';`),
 };
 let stubStore = false;
@@ -314,7 +314,7 @@ await test('set_timer: argument checks, small declaration, fires "[Olympus Coder
     assert.throws(() => T.parseTimerArgs(bad), /minutes|note/);
   assert.deepEqual(T.parseTimerArgs({ minutes: 5, note: ' check\n the build ' }), { minutes: 5, note: 'check the build' });
   assert.ok(JSON.stringify(T.setTimerToolDef).length < 840, 'agy drops large tool declarations');
-  mock.timers.enable({ apis: ['setTimeout'] });
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   try {
     globalThis.__T.notified = [];
     const msg = T.setTimer('chat-9', 2, 'read the build log');
@@ -328,28 +328,61 @@ await test('set_timer: argument checks, small declaration, fires "[Olympus Coder
     T.dropWakes('chat-9');
     mock.timers.tick(61_000);
     assert.equal(globalThis.__T.notified.length, 1);
+
+    // Persistence across app restarts: timers save to disk, survive quit, prune deleted chats, and fire after restore.
+    const timerFile = join(TMP, 'agent-timers.json');
+    assert.equal(T.restoreAgentTimers(timerFile, (id) => id !== 'deleted-chat'), 0);
+    T.setTimer('chat-live', 3, 'check colab run');
+    T.setTimer('deleted-chat', 5, 'gone chat');
+    T.keepWake('chat-live', 'tc-wake-1', 10_000, 'inspect logs');
+    assert.equal(existsSync(timerFile), true);
+    assert.equal(JSON.parse(readFileSync(timerFile, 'utf8')).length, 3);
+
+    T.pauseAgentTimersForQuit();
+    assert.equal(existsSync(timerFile), true, 'quit keeps pending timers on disk');
+    mock.timers.tick(60_000);
+    assert.equal(globalThis.__T.notified.length, 1, 'paused timers do not fire after quit');
+
+    const restored = T.restoreAgentTimers(timerFile, (id) => id !== 'deleted-chat');
+    assert.equal(restored, 2, 'deleted chat timer pruned on restore');
+    assert.equal(JSON.parse(readFileSync(timerFile, 'utf8')).length, 2);
+
+    // Overdue wake (13s delay < 60s elapsed while closed) fires after the 2s restart settle window.
+    mock.timers.tick(2_000);
+    assert.equal(globalThis.__T.notified.length, 2);
+    assert.match(globalThis.__T.notified[1][1], /Your scheduled wake-up is due: "inspect logs"/);
+    // Re-replaying the same wake toolCallId after restore is deduped via `seen`.
+    T.keepWake('chat-live', 'tc-wake-1', 10_000, 'inspect logs');
+
+    // Remaining future timer (3 min = 180s; 62s elapsed so 118s left) fires right on schedule and removes the file.
+    mock.timers.tick(118_000);
+    assert.equal(globalThis.__T.notified.length, 3);
+    assert.deepEqual(globalThis.__T.notified[2], ['chat-live', '[Olympus Coder] Timer: check colab run']);
+    assert.equal(existsSync(timerFile), false, 'file removed once all timers have fired');
   } finally {
     mock.timers.reset();
   }
 });
 
-await test('jobwatch: a finished terminal command sends nothing by default, and a message when the setting is on', async () => {
+await test('jobwatch: a finished terminal command sends nothing by default (0 ps scans), and a message when the setting is on', async () => {
   stubStore = true;
   const J = await import(`${APP}/src/main/jobwatch.ts?stubbed`);
   const run = async (on) => {
     globalThis.__T.settings = { notifyAgentsWhenWorkEnds: on };
     globalThis.__T.notified = [];
+    globalThis.__T.scans = 0;
     globalThis.__T.tasks = [{ id: `t-${on}`, threadId: 'chat-1', source: 'terminal', ptyId: 'pty-1', title: 'build', secs: 30 }];
     await J.tick();
     globalThis.__T.tasks = [];
     await J.tick();
     await J.tick();
-    return globalThis.__T.notified;
+    return { notified: globalThis.__T.notified, scans: globalThis.__T.scans };
   };
-  assert.deepEqual(await run(false), []);
+  assert.deepEqual(await run(false), { notified: [], scans: 0 });
   const sent = await run(true);
-  assert.equal(sent.length, 1);
-  assert.match(sent[0][1], /^\[Olympus Coder\] The command in terminal "build"/);
+  assert.equal(sent.scans, 3);
+  assert.equal(sent.notified.length, 1);
+  assert.match(sent.notified[0][1], /^\[Olympus Coder\] The command in terminal "build"/);
 });
 
 rmSync(TMP, { recursive: true, force: true });

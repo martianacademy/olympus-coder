@@ -174,11 +174,13 @@ function matchShellToThread(
 }
 
 async function scanRunningTasks(): Promise<RunningTask[]> {
+  const agentList = agentProcesses();
+  const terms = terminalsAlive().filter((t) => ptyPid(t.ptyId));
+  if (!agentList.length && !terms.length) return [];
   const procs = await listProcs();
   const kids = childrenMap(procs);
   const out: RunningTask[] = [];
   const seenShellPids = new Set<number>();
-  const agentList = agentProcesses();
 
   for (const a of agentList) {
     for (const sh of topShellsUnder(a.pid, kids)) {
@@ -220,7 +222,7 @@ async function scanRunningTasks(): Promise<RunningTask[]> {
     }
   }
 
-  for (const t of terminalsAlive()) {
+  for (const t of terms) {
     const pid = ptyPid(t.ptyId);
     if (!pid) continue;
     const tree = descendants(pid, kids);

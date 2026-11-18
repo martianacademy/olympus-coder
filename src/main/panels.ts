@@ -16,7 +16,7 @@ interface PanelHost {
   /** The app's main window (gets 'panel:*' events and is focused by "show in main window"). */
   mainWindow: () => BrowserWindow | null;
   /** Sends a desk:event to every app window (lock rule applied by the caller in index.ts). */
-  send: (channel: 'panel:closed' | 'panel:context' | 'panel:show', payload: unknown) => void;
+  send: (channel: 'panel:closed' | 'panel:context' | 'panel:show' | 'panel:compose', payload: unknown) => void;
 }
 
 let host: PanelHost | null = null;
@@ -135,6 +135,21 @@ export function panelCall(sender: WebContents, method: string, args: unknown[]):
         ...(typeof a.threadId === 'string' ? { threadId: a.threadId } : {}),
       });
       if (main && !main.isDestroyed() && !host?.testHidden) main.focus();
+      return true;
+    }
+    case 'composeInMain': {
+      const a = (args[0] ?? {}) as { text?: unknown; files?: unknown };
+      if (typeof a.text !== 'string') throw new Error('No text');
+      if (main && !main.isDestroyed()) {
+        main.webContents.send('desk:event', 'panel:compose', {
+          text: a.text,
+          files: Array.isArray(a.files) ? a.files : [],
+        });
+        if (!host?.testHidden) {
+          if (main.isMinimized()) main.restore();
+          main.focus();
+        }
+      }
       return true;
     }
     default:

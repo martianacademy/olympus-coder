@@ -36,6 +36,7 @@ import {
 import { listSchedules } from './schedules';
 import { canManageSchedules, handleScheduleTool, scheduleToolDefs } from './scheduleTools';
 import { agentToolDefs, canManageAgents, handleAgentTool } from './agentTools';
+import { canManageProjects, handleProjectTool, projectToolDefs } from './projectTools';
 import { agySubagentSummary, discoverAgySubagents } from './agySubagents';
 import { claudeSubagentSummary, discoverClaudeSubagents } from './claudeSubagents';
 import { nativeSubagentSummary } from './nativeSubagents';
@@ -145,6 +146,19 @@ export function userCancelled(threadId: string) {
 }
 export function userSent(threadId: string) {
   unmuteChat(threadId);
+}
+
+/** Releases in-memory orchestrator tracking when a chat or sub-session is deleted. */
+export function forgetOrchestratorThread(threadId: string) {
+  dropWakes(threadId);
+  starting.delete(threadId);
+  cancelled.delete(threadId);
+  disposables.forget(threadId);
+  waiting.delete(threadId);
+  for (const [parentId, m] of waiting) {
+    m.delete(threadId);
+    if (!m.size) waiting.delete(parentId);
+  }
 }
 
 /** The model a sub-session runs on: its model setting, else what its last reply reported. */
@@ -638,7 +652,8 @@ export function toolsFor(t: Thread) {
     : [];
   const schedules = canManageSchedules(t) ? scheduleToolDefs(t.agentId) : [];
   const agentMgmt = canManageAgents(t) ? agentToolDefs() : [];
-  if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...learn, ...schedules, ...agentMgmt];
+  const projectMgmt = canManageProjects(t) ? projectToolDefs() : [];
+  if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...learn, ...schedules, ...agentMgmt, ...projectMgmt];
   // Keep these schemas small: Antigravity (agy 1.5.8) silently disables MCP tools whose declaration is too large
   // ("tool … is not enabled for server …"; seen at ≥1144 chars, fine at ≤840). Agent ids are validated server-side
   // (assertAgentQuotaAvailable) instead of a long `enum`; list_agents shows the ids, models, modes and efforts.
@@ -664,19 +679,22 @@ export function toolsFor(t: Thread) {
     ...learn,
     ...schedules,
     ...agentMgmt,
+    ...projectMgmt,
     {
       name: 'spawn_subsession',
       title: 'Spawn sub-session',
-      description:
-        'Start a sub-session: another agent that does one task in parallel and reports back. It sees only your task text, so include goal, scope, known facts, definition of done, how to verify and what to report.',
+      description: 'Start a parallel sub-session worker. Include goal, file scope, known facts, and how to verify.',
       inputSchema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Short name shown to the user.' },
-          task: { type: 'string', description: 'The complete task brief.' },
-          agent: agent(`CLI agent; default ${t.agentId}`),
-          ...configProps,
-          keep: { type: 'boolean', description: 'Keep after its report (default: auto-delete).' },
+          title: { type: 'string', description: 'Short task title.' },
+          task: { type: 'string', description: 'Full task brief.' },
+          agent: { type: 'string', description: `Agent id (default ${t.agentId}).` },
+          model: { type: 'string' },
+          mode: { type: 'string' },
+          effort: { type: 'string' },
+          config: { type: 'object' },
+          keep: { type: 'boolean', description: 'Keep after report (default false).' },
         },
         required: ['title', 'task'],
         additionalProperties: false,
@@ -848,6 +866,12 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         const agentOut = await handleAgentTool(t, name, args, emit, closed);
         if (agentOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
         text = agentOut;
+        break;
+      }
+      case 'create_project': {
+        const projectOut = await handleProjectTool(t, name, args, emit);
+        if (projectOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
+        text = projectOut;
         break;
       }
       default:

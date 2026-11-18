@@ -97,7 +97,7 @@ code, pre, kbd { font-family: var(--code-font); }
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; min-width: 270px; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 5px;
 }
-.menu-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.menu-item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: calc(var(--radius) * 0.7); cursor: pointer; }
 .menu-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .menu-item.selected { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
@@ -145,7 +145,7 @@ code, pre, kbd { font-family: var(--code-font); }
 .composer-send { flex: none; display: flex; align-items: center; height: 32px; }
 .send-btn { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 99px; }
 .stop-btn { height: 32px; border-radius: 99px; padding: 0 12px; }
-.pill { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border-radius: 7px; font-size: .86em; color: var(--muted); white-space: nowrap; max-width: 100%; }
+.pill { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border-radius: calc(var(--radius) * 0.7); font-size: .86em; color: var(--muted); white-space: nowrap; max-width: 100%; }
 .mini-select { border: 1px solid transparent; cursor: pointer; }
 .mini-select:hover:not(.disabled), .mini-select:focus-within { border-color: var(--border); color: var(--text); background: color-mix(in srgb, var(--text) 4%, transparent); }
 .mini-select.disabled { opacity: .55; cursor: default; }
@@ -165,7 +165,7 @@ code, pre, kbd { font-family: var(--code-font); }
 .modal-body { padding: 18px; overflow-y: auto; }
 .settings { display: flex; min-height: 520px; }
 .settings-nav { width: 180px; flex: none; border-right: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--panel); }
-.settings-nav button { text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: 7px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+.settings-nav button { text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: calc(var(--radius) * 0.7); cursor: pointer; display: flex; gap: 8px; align-items: center; }
 .settings-nav button.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .settings-pane { flex: 1; padding: 18px 22px; overflow-y: auto; }
 .settings-pane h3 { margin: 0 0 4px; }
@@ -178,17 +178,17 @@ code, pre, kbd { font-family: var(--code-font); }
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
 .preset { border: 2px solid var(--border); border-radius: var(--radius); padding: 8px; cursor: pointer; background: var(--surface); }
 .preset.active { border-color: var(--accent); }
-.preset-swatch { height: 46px; border-radius: 6px; display: flex; overflow: hidden; margin-bottom: 6px; }
+.preset-swatch { height: 46px; border-radius: calc(var(--radius) * 0.6); display: flex; overflow: hidden; margin-bottom: 6px; }
 .preset-swatch span { flex: 1; }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8); overflow: hidden; }
 .seg button { border: none; background: var(--surface); padding: 6px 12px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button.active { background: var(--accent); color: var(--accentText); }
 .color-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .color-row label { display: flex; align-items: center; gap: 8px; font-size: .88em; }
-input[type="color"] { width: 30px; height: 24px; border: 1px solid var(--border); border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+input[type="color"] { width: 30px; height: 24px; border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.6); padding: 0; background: none; cursor: pointer; }
 .agent-card { padding: 12px 14px; margin-bottom: 10px; }
-.term-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0; height: 360px; overflow: hidden; }
+.term-box { background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8); padding: 0; height: 360px; overflow: hidden; }
 /* Padding goes on .xterm, not the box: xterm's fit addon subtracts the .xterm element's padding when it works
    out the columns, but not the box's, so padding on the box made lines run into the right edge. */
 .term-box .xterm { height: 100%; padding: 8px 10px 4px 10px; }
@@ -207,7 +207,7 @@ input[type="color"] { width: 30px; height: 24px; border: 1px solid var(--border)
 .onb-foot { display: flex; align-items: center; gap: 8px; margin-top: 26px; }
 .logo { width: 54px; height: 54px; border-radius: 16px; background: var(--accent); color: var(--accentText); display: grid; place-items: center; font-weight: 800; font-size: 20px; margin-bottom: 16px; }
 .memory-panel { width: 320px; flex: none; border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; }
-.memory-panel pre { white-space: pre-wrap; font-size: .82em; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px; user-select: text; }
+.memory-panel pre { white-space: pre-wrap; font-size: .82em; background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius) * 0.8); padding: 8px; user-select: text; }
 
 /* ---------- message actions, nav, sub-sessions, search, schedules ---------- */
 .msg-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; min-height: 26px; }
@@ -224,7 +224,7 @@ input[type="color"] { width: 30px; height: 24px; border: 1px solid var(--border)
 .rename-input { flex: 1; min-width: 0; border: 1px solid var(--accent); border-radius: 5px; background: var(--surface); padding: 1px 5px; outline: none; }
 .search-modal { width: min(640px, 100%); align-self: flex-start; margin-top: 10vh; }
 .search-input { border: none; outline: none; background: transparent; font-size: 1.1em; flex: 1; user-select: text; }
-.search-hit { padding: 9px 14px; cursor: pointer; border-radius: 8px; display: flex; gap: 10px; align-items: flex-start; }
+.search-hit { padding: 9px 14px; cursor: pointer; border-radius: calc(var(--radius) * 0.8); display: flex; gap: 10px; align-items: flex-start; }
 .search-hit:hover, .search-hit.sel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .search-hit mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: inherit; border-radius: 3px; }
 .page { flex: 1; overflow-y: auto; }
@@ -958,9 +958,7 @@ html:not([data-platform='darwin']) .app.sb-collapsed .main-head { padding-left: 
 .sc.s-error { color: var(--danger); }
 .sc.s-running, .sc.s-background { color: var(--accent); }
 .sc.s-done { color: var(--success); }
-/* A project's buttons appear on hover (like a session's), so a narrow sidebar keeps the name readable. */
-.project-head > .btn.icon { display: none; }
-.project-head:hover > .btn.icon, .project-head:focus-within > .btn.icon { display: inline-flex; }
+/* A project's buttons appear on hover (like a session's), floating over the row's end: see sidebar.css. */
 .project-name { flex: 0 1 auto; min-width: 24px; }
 
 /* ---- Appearance → Text and Thinking (CSS variables set by theme.ts) ---- */

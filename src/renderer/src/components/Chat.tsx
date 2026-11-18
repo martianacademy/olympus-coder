@@ -17,6 +17,7 @@ import {
 import type { AgentDef, AgentStatus, Project, SessionView, Thread, ThreadItem } from '@shared/types';
 import { api } from '../api';
 import { LinkedText, RefBaseContext, useOpenFile } from '../fileLinks';
+import { ProjectIdContext, triggerFixError } from '../fixError';
 import { AgentLogo } from '../logos';
 import { useExpandSteps, useStepChoice } from '../prefs';
 import { isQuotaMessage } from '../quota';
@@ -153,6 +154,7 @@ export function Chat(props: {
   const hasLiveWorkGroup = Boolean(running && lastGroup?.kind === 'work');
 
   return (
+    <ProjectIdContext.Provider value={thread.projectId}>
     <RefBaseContext.Provider value={props.project.path}>
       <div className="main-head">
         {props.headerLeft}
@@ -263,6 +265,7 @@ export function Chat(props: {
         onStickToBottom={handleStickToBottom}
       />
     </RefBaseContext.Provider>
+    </ProjectIdContext.Provider>
   );
 }
 
@@ -334,7 +337,7 @@ const Item = memo(function Item({
     case 'user': {
       const from = item.fromAgent ? agentDefs[item.fromAgent] : undefined;
       return (
-        <div className={`col msg-wrap ${item.viaAgent ? 'msg-via-agent' : ''}`} style={{ alignItems: 'flex-end', gap: 3 }} data-testid={item.viaAgent ? 'msg-via-agent' : undefined}>
+        <div className={`col msg-wrap msg-user-wrap ${item.viaAgent ? 'msg-via-agent' : ''}`} data-testid={item.viaAgent ? 'msg-via-agent' : undefined}>
           {item.viaAgent && (
             <span className="small muted row msg-from" style={{ gap: 4 }} title="This message reached the agent from its own session (another app on that session, or replayed by the agent), not from Olympus Coder">
               <Radio size={13} /> From the agent session
@@ -375,6 +378,9 @@ const Item = memo(function Item({
               </span>
             )}
             {!compact && <MsgActions text={item.text} attachments={item.attachments} onFork={() => onFork(item.id)} align="end" secondOpinion={{ threadId, itemId: item.id, agentId: item.agentId, agentDefs }} />}
+            <span className="msg-time" data-testid="msg-time">
+              {new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
             <SentTicks delivery={item.delivery} agentName={def?.name ?? item.agentId} />
           </div>
         </div>
@@ -385,6 +391,9 @@ const Item = memo(function Item({
         <div className="msg-wrap">
           <div className="msg-meta">
             {def && <AgentLogo def={def} />} {def?.name}
+            <span className="msg-time" data-testid="msg-time">
+              {new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
           {isQuotaMessage(item.text) ? (
             <div className="notice-card">
@@ -413,7 +422,16 @@ const Item = memo(function Item({
       );
     }
     case 'error':
-      return <div className="err-box">{item.text}</div>;
+      return (
+        <div className="err-box row" style={{ alignItems: 'center', gap: 10 }}>
+          <span className="grow">{item.text}</span>
+          {!compact && !isQuotaMessage(item.text) && (
+            <button type="button" className="btn small ghost" data-testid="chat-fix-error" title="Put this error and recent uncommitted git changes into the message box" onClick={() => void triggerFixError({ source: 'chat-error', title: 'Chat error', output: item.text })}>
+              Fix error
+            </button>
+          )}
+        </div>
+      );
     case 'notice':
       return <NoticeRow item={item} />;
     case 'compaction':
@@ -446,32 +464,17 @@ const Item = memo(function Item({
   }
 });
 
-/**
- * A collapsible block (used for long compact prompts in `Transcript`). With `follow`, it opens by itself
- * only when the user's "Steps open" preference is enabled; any manual click overrides and persists.
- */
-function Collapsible({
-  stepKey,
-  label,
-  body,
-  icon,
-  follow,
-}: {
-  stepKey: string;
-  label: React.ReactNode;
-  body: React.ReactNode;
-  icon?: React.ReactNode;
-  follow?: boolean;
-}) {
+/** Collapsible block for long compact prompts in `Transcript` (follows "Steps open" unless clicked). */
+function Collapsible(p: { stepKey: string; label: React.ReactNode; body: React.ReactNode; icon?: React.ReactNode; follow?: boolean }) {
   const expandAll = useExpandSteps();
-  const [choice, setChoice] = useStepChoice(stepKey);
-  const open = choice ?? (follow ? expandAll : false);
+  const [choice, setChoice] = useStepChoice(p.stepKey);
+  const open = choice ?? (p.follow ? expandAll : false);
   return (
     <div className="msg-wrap">
       <button className="btn ghost small muted collapse-head" onClick={() => setChoice(!open)} style={{ paddingLeft: 4 }}>
-        {icon} {label} {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        {p.icon} {p.label} {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
       </button>
-      {open && body}
+      {open && p.body}
     </div>
   );
 }

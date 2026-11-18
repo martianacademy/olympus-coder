@@ -11,7 +11,8 @@ import {
   Square,
 } from 'lucide-react';
 import type { AgentDef, AgentStatus, SessionView } from '@shared/types';
-import { api } from '../api';
+import { api, onEvent } from '../api';
+import { addFilesToMessage } from './AddToMessage';
 import { useComposerResize } from '../composerResize';
 import { LiveSession, type LiveStopReason } from '@shared/liveVoice';
 import { liveModeFor, micSoundsFor, wakeWordFor } from '@shared/voice';
@@ -319,10 +320,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     el.setSelectionRange(len, len);
   }, [threadId]);
 
-  // Text sent here from elsewhere in the app (e.g. "Ask agent to fix" on a terminal error): into the box, not sent.
+  // Text sent here from elsewhere in the app (e.g. "Ask agent to fix" on a terminal error or detached window): into the box, not sent.
   useEffect(() => {
-    const on = (e: Event) => {
-      const t = (e as CustomEvent<{ text: string }>).detail.text;
+    const insert = (t: string) => {
       setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${t}` : t));
       requestAnimationFrame(() => {
         const el = ta.current;
@@ -332,8 +332,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         el.scrollTop = el.scrollHeight;
       });
     };
+    const on = (e: Event) => insert((e as CustomEvent<{ text: string }>).detail.text);
+    const offEvent = onEvent((ch, payload) => {
+      if (ch !== 'panel:compose' || !payload?.text) return;
+      if (Array.isArray(payload.files) && payload.files.length) addFilesToMessage(payload.files);
+      insert(String(payload.text));
+    });
     window.addEventListener('olympus:compose', on);
-    return () => window.removeEventListener('olympus:compose', on);
+    return () => {
+      window.removeEventListener('olympus:compose', on);
+      offEvent();
+    };
   }, [setText]);
 
   // Always sendable: while the agent works (or is offline) the message waits in the chat's queue, with ticks.

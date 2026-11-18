@@ -74,6 +74,9 @@ export const DEFAULT_THEME: ThemeSettings = {
   sidebarProjectGap: 2,
   sidebarRowGap: 0,
   sidebarFontSize: 0,
+  userMessageStyle: 'bubble',
+  showMessageTimes: false,
+  reduceMotion: 'system',
   editorFontFamily: '',
   editorFontSize: 0,
   editorFontWeight: 400,
@@ -119,6 +122,7 @@ export const CHAT_WIDTHS: { id: ChatWidth; name: string; px: number }[] = [
   { id: 'narrow', name: 'Narrow', px: 680 },
   { id: 'default', name: 'Default', px: 780 },
   { id: 'wide', name: 'Wide', px: 960 },
+  { id: 'full', name: 'Full', px: 0 },
 ];
 
 export const UI_FONTS: { id: string; name: string; css: string }[] = [
@@ -179,4 +183,38 @@ export function resolvePalette(theme: ThemeSettings, systemDark: boolean): { pal
   const overrides = (dark ? theme.overridesDark : theme.overridesLight) ?? {};
   for (const [k, v] of Object.entries(overrides)) if (v) palette[k as keyof ThemePalette] = v;
   return { palette, dark };
+}
+
+/** Phone text size steps offered in Settings → Appearance → Phone (px; the Mac's own size is the "same as Mac" choice). */
+export const PHONE_TEXT_MIN = 12;
+export const PHONE_TEXT_MAX = 22;
+
+const roundHalf = (n: number): number => Math.round(n * 2) / 2;
+
+/**
+ * The theme a phone (or any browser connected to this Mac) actually uses: the Mac's theme with `theme.phone` on top.
+ * Unset phone keys keep the Mac's value. A phone text size scales every other explicit size the same way
+ * (chat, code, editor, terminal, sidebar), so one slider makes the whole phone bigger; a phone chat or code size
+ * that is set wins over that scaling. The Mac calls `applyTheme` without this, so it never sees phone values.
+ */
+export function withPhoneTheme(theme: ThemeSettings): ThemeSettings {
+  const t: ThemeSettings = { ...DEFAULT_THEME, ...theme };
+  const p = t.phone;
+  if (!p) return t;
+  const out: ThemeSettings = { ...t };
+  if (p.mode) out.mode = p.mode;
+  if (p.lineHeight) out.lineHeight = p.lineHeight;
+  if (p.stepsSize) out.stepsSize = p.stepsSize;
+  if (p.fontSize && p.fontSize !== t.fontSize) {
+    const ratio = p.fontSize / t.fontSize;
+    out.fontSize = p.fontSize;
+    if (t.chatFontSize) out.chatFontSize = Math.round(t.chatFontSize * ratio);
+    out.codeFontSize = roundHalf((t.codeFontSize ?? 12.5) * ratio);
+    if (t.editorFontSize) out.editorFontSize = roundHalf(t.editorFontSize * ratio);
+    if (t.terminalFontSize) out.terminalFontSize = roundHalf(t.terminalFontSize * ratio);
+    if (t.sidebarFontSize) out.sidebarFontSize = Math.round(t.sidebarFontSize * ratio);
+  }
+  if (p.chatFontSize !== undefined) out.chatFontSize = p.chatFontSize;
+  if (p.codeFontSize) out.codeFontSize = p.codeFontSize;
+  return out;
 }

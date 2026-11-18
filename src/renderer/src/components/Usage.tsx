@@ -4,7 +4,7 @@ import type { AgentDef, AgentStatus, ContextUsage, RateLimitView, UsageSummary }
 import { api } from '../api';
 import { AgentLogo } from '../logos';
 import { contextLevel } from '../contextLevel';
-import { formatLimitsAge, liveLimits } from '../quota';
+import { formatLimitAmount, formatLimitsAge, liveLimits } from '../quota';
 
 export const fmtTokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : String(Math.round(n)));
 export const fmtCost = (n: number) => (n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toFixed(3)}` : '$0');
@@ -64,7 +64,7 @@ export function LimitBars({ limits }: { limits?: RateLimitView[] }) {
           <Meter
             value={l.utilization}
             label={l.label}
-            right={l.expired ? 'Reset · refreshing…' : `${l.utilization >= 0.999 ? 'Used up' : `${Math.round(l.utilization * 100)}% used`}${l.resetsAt ? ` · ${fmtReset(l.resetsAt)}` : ''}`}
+            right={l.expired ? 'Reset · refreshing…' : `${l.utilization >= 0.999 ? 'Used up' : `${Math.round(l.utilization * 100)}% used`}${l.amount ? ` · ${formatLimitAmount(l.amount)}` : ''}${l.resetsAt ? ` · ${fmtReset(l.resetsAt)}` : ''}`}
           />
         </div>
       ))}
@@ -171,10 +171,15 @@ export function UsagePage({ defs, statuses, onOpenThread, onClose }: { defs: Age
                     </div>
                   </div>
                   {st?.limits?.length ? (
-                    <LimitBars limits={st.limits} />
+                    <>
+                      <LimitBars limits={st.limits} />
+                      {st.limitsNote && <div className="small muted" data-testid="limits-note">{st.limitsNote}</div>}
+                    </>
                   ) : (
-                    <div className="small muted">
-                      {st?.limitsReadable
+                    <div className="small muted" data-testid={st?.limitsNote ? 'limits-note' : undefined}>
+                      {st?.limitsNote
+                        ? st.limitsNote
+                        : st?.limitsReadable
                         ? 'No plan limits to show (an API-key login has none).'
                         : st?.limitsRefreshing
                           ? 'Reading plan limits…'

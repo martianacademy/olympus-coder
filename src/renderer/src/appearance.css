@@ -46,3 +46,60 @@ html[data-density='compact'] .tool-group.work-group {
 .sidebar .thread-row + .thread-row { margin-top: var(--sb-row-gap, 0px); }
 /* The loading skeleton keeps the same rhythm as the real rows. */
 .sidebar .sk-list { gap: var(--sb-row-gap, 0px); }
+
+/* ---------- User message style (`Bubble` vs `Plain`), Message timestamps & Reduce motion ---------- */
+.msg-user-wrap {
+  align-items: flex-end;
+  gap: 3px;
+}
+
+html[data-user-msg='plain'] .msg-user-wrap {
+  align-items: stretch;
+}
+
+html[data-user-msg='plain'] .msg-user {
+  max-width: 100%;
+  padding: 2px 0 2px 13px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 0;
+}
+
+html[data-user-msg='plain'] .msg-user-wrap .msg-foot {
+  justify-content: flex-start;
+  padding-left: 13px;
+}
+
+.msg-time {
+  display: none;
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-msg-times='on'] .msg-time {
+  display: inline;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+html[data-msg-times='on'] .msg-wrap:hover .msg-time {
+  opacity: 0.85;
+}
+
+@media (hover: none), (pointer: coarse) {
+  html[data-msg-times='on'] .msg-time {
+    opacity: 0.75;
+  }
+}
+
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

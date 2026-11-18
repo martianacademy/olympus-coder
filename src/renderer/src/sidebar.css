@@ -1,0 +1,152 @@
+/*
+ * Left sidebar list (AppSidebar `.sidebar-scroll-wrap` / `.sidebar-scroll`, Sidebar.tsx & ChatNav.tsx rows):
+ *
+ * - Never scrolls horizontally: every row fits its width, `overflow-x: hidden` guards against overflow, and native
+ *   scrollbars are hidden (`scrollbar-width: none` / `::-webkit-scrollbar { display: none }`).
+ * - Vertical bar (`.sidebar-vbar` / `.sidebar-vbar-thumb`, driven by scrollActivity.ts) is a thin 5px DOM overlay
+ *   shown only while `.has-overflow` is set AND the pointer is inside, scrolling is active, or the thumb is dragged.
+ *   Because it overlays the existing right padding with `opacity`, row text never shifts by a single pixel, and it is
+ *   immune to Chromium/macOS vibrancy native-scrollbar fade-out quirks.
+ * - On desktop fine pointers, project and session hover actions float over the right end of their row with a smooth
+ *   alpha mask fade on the label/title instead of joining flex layout (zero horizontal overflow, zero title jump).
+ */
+
+.sidebar-scroll-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar .sidebar-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.sidebar .sidebar-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.sidebar-vbar {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 2px;
+  width: 5px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  z-index: 6;
+}
+.sidebar-scroll-wrap.has-overflow:is(:hover, .is-pointer-in, .is-scrolling, .is-dragging) > .sidebar-vbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar-vbar-thumb {
+  width: 100%;
+  min-height: 28px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+  cursor: default;
+  transition: background-color 0.12s ease;
+}
+.sidebar-vbar:hover .sidebar-vbar-thumb,
+.sidebar-scroll-wrap.is-dragging .sidebar-vbar-thumb {
+  background: color-mix(in srgb, var(--text) 46%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-vbar,
+  .sidebar-vbar-thumb {
+    transition: none;
+  }
+}
+html[data-reduce-motion='on'] .sidebar-vbar,
+html[data-reduce-motion='on'] .sidebar-vbar-thumb {
+  transition: none;
+}
+
+/* ---- project row: name + counts, actions float on hover ---- */
+.project-head {
+  position: relative;
+}
+.project-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.project-label .status-counts {
+  margin-left: 0;
+}
+
+.project-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 6px;
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+.project-head:hover > .project-actions,
+.project-head:focus-within > .project-actions {
+  display: inline-flex;
+}
+/* Mask fades the label smoothly under the floating icon buttons so glass vibrancy stays clean underneath. */
+.project-head:hover > .project-label,
+.project-head:focus-within > .project-label {
+  --pa-w: 73px;
+  -webkit-mask-image: linear-gradient(to left, transparent var(--pa-w), #000 calc(var(--pa-w) + 18px));
+  mask-image: linear-gradient(to left, transparent var(--pa-w), #000 calc(var(--pa-w) + 18px));
+}
+.project-head:hover:has(> .project-actions[data-count='4']) > .project-label,
+.project-head:focus-within:has(> .project-actions[data-count='4']) > .project-label {
+  --pa-w: 98px;
+}
+
+/* Desktop session rows: float action buttons on hover/focus so titles never jump or squeeze at narrow widths. */
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:not(.is-drawer) .thread-row {
+    position: relative;
+  }
+  .sidebar:not(.is-drawer) .thread-row > .row-actions {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 6px;
+    align-items: center;
+    gap: 1px;
+  }
+  .sidebar:not(.is-drawer) .thread-row:is(:hover, :focus-within) > .row-actions {
+    display: inline-flex;
+  }
+  .sidebar:not(.is-drawer) .thread-row:is(:hover, :focus-within) > .title {
+    -webkit-mask-image: linear-gradient(to left, transparent 68px, #000 86px);
+    mask-image: linear-gradient(to left, transparent 68px, #000 86px);
+  }
+  .sidebar:not(.is-drawer) .thread-row.flat:is(:hover, :focus-within) > .title {
+    -webkit-mask-image: linear-gradient(to left, transparent 48px, #000 64px);
+    mask-image: linear-gradient(to left, transparent 48px, #000 64px);
+  }
+}
+
+/* Touch screens have no hover: keep actions inline in normal flow, always visible, with no mask fade. */
+@media (pointer: coarse) {
+  .project-actions {
+    position: static;
+    display: inline-flex;
+    flex: none;
+  }
+  .project-head:hover > .project-label,
+  .project-head:focus-within > .project-label {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

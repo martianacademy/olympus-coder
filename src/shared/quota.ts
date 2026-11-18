@@ -46,11 +46,26 @@ export function formatLimitLine(l: RateLimitView): string {
   if (l.expired) return `${l.label}: reset, refreshing`;
   const pct = Number.isFinite(l.utilization) ? `${Math.round(l.utilization * 100)}% used` : (l.status ?? 'unknown');
   const reset = formatResetTime(l.resetsAt);
-  return `${l.label}: ${pct}${reset ? ` (${reset})` : ''}`;
+  const amount = formatLimitAmount(l.amount);
+  const extra = [amount, reset].filter(Boolean).join(', ');
+  return `${l.label}: ${pct}${extra ? ` (${extra})` : ''}`;
+}
+
+/** "$1.39 of $10" / "37 of 300 requests" for a limit with real amounts, else "". */
+export function formatLimitAmount(a: RateLimitView['amount']): string {
+  if (!a) return '';
+  if (a.unit === 'usd') {
+    const usd = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+    return `${usd(a.used)} of ${usd(a.limit)}`;
+  }
+  return `${Math.round(a.used).toLocaleString('en-US')} of ${Math.round(a.limit).toLocaleString('en-US')} requests`;
 }
 
 function modelGroupOf(model?: string): string | undefined {
   if (!model) return undefined;
+  // OpenCode / Olympus CLI model ids carry their provider: `openrouter/…`, `github-copilot/…`.
+  if (/^openrouter\//i.test(model)) return 'OpenRouter';
+  if (/^github-copilot\//i.test(model)) return 'GitHub Copilot';
   if (/gemini/i.test(model)) return 'Gemini';
   if (/claude|gpt|opus|sonnet|haiku|o[134]/i.test(model)) return 'Claude & GPT';
   return undefined;
@@ -62,7 +77,9 @@ function modelGroupOf(model?: string): string | undefined {
  */
 export function quotaState(status: AgentStatus | undefined, model?: string): QuotaState {
   // Expired windows count as reset (available), not as missing: see `liveLimits`.
-  const all = liveLimits(status?.limits);
+  // A limit on one of several providers (OpenCode's OpenRouter credits) counts only for that provider's models.
+  const wanted = modelGroupOf(model);
+  const all = liveLimits(status?.limits).filter((l) => !l.partial || (wanted !== undefined && l.group === wanted));
   if (!all.length) return { out: false, limits: [], otherGroupsLeft: [], availableGroups: [] };
 
   const isHit = (l: RateLimitView) => l.status === 'rejected' || l.utilization >= 0.999;
@@ -75,7 +92,7 @@ export function quotaState(status: AgentStatus | undefined, model?: string): Quo
     return { out: hit.length > 0, limits: hit, resetsAt, otherGroupsLeft: [], availableGroups };
   }
 
-  const wantedGroup = modelGroupOf(model);
+  const wantedGroup = wanted;
   const groupHasQuota = (g: string) => !all.filter((l) => l.group === g).some(isHit);
   const freeGroupNames = groups.filter(groupHasQuota);
 
@@ -150,5 +167,7 @@ export function formatResetTime(resetsAt?: number): string {
     const m = mins % 60;
     return `resets in ${h}h${m ? ` ${m}m` : ''}`;
   }
+  // Beyond a week (monthly quotas, a far weekly reset) the date reads better than a weekday: "resets Dec 1".
+  if (mins > 7 * 24 * 60) return `resets ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   return `resets ${d.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
 }

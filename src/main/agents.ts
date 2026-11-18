@@ -38,7 +38,8 @@ import { mcpServersFor } from './orchestrator';
 import { claimOlympusServerName, sharesMcpRegistry } from '@shared/olympusServer';
 import { keepWake, scheduleOf } from './agenttimers';
 import { acpServersFor } from './connectors';
-import { changedSince, changes, fileDiff, restore, snapshot } from './checkpoints';
+import { parseDiffHunks } from '@shared/diffHunks';
+import { applyHunkPatch, changedSince, changes, checkHunkStates, fileDiff, restore, snapshot } from './checkpoints';
 import {
   beginAgentInitiatedTurn,
   drainQueuedPrompts,
@@ -102,7 +103,8 @@ import { acpMcp, loginLinks, mcpStatus, noteAuthStatus, reapplyProvider, setAcpC
 import { authenticateParams, cliLoginArgs, effectiveAuthMethods, envForMethods, type AgentAuthMeta } from './acpAuth';
 import { afterSet, configRequest, configView, CONFIG_SESSION_CAPS, defaultsToApply, initialConfigOptions, mapConfigOptions, matchChoice, normalizeValue, withCurrentMode } from './acpConfig';
 import { describeServers, mcpStatusFromUpdate, nextCreateAttempt, supportsAcpMcp } from './acpMcp';
-import { probeCommandFor, ProbeSessions, runProbe } from './limitProbe';
+import { limitsKindOf, probeCommandFor, ProbeSessions, runProbe, type LimitsKind } from './limitProbe';
+import { openCodeDataDir, readOpenCodeCredentials, readOpenCodeLimits } from './providerLimits';
 import { LimitsService, type LimitsReadResult } from './limitsService';
 
 type Emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) => void;
@@ -423,8 +425,9 @@ class AgentConn {
    */
   async probeLimits(): Promise<LimitsReadResult | null> {
     await this.ensureStarted();
-    if (this.status.state === 'needs-login') return { limits: [], loggedOut: true };
-    const command = probeCommandFor(this.def.id, advertisedCommands(this.def.id));
+    if ((this.status.state as AgentStatus['state']) === 'needs-login') return { limits: [], loggedOut: true };
+    const kind = limitsKindOf(this.def);
+    const command = probeCommandFor(this.def.id, advertisedCommands(this.def.id), kind);
     const caps = this.init?.agentCapabilities ?? {};
     const dir = join(app.getPath('userData'), 'limits-probe');
     mkdirSync(dir, { recursive: true });
@@ -435,6 +438,9 @@ class AgentConn {
         cwd: dir,
         command,
         canClose: Boolean(caps.sessionCapabilities?.close),
+        kind,
+        // Olympus CLI keeps every session on disk: delete the probe's instead of leaving one per read.
+        deleteAfter: kind === 'olympus' && Boolean(caps.sessionCapabilities?.delete),
         // Claude: keep no transcript of the probe and start none of the user's MCP servers for it.
         meta: command === 'usage' || this.def.id === 'claude' ? { claudeCode: { options: { persistSession: false, strictMcpConfig: true, promptSuggestions: false } } } : undefined,
         timeoutMs: 45_000,
@@ -449,6 +455,58 @@ class AgentConn {
     }
   }
 
+  /**
+   * Antigravity quota: reads `RetrieveUserQuotaSummary` from any running `agy acp` HTTP server or Antigravity IDE hub
+   * in ~15 ms (`agyQuota.ts`). On a cold launch where neither is up yet, boots `agy acp` with one silent `session/new`
+   * (0 tokens, $0, no MCP servers) so its in-process HTTP server and subscription tier (`_meta.antigravity.tier`) load.
+   */
+  async probeAgyLimits(): Promise<LimitsReadResult> {
+    const fast = await fetchAgyQuota({ preferredPid: this.proc?.pid });
+    if (fast) return { limits: fast, ...(this.status.plan ? { plan: this.status.plan } : {}), ...(fast.length ? {} : { empty: true }) };
+    if (!this.installed() || this.status.state === 'needs-login') return { limits: [], unavailable: true };
+
+    try {
+      await this.ensureStarted();
+    } catch (e) {
+      if (isAuthError(e)) return { limits: [], loggedOut: true };
+      return { limits: [], unavailable: true };
+    }
+    if ((this.status.state as AgentStatus['state']) === 'needs-login') return { limits: [], loggedOut: true };
+
+    const dir = join(app.getPath('userData'), 'limits-probe');
+    mkdirSync(dir, { recursive: true });
+    let sid: string | undefined;
+    let tier: string | undefined = this.status.plan;
+    try {
+      const res: any = await Promise.race([
+        this.conn!.agent.request('session/new' as any, { cwd: dir, mcpServers: [] }),
+        timeout(25_000, 'Opening Antigravity limits session timed out'),
+      ]);
+      sid = res?.sessionId;
+      if (sid) probeSessions.open(sid);
+      if (typeof res?._meta?.antigravity?.tier?.name === 'string' && res._meta.antigravity.tier.name) {
+        tier = res._meta.antigravity.tier.name;
+      }
+      for (let i = 0; i < 20; i++) {
+        const limits = await fetchAgyQuota({ preferredPid: this.proc?.pid });
+        if (limits) return { limits, ...(tier ? { plan: tier } : {}), ...(limits.length ? {} : { empty: true }) };
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (tier && tier !== this.status.plan) this.setStatus({ plan: tier });
+      return { limits: [], unavailable: true };
+    } catch (e) {
+      if (isAuthError(e)) return { limits: [], loggedOut: true };
+      return { limits: [], unavailable: true };
+    } finally {
+      if (sid) {
+        probeSessions.close(sid);
+        if (this.init?.agentCapabilities?.sessionCapabilities?.close) {
+          await Promise.race([this.conn!.agent.request('session/close' as any, { sessionId: sid }), timeout(5000, 'Closing Antigravity limits session timed out')]).catch(() => {});
+        }
+      }
+    }
+  }
+
   /** Plan limits from a usage update (Claude sends five-hour and weekly windows). */
   onLimits(meta: any) {
     const rl = meta?.['_claude/rateLimit'];
@@ -457,7 +515,8 @@ class AgentConn {
     const LABEL: Record<string, string> = { five_hour: '5-hour limit', seven_day: 'Weekly limit', seven_day_opus: 'Weekly (Opus)', seven_day_sonnet: 'Weekly (Sonnet)' };
     const limits: RateLimitView[] = Object.entries(windows).map(([window, w]: [string, any]) => ({
       window,
-      label: LABEL[window] ?? window.replace(/_/g, ' '),
+      // Other agents may send the same shape (the Olympus CLI contract) with their own `label`.
+      label: LABEL[window] ?? (typeof w?.label === 'string' && w.label ? w.label.slice(0, 80) : window.replace(/_/g, ' ')),
       utilization: Math.max(0, Math.min(1, Number(w?.utilization ?? 0))),
       resetsAt: w?.resetsAt ? Number(w.resetsAt) * 1000 : undefined,
       status: w?.status,
@@ -584,6 +643,10 @@ const probeSessions = new ProbeSessions();
 /** Slash commands each agent advertised in any session (kept after the chat closes), for `probeCommandFor`. */
 const advertised = new Map<string, string[]>();
 const advertisedCommands = (agentId: string) => advertised.get(agentId);
+const kindOf = (agentId: string): LimitsKind | undefined => {
+  const d = agentDef(agentId);
+  return d ? limitsKindOf(d) : undefined;
+};
 
 /**
  * Keeps every ready agent's limits fresh (see limitsService.ts). Tests run with OLYMPUS_TEST_HIDDEN and poll only
@@ -607,14 +670,24 @@ limitsService.setHost({
         limitsAt: c.status.limitsAt,
       };
     }),
-  reader: (id) => (id === 'antigravity' ? 'daemon' : probeCommandFor(id, advertisedCommands(id)) ? 'probe' : null),
-  // Only a built-in agent with a known limits command is started just to read limits, and never when logged out.
-  mayStart: (id) => Boolean(probeCommandFor(id)) && getConn(id).status.state !== 'needs-login',
+  reader: (id) => {
+    const kind = kindOf(id);
+    if (kind === 'antigravity') return 'daemon';
+    // OpenCode advertises no limits command (only init/review/goal/compact): read its saved provider logins.
+    if (kind === 'opencode') return 'http';
+    return probeCommandFor(id, advertisedCommands(id), kind) ? 'probe' : null;
+  },
+  // Only an agent with a known limits reader (Antigravity, Claude, Codex, Olympus CLI) is started just to read limits,
+  // and never when logged out.
+  mayStart: (id) => (kindOf(id) === 'antigravity' || Boolean(probeCommandFor(id, undefined, kindOf(id)))) && getConn(id).status.state !== 'needs-login',
   read: async (id, reader) => {
     if (reader === 'daemon') {
-      const limits = await fetchAgyQuota();
-      if (!limits) return { limits: [], unavailable: true };
-      return { limits, ...(limits.length ? {} : { empty: true }) };
+      return getConn(id).probeAgyLimits();
+    }
+    if (reader === 'http') {
+      const env = { ...process.env, ...(agentDef(id)?.env ?? {}) };
+      const r = await readOpenCodeLimits(readOpenCodeCredentials(openCodeDataDir(env)));
+      return { limits: r.limits, note: r.note, plan: r.plan, ...(r.limits.length ? {} : { empty: true }) };
     }
     return getConn(id).probeLimits();
   },
@@ -1166,6 +1239,7 @@ export async function sendPrompt(threadId: string, text: string, attachments: At
  * (the user's, or one the agent started itself) the message waits in the chat's send-while-busy queue instead.
  */
 export function startPrompt(threadId: string, text: string, attachments: AttachmentView[] = [], opts: PromptOpts = {}): { item?: ThreadItem; done: Promise<void> } {
+  if (!opts.fromApp) freshUserTurnHook?.(threadId);
   const rt = runtimeFor(threadId);
   if (rt.running) {
     enqueuePrompt(threadId, text, attachments, { fromAgent: opts.fromAgent, fromApp: opts.fromApp });
@@ -1375,6 +1449,12 @@ function markNeedsLogin(rt: Runtime) {
   rt.status = 'needs-login';
 }
 
+let afterCheckpointHook: ((info: { thread: Thread; changedFiles: number }) => void) | undefined;
+export const onAfterTurnCheckpoint = (fn: (info: { thread: Thread; changedFiles: number }) => void) => (afterCheckpointHook = fn);
+
+let freshUserTurnHook: ((threadId: string) => void) | undefined;
+export const onFreshUserTurn = (fn: (threadId: string) => void) => (freshUserTurnHook = fn);
+
 /** After a turn: the "after" snapshot and what changed, shown under the turn. */
 async function finishCheckpoint(rt: Runtime, userItem: ThreadItem, projectId: string, cwd: string, before: string) {
   if (userItem.kind !== 'user') return;
@@ -1389,6 +1469,25 @@ async function finishCheckpoint(rt: Runtime, userItem: ThreadItem, projectId: st
     removed: files.reduce((a, f) => a + f.removed, 0),
   };
   pushItem(rt, userItem);
+  if (files.length > 0) afterCheckpointHook?.({ thread: rt.thread, changedFiles: files.length });
+}
+
+export function appendNoticeToThread(
+  threadId: string,
+  severity: 'info' | 'warning' | 'error',
+  title: string,
+  description?: string,
+) {
+  const rt = runtimeFor(threadId);
+  addItem(rt, {
+    kind: 'notice',
+    id: randomUUID(),
+    agentId: rt.agentId,
+    severity,
+    title,
+    ...(description ? { description } : {}),
+    ts: Date.now(),
+  });
 }
 
 function turnFor(threadId: string, itemId: string) {
@@ -1403,12 +1502,57 @@ function turnFor(threadId: string, itemId: string) {
 /** What a turn changed (from its snapshots). */
 export async function turnChanges(threadId: string, itemId: string) {
   const { cp, project } = turnFor(threadId, itemId);
-  return { files: await changes(project.id, project.path, cp.before, cp.after!), undone: Boolean(cp.undone) };
+  const files = await changes(project.id, project.path, cp.before, cp.after!);
+  const paths = files.map((f) => f.path);
+  const [diffFromAfter, diffFromBefore] = paths.length
+    ? await Promise.all([
+        changedSince(project.id, project.path, cp.after!, paths).catch(() => [] as string[]),
+        changedSince(project.id, project.path, cp.before, paths).catch(() => paths),
+      ])
+    : [[], []];
+  const afterSet = new Set(diffFromAfter);
+  const beforeSet = new Set(diffFromBefore);
+  const fileStates: Record<string, 'applied' | 'reverted' | 'partial'> = {};
+  for (const p of paths) {
+    fileStates[p] = !afterSet.has(p) ? 'applied' : !beforeSet.has(p) ? 'reverted' : 'partial';
+  }
+  return { files, undone: Boolean(cp.undone), fileStates };
 }
 
 export async function turnFileDiff(threadId: string, itemId: string, path: string) {
   const { cp, project } = turnFor(threadId, itemId);
   return fileDiff(project.id, project.path, cp.before, cp.after!, path);
+}
+
+/** Diff + per-hunk live working-tree status (`applied`, `reverted`, `modified`) for Turn Review. */
+export async function turnFileReview(threadId: string, itemId: string, path: string) {
+  const { cp, project } = turnFor(threadId, itemId);
+  const diff = await fileDiff(project.id, project.path, cp.before, cp.after!, path);
+  const parsed = parseDiffHunks(diff);
+  const hunkStates = parsed.hunks.length ? await checkHunkStates(project.id, project.path, parsed.hunks.map((h) => h.patch)) : [];
+  return { diff, hunkStates };
+}
+
+/** Revert (`to: 'before'`) or re-apply (`to: 'after'`) a single file from a turn's checkpoint. */
+export async function turnSetFile(threadId: string, itemId: string, path: string, to: 'before' | 'after') {
+  const { rt, cp, project } = turnFor(threadId, itemId);
+  if (rt.running) throw new Error('Wait for the agent to finish this turn first.');
+  const files = await changes(project.id, project.path, cp.before, cp.after!);
+  if (!files.some((f) => f.path === path)) throw new Error('File is not part of this turn.');
+  await restore(project.id, project.path, to === 'before' ? cp.before : cp.after!, [path]);
+  return turnChanges(threadId, itemId);
+}
+
+/** Revert (`action: 'revert'`) or re-apply (`action: 'apply'`) one diff hunk of a file in a turn's checkpoint. */
+export async function turnSetHunk(threadId: string, itemId: string, path: string, hunkIndex: number, action: 'revert' | 'apply') {
+  const { rt, cp, project } = turnFor(threadId, itemId);
+  if (rt.running) throw new Error('Wait for the agent to finish this turn first.');
+  const diff = await fileDiff(project.id, project.path, cp.before, cp.after!, path);
+  const hunk = parseDiffHunks(diff).hunks[hunkIndex];
+  if (!hunk) throw new Error('Diff hunk not found.');
+  await applyHunkPatch(project.id, project.path, hunk.patch, action === 'revert');
+  const [review, overview] = await Promise.all([turnFileReview(threadId, itemId, path), turnChanges(threadId, itemId)]);
+  return { ...review, fileStates: overview.fileStates };
 }
 
 /** Before an Undo: the files it would put back, and which of them changed again after the turn. */
@@ -2417,6 +2561,8 @@ const OLYMPUS_TOOLS = [
   'add_agent',
   'add_custom_agent',
   'remove_agent',
+  // Adds a folder to the sidebar (and may open a chat there); the new chat asks for its own edits and commands.
+  'create_project',
 ];
 
 /**

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Copy, Eraser, FlaskConical, Globe, Play, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
 import type { PortInfo, TerminalView } from '@shared/types';
 import { api, onEvent } from '../api';
-import { composeInChat, portInUse } from '../compose';
+import { portInUse } from '../compose';
+import { triggerFixError } from '../fixError';
 import { WORKBENCH_SHEET_BP } from '../responsive';
 import { parseTestOutput, type TestResult } from '../tests';
 import { Terminal, terminalAction, terminalLineCount, terminalText, terminalTextFrom } from './Terminal';
@@ -101,16 +102,24 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
   const markError = (id: string, on: boolean) => setErrored((e) => (Boolean(e[id]) === on ? e : { ...e, [id]: on }));
 
   const askFixTests = (t: TerminalView, r: TestResult) => {
-    const failedLines = r.failures.slice(0, 20).map((f) => `- ${f.name}${f.ref && !f.name.startsWith(f.ref) ? ` (${f.ref})` : ''}`).join('\n');
-    composeInChat(
-      `${r.failed} test${r.failed > 1 ? 's' : ''} failed (${r.runner}) in the terminal "${t.title}". Find the cause and fix ${r.failed > 1 ? 'them' : 'it'}, then run the tests again.\n\n${failedLines ? `${failedLines}\n\n` : ''}\`\`\`text\n${terminalText(t.ptyId, 80)}\n\`\`\``,
-    );
+    const failedLines = r.failures.slice(0, 20).map((f) => `- ${f.name}${f.ref && !f.name.startsWith(f.ref) ? ` (${f.ref})` : ''}`);
+    void triggerFixError({
+      source: 'tests',
+      title: `${r.failed} test${r.failed > 1 ? 's' : ''} failed (${r.runner}) in terminal "${t.title}"`,
+      output: terminalText(t.ptyId, 80),
+      failedItems: failedLines,
+      projectId,
+    });
     if (typeof window !== 'undefined' && window.innerWidth <= WORKBENCH_SHEET_BP) onClose();
   };
 
   const askFix = (t: TerminalView) => {
-    const out = terminalText(t.ptyId, 60);
-    composeInChat(`This failed in the terminal "${t.title}". Find the cause and fix it.\n\n\`\`\`text\n${out}\n\`\`\``);
+    void triggerFixError({
+      source: 'terminal',
+      title: t.title,
+      output: terminalText(t.ptyId, 60),
+      projectId,
+    });
     markError(t.ptyId, false);
     if (typeof window !== 'undefined' && window.innerWidth <= WORKBENCH_SHEET_BP) onClose();
   };

@@ -10,8 +10,15 @@ import { isExternalUrl, LinkedText, looksLikePath, RefBaseContext, RunCommandCon
 import { copyText } from '../clipboard';
 import { HighlightedCode } from '../codeHighlight';
 import { langFromFence } from '../codeLang';
+import { normalizeMath } from '@shared/markdownMath';
+import { isViewerTarget, openViewer, viewerAttrs, viewerKindOf } from './MediaViewer';
 
-/** Web links open in the browser; every other link (a file path, file://, path:line) opens in the side panel. */
+function openRefSmart(ref: string, from: Element | null, openInPanel: (r: string) => void) {
+  if (isViewerTarget(ref)) openViewer({ ref, from, openInPanel });
+  else openInPanel(ref);
+}
+
+/** Web links open in the browser; media/rich-doc links open in MediaViewer; code/line links open in the side panel. */
 function MdLink({ href, children }: { href?: string; children?: React.ReactNode }) {
   const open = useOpenFile();
   const base = useContext(RefBaseContext);
@@ -20,12 +27,12 @@ function MdLink({ href, children }: { href?: string; children?: React.ReactNode 
     <a
       href={href}
       className={file ? 'file-link' : undefined}
-      title={file ? `Open ${href} in the side panel` : href}
+      title={file ? `Open ${href}` : href}
       onClick={(e) => {
         e.preventDefault();
         if (!href) return;
         if (isExternalUrl(href)) void api.openExternal(href);
-        else if (file) open(withBase(href, base));
+        else if (file) openRefSmart(withBase(href, base), e.currentTarget, open);
       }}
     >
       {children}
@@ -45,7 +52,7 @@ function MdCode({ className, children }: { className?: string; children?: React.
         : null;
   if (!className && text && !text.includes('\n') && looksLikePath(text)) {
     return (
-      <code className="file-ref" title={`Open ${text} in the side panel`} onClick={() => open(withBase(text, base))}>
+      <code className="file-ref" title={`Open ${text}`} onClick={(e) => openRefSmart(withBase(text, base), e.currentTarget, open)}>
         {children}
       </code>
     );
@@ -53,7 +60,7 @@ function MdCode({ className, children }: { className?: string; children?: React.
   return <code className={className}>{children}</code>;
 }
 
-/** Images: web and data URLs as they are; local paths are read through the app. */
+/** Images: web and data URLs as they are; local paths are read through the app and open in MediaViewer. */
 function MdImage({ src, alt }: { src?: string; alt?: string }) {
   const open = useOpenFile();
   const base = useContext(RefBaseContext);
@@ -67,38 +74,23 @@ function MdImage({ src, alt }: { src?: string; alt?: string }) {
     };
   }, [src, base]);
   const clickable = Boolean(src && !/^(https?:|data:)/i.test(src));
+  const resolved = src ? withBase(src, base) : '';
   return url ? (
     <img
       src={url}
       alt={alt ?? ''}
+      {...(clickable ? viewerAttrs(resolved, viewerKindOf(resolved), alt || undefined) : {})}
       className={`md-img ${clickable ? 'is-clickable' : ''}`}
       title={clickable ? 'Click to open preview' : alt}
-      onClick={clickable ? () => open(withBase(src!, base)) : undefined}
+      onClick={clickable ? (e) => openRefSmart(resolved, e.currentTarget, open) : undefined}
     />
   ) : (
     <span className="muted small">[image: {alt || src}]</span>
   );
 }
 
-/**
- * Agents write math in several ways; remark-math only treats a `$$` block on its own lines as display math.
- * A line that is just `$$…$$` becomes a display block, and `\[…\]` / `\(…\)` become `$$…$$` / `$…$`.
- * Fenced code is left alone here (CodeBlock highlights it by its fence language).
- */
-export function normalizeMath(md: string): string {
-  if (!/\$\$|\\\[|\\\(/.test(md)) return md;
-  return md
-    .split(/(^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)[ \t]*$)/m)
-    .map((part, i) =>
-      i % 2 === 1
-        ? part
-        : part
-            .replace(/\\\[([\s\S]+?)\\\]/g, (_m, body: string) => `\n$$\n${body.trim()}\n$$\n`)
-            .replace(/\\\(([\s\S]+?)\\\)/g, (_m, body: string) => `$${body.trim()}$`)
-            .replace(/^[ \t]*\$\$([^\n]+?)\$\$[ \t]*$/gm, (_m, body: string) => `$$\n${body.trim()}\n$$`),
-    )
-    .join('');
-}
+/** Math syntax clean-up and money-vs-math `$` handling live in @shared/markdownMath (unit-tested). */
+export { normalizeMath };
 
 const SHELL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console', 'terminal', 'fish', 'powershell', 'ps1', 'pwsh', 'cmd', 'bat']);
 const PLAIN_LANGS = new Set(['text', 'txt', 'plaintext', 'log', 'logs', 'output', 'console', 'stacktrace', 'traceback', 'error']);

@@ -63,3 +63,71 @@ export interface DeletableAgentSession {
   agentId: AgentId;
   sessionId: string;
 }
+
+/** Summary of sub-sessions and deletable agent sessions for DeleteChatDialog. */
+export interface DeleteChatTargets {
+  /** Deletable agent IDs for the target chat itself. */
+  ownAgents: AgentId[];
+  /** User-visible sub-sessions (`!nativeSubagent`) under the target chat, ordered leaves-first. */
+  subsessions: { id: string; title: string }[];
+  /** Deletable agent IDs across the target chat and all its sub-sessions. */
+  allAgents: AgentId[];
+}
+
+/**
+ * Collects every user-visible sub-session (`!nativeSubagent`) under `rootId` (workers, forks, second opinions,
+ * and nested forks), ordered leaves-first so children are deleted before their parents.
+ */
+export function collectSubsessions<T extends { id: string; parentId?: string; nativeSubagent?: boolean }>(
+  threads: readonly T[],
+  rootId: string,
+): T[] {
+  const byParent = new Map<string, T[]>();
+  for (const t of threads) {
+    if (t.nativeSubagent || !t.parentId || t.id === rootId) continue;
+    const arr = byParent.get(t.parentId);
+    if (arr) arr.push(t);
+    else byParent.set(t.parentId, [t]);
+  }
+  const out: T[] = [];
+  const visited = new Set<string>([rootId]);
+  const walk = (parentId: string) => {
+    for (const child of byParent.get(parentId) ?? []) {
+      if (visited.has(child.id)) continue;
+      visited.add(child.id);
+      walk(child.id);
+      out.push(child);
+    }
+  };
+  walk(rootId);
+  return out;
+}
+
+/**
+ * Collects internal CLI sub-agent mirror threads (`nativeSubagent: true`) attached under `rootId`, ordered
+ * leaves-first so deleting their owning chat never leaves orphaned mirror files on disk.
+ */
+export function collectNativeSubagents<T extends { id: string; parentId?: string; nativeSubagent?: boolean }>(
+  threads: readonly T[],
+  rootId: string,
+): T[] {
+  const byParent = new Map<string, T[]>();
+  for (const t of threads) {
+    if (!t.nativeSubagent || !t.parentId || t.id === rootId) continue;
+    const arr = byParent.get(t.parentId);
+    if (arr) arr.push(t);
+    else byParent.set(t.parentId, [t]);
+  }
+  const out: T[] = [];
+  const visited = new Set<string>([rootId]);
+  const walk = (parentId: string) => {
+    for (const child of byParent.get(parentId) ?? []) {
+      if (visited.has(child.id)) continue;
+      visited.add(child.id);
+      walk(child.id);
+      out.push(child);
+    }
+  };
+  walk(rootId);
+  return out;
+}

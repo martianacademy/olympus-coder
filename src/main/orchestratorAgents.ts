@@ -123,7 +123,9 @@ export async function formatAgentCatalog(currentAgentId: string): Promise<string
     const stateLabel = q.out ? 'quota-exceeded' : (st?.state ?? 'unknown');
     const head = `### ${d.id} — ${d.name}${d.id === currentAgentId ? ' (this session)' : ''} · ${stateLabel}${st?.plan ? ` · plan: ${st.plan}` : ''}`;
     const age = st?.limitsAt ? ` (${formatLimitsAge(st.limitsAt).toLowerCase()})` : '';
-    const limitLines = st?.limits?.length ? [`  limits${age}: ${liveLimits(st.limits).map(formatLimitLine).join(' · ')}`] : ['  limits: not reported yet'];
+    // A read that found nothing to count says so honestly ("LM Studio · local model, no limits"), never "not reported".
+    const note = st?.limitsNote ? [`  ${st.limits?.length ? 'also' : `limits${age}`}: ${st.limitsNote}`] : [];
+    const limitLines = st?.limits?.length ? [`  limits${age}: ${liveLimits(st.limits).map(formatLimitLine).join(' · ')}`, ...note] : note.length ? note : ['  limits: not reported yet'];
     const optLines = formatOptions(knownOptionsForAgent(d.id), defaults[d.id]);
     return [head, ...limitLines, ...optLines].join('\n');
   });

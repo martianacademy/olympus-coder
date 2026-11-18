@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetSta
 import type { AgentStatus, AppState, DeskEvents, Project, SessionView, Thread, ThreadItem, ThreadMeta, UiMode } from '@shared/types';
 import { withItem } from '@shared/itemOrder';
 import { onEvent, terminalAskedRecently } from './api';
+import { clearDraft } from './drafts';
 import { addTerminal, type WorkbenchTab } from './components/Workbench';
 import type { SettingsTab } from './components/Settings';
 import { isRemoteBrowser, WORKBENCH_SHEET_BP } from './responsive';
@@ -36,6 +37,8 @@ export interface AppSyncParams {
   onMenuCommand: (cmd: string) => void;
   /** A chat was deleted anywhere (this window, the main process, a phone): leave it if it is open. */
   onThreadDeleted: (d: DeskEvents['thread:deleted']) => void;
+  /** projects.json changed anywhere (this window, an agent's create_project, an outside write): the new list. */
+  onProjectsChanged: (list: Project[]) => void;
 }
 
 /**
@@ -81,6 +84,8 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
   menuRef.current = params.onMenuCommand;
   const deletedRef = useRef(params.onThreadDeleted);
   deletedRef.current = params.onThreadDeleted;
+  const projectsRef = useRef(params.onProjectsChanged);
+  projectsRef.current = params.onProjectsChanged;
   const tasksShown = useRef<Set<string>>(new Set());
   const bumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -191,8 +196,12 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
           if (m.id === activeIdRef.current) setActive((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove } : t));
           break;
         }
+        case 'projects:changed':
+          projectsRef.current(payload as DeskEvents['projects:changed']);
+          break;
         case 'thread:deleted': {
           const d = payload as DeskEvents['thread:deleted'];
+          clearDraft(d.id);
           deletedRef.current(d);
           setThreads((all) => (all[d.projectId]?.some((x) => x.id === d.id) ? { ...all, [d.projectId]: all[d.projectId].filter((x) => x.id !== d.id) } : all));
           break;

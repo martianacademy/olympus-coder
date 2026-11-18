@@ -102,11 +102,14 @@ export function Sidebar(props: Props) {
             >
               {open ? <ChevronDown size={14} className="muted" /> : <ChevronRight size={14} className="muted" />}
               {open ? <FolderOpen size={15} className="muted" /> : <Folder size={15} className="muted" />}
-              <span className="ellipsis project-name" style={{ fontWeight: 550 }}>
-                {p.name}
+              {/* Name + counts take the free width; on hover the actions float over its right end (sidebar.css), so the
+                  row never gets wider than the list and nothing re-lays out. */}
+              <span className="project-label">
+                <span className="ellipsis project-name" style={{ fontWeight: 550 }}>
+                  {p.name}
+                </span>
+                <StatusCounts threadIds={list.map((t) => t.id)} />
               </span>
-              <StatusCounts threadIds={list.map((t) => t.id)} />
-              <span className="grow" />
               {props.compact ? (
                 <SidebarRowMenu
                   title="Project actions"
@@ -120,7 +123,7 @@ export function Sidebar(props: Props) {
                   ]}
                 />
               ) : (
-                <>
+                <span className="project-actions" data-count={props.onImport ? 4 : 3}>
                   <button className="btn ghost icon" title="New chat in this project" onClick={(e) => (e.stopPropagation(), props.onNew(p.id))}>
                     <Plus size={14} />
                   </button>
@@ -148,7 +151,7 @@ export function Sidebar(props: Props) {
                   <button className="btn ghost icon" title="Remove from list" onClick={(e) => (e.stopPropagation(), props.onRemoveProject(p))}>
                     <X size={13} />
                   </button>
-                </>
+                </span>
               )}
             </div>
             {p.missing && props.onLocate && (

@@ -4,13 +4,13 @@ Known issues in Olympus Coder. Fixed items stay listed with the date they were f
 
 ## Open
 
-- **No single-instance guard.** The app never calls `app.requestSingleInstanceLock()`, so two copies can run with the
-  same userData (automated tests avoid this with their own `--user-data-dir`). Seen 2026-11-17: two copies raced the
-  whisper pid file (one pid glued to another: `6766855360`) and each kept a warm whisper-server. The pid file itself is
-  now hardened (`pidsInFile` parses glued pids, writes are tmp+rename), but running two copies with one userData is
-  still unsupported.
+None currently tracked.
 
 ## Fixed
+
+- 2026-11-18 — Single-instance guard: `src/main/index.ts` now acquires `app.requestSingleInstanceLock()` right after
+  resolving `userData` (before starting services or `will-quit` hooks, so a duplicate copy exits without stopping the
+  primary copy's warm `whisper-server` or staged updates) and focuses/reopens the main window on `second-instance`.
 
 - 2026-11-17 — Phone, landscape video markup: the screen slid out of the viewport. The floating sheet now wraps the
   video and loading screens too, not just the image editor.

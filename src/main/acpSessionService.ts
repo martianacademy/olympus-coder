@@ -1,4 +1,13 @@
-import type { AcpSessionSupport, AcpSideEffect, DeletableAgentSession, HomeSessionOptions, NativeArchiveFilter, NativeSessionPage } from '@shared/acpSessions';
+import {
+  collectSubsessions,
+  type AcpSessionSupport,
+  type AcpSideEffect,
+  type DeletableAgentSession,
+  type DeleteChatTargets,
+  type HomeSessionOptions,
+  type NativeArchiveFilter,
+  type NativeSessionPage,
+} from '@shared/acpSessions';
 import type { AgentId, ConfigOptionView, Project, Settings, Thread, ThreadMeta } from '@shared/types';
 import {
   archiveSession,
@@ -158,6 +167,17 @@ export async function deleteNative(agentId: AgentId, sessionId: string): Promise
 // ------------------------------------------------------------------ chat delete / close
 
 /**
+ * User-visible sub-sessions (`!nativeSubagent`) under `threadId` in the project tree (workers, forks, second
+ * opinions, and nested forks), ordered leaves-first so children are deleted before their parent.
+ */
+export function subsessionsOf(threadId: string): ThreadMeta[] {
+  const { store } = need();
+  const root = store.findThread(threadId);
+  if (!root) return [];
+  return collectSubsessions(store.listThreads(root.projectId), threadId);
+}
+
+/**
  * The agent sessions behind a chat, for the delete dialog. `canDelete` is known only for agents running now
  * (`undefined` = not running, the dialog still offers it and the delete starts the agent).
  */
@@ -173,6 +193,26 @@ export async function deletableSessions(threadId: string): Promise<(DeletableAge
   return out.filter((s) => s.canDelete !== false);
 }
 
+/**
+ * Everything `DeleteChatDialog` needs for a chat: its own deletable agent IDs, its user-visible sub-sessions,
+ * and the union of deletable agent IDs when sub-sessions are deleted alongside the parent.
+ */
+export async function deleteTargets(threadId: string): Promise<DeleteChatTargets> {
+  const subs = subsessionsOf(threadId);
+  const own = await deletableSessions(threadId);
+  const ownAgents = [...new Set(own.map((s) => s.agentId))];
+  if (!subs.length) return { ownAgents, subsessions: [], allAgents: ownAgents };
+  const allSet = new Set<AgentId>(ownAgents);
+  for (const sub of subs) {
+    for (const s of await deletableSessions(sub.id)) allSet.add(s.agentId);
+  }
+  return {
+    ownAgents,
+    subsessions: subs.map((s) => ({ id: s.id, title: s.title })),
+    allAgents: [...allSet],
+  };
+}
+
 /** Release the agent side of a chat: `session/close` on every agent that is running and supports it. */
 export async function closeChatSessions(threadId: string): Promise<Record<AgentId, AcpSideEffect>> {
   const t = deps?.store.findThread(threadId);
@@ -186,23 +226,46 @@ export async function closeChatSessions(threadId: string): Promise<Record<AgentI
 }
 
 /**
- * Before a chat is deleted: with `alsoAgentSessions` (the user ticked the box) each agent deletes its own saved
- * session; otherwise the sessions are only closed, so the agent can still list and resume them.
+ * Before one or more chats are deleted: with `alsoAgentSessions` (the user ticked the box) each agent deletes its
+ * own saved sessions; otherwise the sessions are only closed, so the agent can still list and resume them.
+ * Deduplicates `(agentId, sessionId)` pairs and preserves any non-`'done'` outcome per agent.
  */
-export async function beforeDeleteChat(threadId: string, alsoAgentSessions: boolean): Promise<Record<AgentId, AcpSideEffect>> {
-  if (!alsoAgentSessions) return closeChatSessions(threadId);
-  const t = need().store.findThread(threadId);
+export async function beforeDeleteChats(threadIds: readonly string[], alsoAgentSessions: boolean): Promise<Record<AgentId, AcpSideEffect>> {
   const out: Record<AgentId, AcpSideEffect> = {};
-  for (const [agentId, sessionId] of Object.entries(t?.acpSessions ?? {})) {
-    if (!sessionId) continue;
-    out[agentId] = await deleteNative(agentId, sessionId);
-    if (out[agentId] === 'unsupported') {
-      // Still release it: an agent that cannot delete may at least close.
-      const c = await connect(agentId, false);
-      if (c && sessionSupport(c.caps).close) await bestEffort(() => closeSession(c.conn, c.caps, sessionId));
+  const seenPairs = new Set<string>();
+  const record = (agentId: AgentId, effect: AcpSideEffect) => {
+    const prev = out[agentId];
+    if (!prev || prev === 'done') out[agentId] = effect;
+  };
+  for (const threadId of threadIds) {
+    const t = (alsoAgentSessions ? need().store : deps?.store)?.findThread(threadId);
+    for (const [agentId, sessionId] of Object.entries(t?.acpSessions ?? {})) {
+      if (!sessionId) continue;
+      const key = `${agentId}\0${sessionId}`;
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
+      if (!alsoAgentSessions) {
+        const c = await connect(agentId, false);
+        record(agentId, !c ? 'not-running' : sessionSupport(c.caps).close ? await bestEffort(() => closeSession(c.conn, c.caps, sessionId)) : 'unsupported');
+        continue;
+      }
+      const effect = await deleteNative(agentId, sessionId);
+      record(agentId, effect);
+      if (effect === 'unsupported') {
+        // Still release it: an agent that cannot delete may at least close.
+        const c = await connect(agentId, false);
+        if (c && sessionSupport(c.caps).close) await bestEffort(() => closeSession(c.conn, c.caps, sessionId));
+      }
     }
   }
   return out;
+}
+
+/**
+ * Before a single chat is deleted: closes or deletes its saved agent sessions.
+ */
+export async function beforeDeleteChat(threadId: string, alsoAgentSessions: boolean): Promise<Record<AgentId, AcpSideEffect>> {
+  return beforeDeleteChats([threadId], alsoAgentSessions);
 }
 
 // ------------------------------------------------------------------ rename / fork / status

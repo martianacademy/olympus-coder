@@ -21,6 +21,7 @@ registerHooks({
   },
 });
 
+const SH = await import(`${APP}/src/shared/acpSessions.ts`);
 const S = await import(`${APP}/src/main/acpSessions.ts`);
 const SVC = await import(`${APP}/src/main/acpSessionService.ts`);
 const SDK = await import(`${APP}/node_modules/@agentclientprotocol/sdk/dist/v1/unstable/acp.js`);
@@ -630,6 +631,83 @@ await test('service: chatSessionStatus reports the current agent session', async
   assert.deepEqual(await SVC.chatSessionStatus(t.id), { agentId: 'claude', sessionId: 'sc', status: 'open' });
   const t2 = f.store.createThread('p1', 'claude');
   assert.deepEqual(await SVC.chatSessionStatus(t2.id), { agentId: 'claude', status: 'unknown' });
+});
+
+await test('shared: collectSubsessions orders leaves-first, skips nativeSubagent, and guards cycles', () => {
+  const list = [
+    { id: 'root', title: 'Main' },
+    { id: 'w1', parentId: 'root', title: 'Worker 1' },
+    { id: 'f1', parentId: 'root', title: 'Fork 1' },
+    { id: 'f2', parentId: 'f1', title: 'Nested fork' },
+    { id: 'nat1', parentId: 'root', nativeSubagent: true, title: 'Internal sub-agent' },
+    { id: 'nat2', parentId: 'nat1', nativeSubagent: true, title: 'Nested internal' },
+    { id: 'cycA', parentId: 'cycB', title: 'Cycle A' },
+    { id: 'cycB', parentId: 'cycA', title: 'Cycle B' },
+  ];
+  assert.deepEqual(
+    SH.collectSubsessions(list, 'root').map((x) => x.id),
+    ['w1', 'f2', 'f1'],
+  );
+  assert.deepEqual(
+    SH.collectNativeSubagents(list, 'root').map((x) => x.id),
+    ['nat2', 'nat1'],
+  );
+  assert.deepEqual(SH.collectSubsessions(list, 'cycA').map((x) => x.id), ['cycB']);
+});
+
+await test('service: deleteTargets collects visible sub-sessions and unions deletable agent sessions', async () => {
+  const f = serviceFixture();
+  const root = f.store.createThread('p1', 'antigravity', { title: 'Orchestrator' });
+  const w1 = f.store.createThread('p1', 'claude', { title: 'Worker 1', parentId: root.id, spawnedBy: root.id, acpSessions: { claude: 'sc-w1' } });
+  const f1 = f.store.createThread('p1', 'codex', { title: '↳ Orchestrator', parentId: root.id, acpSessions: { codex: 'sx-f1' } });
+  const f2 = f.store.createThread('p1', 'claude', { title: '↳ ↳ Orchestrator', parentId: f1.id, acpSessions: { claude: 'sc-f2' } });
+  f.store.createThread('p1', 'claude', { title: 'Internal mirror', parentId: root.id, nativeSubagent: true, acpSessions: { claude: 'sc-nat' } });
+
+  const targets = await SVC.deleteTargets(root.id);
+  assert.deepEqual(targets.ownAgents, [], 'parent has no deletable agent session');
+  assert.deepEqual(targets.subsessions, [
+    { id: w1.id, title: 'Worker 1' },
+    { id: f2.id, title: '↳ ↳ Orchestrator' },
+    { id: f1.id, title: '↳ Orchestrator' },
+  ]);
+  assert.deepEqual(targets.allAgents, ['claude', 'codex']);
+});
+
+await test('service: beforeDeleteChats closes or deletes across sub-sessions, deduplicates, and preserves failures', async () => {
+  let failSecond = false;
+  const f = serviceFixture({
+    handlers: {
+      'session/delete': (p) => {
+        if (failSecond && p.sessionId === 'sc-parent') throw new Error('boom');
+        return {};
+      },
+    },
+  });
+  const parent = f.store.createThread('p1', 'claude', { acpSessions: { claude: 'sc-parent' } });
+  const sub1 = f.store.createThread('p1', 'claude', { parentId: parent.id, acpSessions: { claude: 'sc-sub1' } });
+  const subDup = f.store.createThread('p1', 'claude', { parentId: parent.id, acpSessions: { claude: 'sc-sub1' } });
+
+  const closed = await SVC.beforeDeleteChats([sub1.id, subDup.id, parent.id], false);
+  assert.deepEqual(closed, { claude: 'done' });
+  assert.deepEqual(
+    f.conn.calls.map((c) => [c.method, c.params.sessionId]),
+    [
+      ['session/close', 'sc-sub1'],
+      ['session/close', 'sc-parent'],
+    ],
+  );
+
+  f.conn.calls.length = 0;
+  failSecond = true;
+  const deleted = await SVC.beforeDeleteChats([sub1.id, parent.id], true);
+  assert.deepEqual(deleted, { claude: 'failed' }, 'a failure on one session is not masked by another succeeding');
+  assert.deepEqual(
+    f.conn.calls.map((c) => [c.method, c.params.sessionId]),
+    [
+      ['session/delete', 'sc-sub1'],
+      ['session/delete', 'sc-parent'],
+    ],
+  );
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

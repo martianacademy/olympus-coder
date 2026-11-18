@@ -174,6 +174,10 @@ export const sharedRoot = () => getSettings().sharedRoot;
 const projectsFile = () => join(sharedRoot(), 'projects.json');
 const threadsDir = (projectId: string) => join(sharedRoot(), 'threads', projectId);
 
+/** Told after every write of projects.json by the app (add, remove, reorder, relocate/rename): see projectWatch.ts. */
+let projectsWritten: () => void = () => {};
+export const onProjectsWritten = (fn: () => void) => (projectsWritten = fn);
+
 export function listProjects(): Project[] {
   return readJson<Project[]>(projectsFile(), []).filter((p) => existsSync(p.path));
 }
@@ -194,6 +198,7 @@ export function relocateProject(id: string, newPath: string): Project {
   if (!p) throw new Error('Project not found.');
   const r = relocateOnDisk({ sharedRoot: sharedRoot(), home: homedir(), oldPath: p.path, newPath, projectId: id });
   console.log(`[relocate] ${p.path} → ${newPath}\n  ${r.steps.join('\n  ')}`);
+  projectsWritten();
   return { ...p, ...r.project! };
 }
 
@@ -205,12 +210,14 @@ export function generalProject(): Project {
   return { id: GENERAL_PROJECT_ID, name: 'General', path, createdAt: 0 };
 }
 
-export function addProject(path: string): Project {
+/** Adds a project for `path`; a path that is already a project returns that project (never a duplicate). */
+export function addProject(path: string, name?: string): Project {
   const all = readJson<Project[]>(projectsFile(), []);
   const existing = all.find((p) => p.path === path);
   if (existing) return existing;
-  const project: Project = { id: randomUUID(), name: basename(path), path, createdAt: Date.now() };
+  const project: Project = { id: randomUUID(), name: name?.trim() || basename(path), path, createdAt: Date.now() };
   writeJson(projectsFile(), [...all, project]);
+  projectsWritten();
   return project;
 }
 
@@ -220,6 +227,7 @@ export function reorderProjects(ids: string[]): void {
   const rank = new Map(ids.map((id, i) => [id, i]));
   const sorted = [...all].sort((a, b) => (rank.get(a.id) ?? 1e9 + all.indexOf(a)) - (rank.get(b.id) ?? 1e9 + all.indexOf(b)));
   writeJson(projectsFile(), sorted);
+  projectsWritten();
 }
 
 export function removeProject(id: string): void {
@@ -227,6 +235,19 @@ export function removeProject(id: string): void {
     projectsFile(),
     readJson<Project[]>(projectsFile(), []).filter((p) => p.id !== id),
   );
+  projectsWritten();
+}
+
+export function updateProjectVerifyGate(id: string, verifyGate: Project['verifyGate']): Project | undefined {
+  if (id === GENERAL_PROJECT_ID) return undefined;
+  const all = readJson<Project[]>(projectsFile(), []);
+  const idx = all.findIndex((p) => p.id === id);
+  if (idx < 0) return undefined;
+  const updated: Project = { ...all[idx], verifyGate };
+  all[idx] = updated;
+  writeJson(projectsFile(), all);
+  projectsWritten();
+  return updated;
 }
 
 export function getProject(id: string): Project | undefined {

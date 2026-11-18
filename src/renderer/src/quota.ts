@@ -1,1 +1,1 @@
-export { quotaState, isQuotaMessage, isQuotaErrorText, formatResetTime, formatLimitsAge, liveLimits, type QuotaState } from '@shared/quota';
+export { quotaState, isQuotaMessage, isQuotaErrorText, formatResetTime, formatLimitsAge, formatLimitAmount, liveLimits, type QuotaState } from '@shared/quota';

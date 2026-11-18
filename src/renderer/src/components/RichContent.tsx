@@ -20,7 +20,7 @@ import { useOpenFile } from '../fileLinks';
 import { isRemoteBrowser } from '../responsive';
 import { Markdown } from './ChatMarkdown';
 import { downloadFileRef } from './InlineFilePreviews';
-import { openViewer, viewerAttrs } from './MediaViewer';
+import { isViewerTarget, openViewer, viewerAttrs } from './MediaViewer';
 import { AddToMessageButton } from './AddToMessage';
 import { StepBox } from './StepBox';
 import '../richContent.css';
@@ -331,7 +331,11 @@ export function LocationLinks({ locations, max = 12 }: { locations: ToolLocation
           className="rich-loc mono"
           data-testid="tool-location"
           title={l.line ? `Open ${l.path} at line ${l.line}` : `Open ${l.path}`}
-          onClick={() => openFile(locationRef(l))}
+          onClick={(e) => {
+            const ref = locationRef(l);
+            if (!l.line && isViewerTarget(l.path)) openViewer({ ref: l.path, from: e.currentTarget, openInPanel: openFile });
+            else openFile(ref);
+          }}
         >
           <MapPin size={11} />
           <span className="ellipsis">{baseNameOf(l.path)}</span>

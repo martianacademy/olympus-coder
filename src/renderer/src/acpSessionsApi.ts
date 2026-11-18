@@ -1,4 +1,4 @@
-import type { AcpSessionSupport, AcpSideEffect, DeletableAgentSession, HomeSessionOptions, NativeArchiveFilter, NativeSessionPage } from '@shared/acpSessions';
+import type { AcpSessionSupport, AcpSideEffect, DeletableAgentSession, DeleteChatTargets, HomeSessionOptions, NativeArchiveFilter, NativeSessionPage } from '@shared/acpSessions';
 import type { Settings, ThreadMeta } from '@shared/types';
 import { clearDraft } from './drafts';
 
@@ -15,8 +15,9 @@ export const acpSessionsApi = {
   setArchived: (agentId: string, sessionId: string, archived: boolean) => call<AcpSideEffect>('acpSessions.archive', agentId, sessionId, archived),
   deleteNative: (agentId: string, sessionId: string) => call<AcpSideEffect>('acpSessions.deleteNative', agentId, sessionId),
   deletable: (threadId: string) => call<(DeletableAgentSession & { canDelete?: boolean })[]>('acpSessions.deletable', threadId),
-  deleteChat: (threadId: string, alsoAgentSessions: boolean) =>
-    call<Record<string, AcpSideEffect>>('acpSessions.deleteChat', threadId, alsoAgentSessions).then((r) => (clearDraft(threadId), r)),
+  deleteTargets: (threadId: string) => call<DeleteChatTargets>('acpSessions.deleteTargets', threadId),
+  deleteChat: (threadId: string, alsoAgentSessions: boolean, alsoSubsessions = false) =>
+    call<Record<string, AcpSideEffect>>('acpSessions.deleteChat', threadId, alsoAgentSessions, alsoSubsessions).then((r) => (clearDraft(threadId), r)),
   rename: (threadId: string, title: string) => call<{ title: string; results: Record<string, AcpSideEffect> }>('acpSessions.rename', threadId, title),
   fork: (threadId: string, uptoItemId?: string) => call<{ meta: ThreadMeta; nativeFork: boolean }>('acpSessions.fork', threadId, uptoItemId),
   status: (threadId: string) => call<{ agentId: string; sessionId?: string; status: SessionStatusView }>('acpSessions.status', threadId),

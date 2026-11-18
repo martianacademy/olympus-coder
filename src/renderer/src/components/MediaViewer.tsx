@@ -32,6 +32,7 @@ export interface ViewerItem {
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|heic|heif|tiff?)$/i;
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|ogv|mkv)$/i;
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i;
+const DOC_VIEWER_EXT = /\.(pdf|docx?|rtf|odt|xlsx|pptx|pages|numbers|key)$/i;
 
 export function viewerKindOf(ref: string, mime?: string): ViewerKind {
   if (mime?.startsWith('image/')) return 'image';
@@ -42,6 +43,14 @@ export function viewerKindOf(ref: string, mime?: string): ViewerKind {
   if (VIDEO_EXT.test(p)) return 'video';
   if (AUDIO_EXT.test(p)) return 'audio';
   return 'file';
+}
+
+/** True when a file reference has no `:line` / `#Lline` anchor and points to media or a rich document suited to `MediaViewer`. */
+export function isViewerTarget(ref: string): boolean {
+  const trimmed = ref.trim().replace(/^file:\/\//i, '');
+  if (!trimmed || /(?::\d+(?::\d+)?|#L?\d+(?:-L?\d+)?)$/i.test(trimmed)) return false;
+  const clean = trimmed.replace(/[?#].*$/, '');
+  return IMAGE_EXT.test(clean) || VIDEO_EXT.test(clean) || AUDIO_EXT.test(clean) || DOC_VIEWER_EXT.test(clean);
 }
 
 /** Attributes that make an element part of the chat's gallery. */

@@ -6,7 +6,11 @@
 import type { AgentState, AgentStatus, RateLimitView } from '@shared/types';
 import { nextResetAt } from '@shared/quota';
 
-export type LimitsReader = 'daemon' | 'probe';
+/**
+ * daemon: a local service the agent runs (Antigravity). probe: a hidden `/usage`-style session (starts the agent).
+ * http: the providers the agent is logged in to, read with its saved credentials (OpenCode); never starts it.
+ */
+export type LimitsReader = 'daemon' | 'probe' | 'http';
 
 export interface LimitsAgentView {
   id: string;
@@ -29,6 +33,8 @@ export interface LimitsReadResult {
   loggedOut?: boolean;
   /** Nothing to read right now (Antigravity's app isn't running): not an error, and not a fresh reading either. */
   unavailable?: boolean;
+  /** An honest line for what has no quota, e.g. "LM Studio · local model, no limits" (shown instead of "not reported"). */
+  note?: string;
 }
 
 export interface LimitsHost {
@@ -165,10 +171,11 @@ export class LimitsService {
     if (o.maxAgeMs !== undefined && a.limitsAt && now - a.limitsAt < o.maxAgeMs && !(a.limits ?? []).some((l) => l.resetsAt && l.resetsAt <= now)) return Promise.resolve();
     if (!o.force && (now < p.nextAllowed || now < p.unsupportedUntil)) return Promise.resolve();
     if (reader === 'probe') {
-      if (!ELIGIBLE.includes(a.state)) return Promise.resolve();
-      if (!a.running && !h.mayStart(agentId)) return Promise.resolve();
-      if (a.busy) {
-        p.afterTurn = true;
+      const busy = ELIGIBLE.includes(a.state) && (a.running || h.mayStart(agentId)) && a.busy;
+      const skip = !ELIGIBLE.includes(a.state) ? `state ${a.state}` : !a.running && !h.mayStart(agentId) ? 'not running, may not start it' : busy ? 'a turn is running (read after it)' : '';
+      if (skip) {
+        if (busy) p.afterTurn = true;
+        h.log?.(`[limits] ${agentId} (${o.reason}) skipped: ${skip}`);
         return Promise.resolve();
       }
     }
@@ -180,6 +187,7 @@ export class LimitsService {
         if (r === null) {
           p.unsupportedUntil = this.now() + this.opts.unsupportedRetryMs;
           h.patch(agentId, { limitsRefreshing: false, limitsReadable: false });
+          h.log?.(`[limits] ${agentId} (${o.reason}): no limits command`);
           return;
         }
         p.failures = 0;
@@ -190,6 +198,7 @@ export class LimitsService {
         }
         if (r.loggedOut) {
           h.patch(agentId, { limitsRefreshing: false, limitsError: undefined, state: 'needs-login' });
+          h.log?.(`[limits] ${agentId} (${o.reason}): logged out`);
           return;
         }
         h.patch(agentId, {
@@ -198,10 +207,11 @@ export class LimitsService {
           limitsReadable: true,
           // A read with nothing to report keeps the numbers a turn brought, but is still a fresh check.
           ...(r.limits.length ? { limits: r.limits } : {}),
+          limitsNote: r.note,
           limitsAt: this.now(),
           ...(r.plan ? { plan: r.plan } : {}),
         });
-        h.log?.(`[limits] ${agentId} (${o.reason}): ${r.limits.length ? r.limits.map((l) => `${l.window}=${Math.round(l.utilization * 100)}%`).join(' ') : 'nothing to report'}`);
+        h.log?.(`[limits] ${agentId} (${o.reason}): ${r.limits.length ? r.limits.map((l) => `${l.window}=${Math.round(l.utilization * 100)}%`).join(' ') : 'nothing to report'}${r.note ? ` · ${r.note}` : ''}`);
       } catch (e: any) {
         p.failures++;
         p.nextAllowed = this.now() + Math.min(this.opts.maxBackoffMs, this.opts.backoffMs * 2 ** (p.failures - 1));
@@ -224,12 +234,12 @@ export class LimitsService {
     await Promise.race([all, new Promise<void>((r) => (timer = setTimeout(r, timeoutMs)))]).finally(() => clearTimeout(timer));
   }
 
-  /** A chat on this agent finished a turn: run a read that was put off, and re-read daemon-backed limits. */
+  /** A chat on this agent finished a turn: run a read that was put off, and re-read daemon/provider-backed limits. */
   turnEnded(agentId: string) {
     const p = this.state(agentId);
     const reader = this.host?.reader(agentId);
     if (p.afterTurn) void this.refresh(agentId, { reason: 'after turn' });
-    else if (reader === 'daemon') void this.refresh(agentId, { reason: 'after turn', force: true });
+    else if (reader === 'daemon' || reader === 'http') void this.refresh(agentId, { reason: 'after turn', force: true });
   }
 
   /** Limits changed (a read, or numbers a turn brought): plan the next reset wake-up. */

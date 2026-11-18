@@ -3,7 +3,7 @@
 .delivery-ticks { display: inline-flex; align-items: center; color: color-mix(in srgb, var(--muted) 80%, transparent); line-height: 0; cursor: default; }
 .delivery-ticks.seen { color: #4ea1ff; }
 
-.queued-list { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 0 2px 8px; }
+.queued-list { max-width: var(--chat-width, 780px); margin: 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 0 2px 8px; }
 .queued-msg { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 85%; min-width: 0; }
 .queued-msg .msg-user { max-width: 100%; opacity: .62; border-style: dashed; }
 .queued-edit-modal { width: min(720px, calc(100vw - 32px)); }

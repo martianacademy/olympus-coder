@@ -2,8 +2,6 @@ import { memo, useContext, useEffect, useMemo, useState } from 'react';
 import {
   Brain,
   Check,
-  ChevronDown,
-  ChevronRight,
   FilePen,
   FileText,
   FolderInput,
@@ -15,15 +13,16 @@ import {
   SquareTerminal,
   ToggleLeft,
   Trash2,
+  Wrench,
 } from 'lucide-react';
 import { formatBashCommand, formatCommandResult } from '../cmdFormat';
 import { HighlightedCode } from '../codeHighlight';
 import { detectResultLang } from '../codeLang';
 import { LinkedText, RunCommandContext, useOpenFile } from '../fileLinks';
+import { triggerFixError, useProjectId } from '../fixError';
 import { useStepChoice } from '../prefs';
 import { fmtTokens } from '../tokens';
 import { fmtStepDuration, parseToolStep, type ParsedToolStep, type ToolItem } from '../toolStep';
-import { describeToolForHeader } from '../workStepSummary';
 import { extractStepFilePaths } from './InlineFilePreviews';
 import { AcpTerminalBox } from './AcpTerminalBox';
 import { toolIdentityLabel } from '@shared/acpContent';
@@ -31,7 +30,7 @@ import { LocationLinks, ToolRichContent } from './RichContent';
 import { StepBody } from './StepBodies';
 import { StepRowHead } from './StepRowHead';
 import { BoxButton, CopyBoxButton, ExpandBoxButton, STEP_BOX_CAP, useBodyCap } from './StepBox';
-import { StepIcon, stepKindColor, toolStepKind } from './stepIcons';
+import { StepIcon, toolStepKind } from './stepIcons';
 
 /** Icons for each ACP tool category, shared by `ToolGroup` and `ToolRow`. */
 export const KIND_ICON: Record<string, React.ReactNode> = {
@@ -103,6 +102,7 @@ function CommandTerminalBox({
   failed: boolean;
 }) {
   const openFile = useOpenFile();
+  const projectId = useProjectId();
   const runInTerminal = useContext(RunCommandContext);
   const cmdCap = useBodyCap(STEP_BOX_CAP);
   const outCap = useBodyCap(STEP_BOX_CAP);
@@ -170,6 +170,24 @@ function CommandTerminalBox({
             </span>
           )}
           <span className="step-box-actions">
+            {failed && !running && (
+              <BoxButton
+                icon={<Wrench size={11} />}
+                label="Fix error"
+                tip="Put this failed command, output, and uncommitted git diff into the message box"
+                testId="cmd-box-fix-error"
+                onClick={() =>
+                  void triggerFixError({
+                    source: 'command',
+                    title: parsed.headerTitle || 'Command',
+                    command: parsed.command,
+                    exitCode: parsed.exitCode,
+                    output: formattedOutput || item.title,
+                    projectId,
+                  })
+                }
+              />
+            )}
             {parsed.truncatedOutputPath && (
               <BoxButton
                 icon={<SquareArrowOutUpRight size={11} />}
@@ -287,142 +305,37 @@ export const ToolRow = memo(function ToolRow({ item, defaultOpen, standalone, li
     setChoice(!open);
   };
   const stepKind = toolStepKind(item, parsed);
-  const kind = stepKindColor(stepKind);
-  const file = stepPaths[0] ?? diffs.find((c) => c.path)?.path;
-  const statusClass = badExit && item.status === 'completed' ? 'failed' : item.status;
-  const chevSize = standalone ? 14 : 13;
 
-  const rootCls = standalone
-    ? `tool-group tool-single ${parsed.isCommand ? 'is-cmd' : ''} ${failed ? 'is-failed' : ''}`
-    : `tool-row ${parsed.isCommand ? 'is-cmd' : ''} ${failed ? 'is-failed' : ''} ${open ? 'is-open' : ''}`;
-  const headCls = `tool-row-head ${standalone ? 'standalone' : ''}`;
-
-  if (parsed.isCommand) {
-    const cmdLine = parsed.headerTitle || parsed.command || 'command';
-
-    return (
-      <div className={rootCls} data-testid="tool-row-cmd">
-        {/* Inside a WorkGroup: the calm verb + target line; standalone cards keep the full header below. */}
-        {!standalone ? (
-          <StepRowHead
-            item={item}
-            parsed={parsed}
-            running={running}
-            live={live}
-            failed={failed}
-            hasBody={true}
-            durLabel={durLabel}
-            onToggle={toggleOpen}
-          />
-        ) : (
-        <div className={headCls} onClick={toggleOpen}>
-          <span className="tool-kind k-execute">
-            {running ? <Loader2 size={13} className="spin" /> : <SquareTerminal size={13} />}
-          </span>
-          <span className="tool-badge k-execute mono">{parsed.toolLabel}</span>
-          <span className={`grow ellipsis tool-row-title mono cmd-term-title ${running && live ? 'shimmer' : ''}`}>
-            <span className="cmd-dollar">$ </span>
-            {cmdLine}
-            {parsed.summary && <span className="cmd-comment">  # {parsed.summary}</span>}
-          </span>
-          {standalone && tokens !== undefined && <TokenTag n={tokens} live={Boolean(live && running)} />}
-          {durLabel && <span className="tool-dur mono">{durLabel}</span>}
-          {parsed.exitCode !== undefined ? (
-            <span className={`cmd-exit mono ${badExit ? 'bad' : 'ok'}`}>exit {parsed.exitCode}</span>
-          ) : item.status === 'failed' ? (
-            <span className="cmd-exit mono bad">failed</span>
-          ) : null}
-          {standalone && item.status === 'interrupted' && (
-            <span className="status-pill" title={STATUS_TIP.interrupted}>
-              stopped
-            </span>
-          )}
-          <span className={`tool-status ${statusClass}`} />
-          {open ? <ChevronDown size={chevSize} className="muted" /> : <ChevronRight size={chevSize} className="muted" />}
-        </div>
-        )}
-
-        {open &&
-          (item.terminalKey ? (
-            <AcpTerminalBox
-              termKey={item.terminalKey}
-              command={parsed.command}
-              fallbackOutput={parsed.output}
-              fallbackExitCode={parsed.exitCode}
-              toolStatus={item.status}
-              standalone={standalone}
-            />
-          ) : (
-            <CommandTerminalBox item={item} parsed={parsed} standalone={standalone} running={running} failed={failed} />
-          ))}
-      </div>
-    );
-  }
-
-  const desc = describeToolForHeader(item, parsed);
-  const rawPrimary = parsed.summary || desc.params || parsed.headerTitle;
-  const showPrimary = Boolean(rawPrimary && rawPrimary.toLowerCase() !== parsed.toolLabel.toLowerCase());
-  const subTarget = desc.params || parsed.headerTitle;
-  const showSubTarget = Boolean(
-    parsed.summary &&
-      subTarget &&
-      subTarget.toLowerCase() !== parsed.summary.toLowerCase() &&
-      subTarget.toLowerCase() !== parsed.toolLabel.toLowerCase(),
+  const innerCls = `tool-row ${parsed.isCommand ? 'is-cmd' : ''} ${failed ? 'is-failed' : ''} ${open ? 'is-open' : ''}`;
+  const headNode = (
+    <StepRowHead
+      item={item}
+      parsed={parsed}
+      running={running}
+      live={live}
+      failed={failed}
+      hasBody={parsed.isCommand ? true : hasBody}
+      durLabel={durLabel}
+      onToggle={toggleOpen}
+    />
   );
 
-  return (
-    <div className={rootCls} data-testid="tool-row" data-step-kind={stepKind}>
-      {!standalone ? (
-        <StepRowHead
-          item={item}
-          parsed={parsed}
-          running={running}
-          live={live}
-          failed={failed}
-          hasBody={hasBody}
-          durLabel={durLabel}
-          onToggle={toggleOpen}
+  const bodyNode = parsed.isCommand
+    ? open &&
+      (item.terminalKey ? (
+        <AcpTerminalBox
+          termKey={item.terminalKey}
+          command={parsed.command}
+          fallbackOutput={parsed.output}
+          fallbackExitCode={parsed.exitCode}
+          toolStatus={item.status}
+          standalone={standalone}
         />
       ) : (
-      <div className={headCls} onClick={() => hasBody && toggleOpen()}>
-        <span className={`tool-kind k-${kind}`}>
-          {running ? <Loader2 size={13} className="spin" /> : <StepIcon kind={stepKind} size={13} />}
-        </span>
-        <span className={`tool-badge k-${kind}`}>{parsed.toolLabel}</span>
-        {showPrimary ? (
-          <span
-            className={`grow tool-row-title ${!parsed.summary && desc.isMono ? 'mono ellipsis' : 'human'} ${running && live ? 'shimmer' : ''}`}
-          >
-            {rawPrimary}
-            {showSubTarget && <span className="tool-sub-target mono"> · {subTarget}</span>}
-          </span>
-        ) : (
-          <span className="grow" />
-        )}
-        {standalone && tokens !== undefined && <TokenTag n={tokens} live={Boolean(live && running)} />}
-        {durLabel && <span className="tool-dur">{durLabel}</span>}
-        {file && (
-          <button
-            className="btn ghost icon tool-open"
-            title={`Open ${file} in the side panel`}
-            onClick={(e) => {
-              e.stopPropagation();
-              openFile(file);
-            }}
-          >
-            <FileText size={13} />
-          </button>
-        )}
-        {standalone && item.status === 'interrupted' && (
-          <span className="status-pill" title={STATUS_TIP.interrupted}>
-            stopped
-          </span>
-        )}
-        <span className={`tool-status ${statusClass}`} />
-        {hasBody && (open ? <ChevronDown size={chevSize} className="muted" /> : <ChevronRight size={chevSize} className="muted" />)}
-      </div>
-      )}
-      {open && hasBody && (
+        <CommandTerminalBox item={item} parsed={parsed} standalone={standalone} running={running} failed={failed} />
+      ))
+    : open &&
+      hasBody && (
         <div className={`tool-body step-boxes ${standalone ? 'standalone' : ''}`} data-testid="step-boxes">
           {identity && (
             <div className="rich-tool-identity mono small muted" data-testid="tool-identity">
@@ -433,7 +346,32 @@ export const ToolRow = memo(function ToolRow({ item, defaultOpen, standalone, li
           <StepBody item={item} parsed={parsed} kind={stepKind} diffs={diffs} stepPaths={stepPaths} running={running} />
           {hasRich && <ToolRichContent entries={item.content} />}
         </div>
-      )}
+      );
+
+  if (!standalone) {
+    return (
+      <div className={innerCls} data-testid={parsed.isCommand ? 'tool-row-cmd' : 'tool-row'} data-step-kind={stepKind}>
+        {headNode}
+        {bodyNode}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`tool-group tool-single work-group ${parsed.isCommand ? 'is-cmd' : ''} ${failed ? 'is-failed has-failed' : ''} ${running && live ? 'is-live' : ''}`}
+      data-testid={parsed.isCommand ? 'tool-row-cmd' : 'tool-row'}
+      data-step-kind={stepKind}
+    >
+      <div className="tool-group-body work-group-body">
+        <div className={`wg-step ${running ? 'wg-step-running' : failed ? 'wg-step-failed' : ''}`}>
+          <span className="wg-step-icon">{running ? <Loader2 size={13} className="spin" /> : <StepIcon kind={stepKind} size={14} />}</span>
+          <div className={innerCls}>
+            {headNode}
+            {bodyNode}
+          </div>
+        </div>
+      </div>
     </div>
   );
 });

@@ -22,6 +22,9 @@ import type { AgentDef, ProcAction, RunningTask, SubTaskView, Thread, ThreadItem
 import { api } from '../api';
 import { everyWhileVisible } from '../visibility';
 import { copyText } from '../clipboard';
+import { formatBashCommand } from '../cmdFormat';
+import { HighlightedCode } from '../codeHighlight';
+import { detectResultLang, langFromPath } from '../codeLang';
 import { stripAnsi } from '../compose';
 import { LinkedText } from '../fileLinks';
 import { AgentLogo } from '../logos';
@@ -208,7 +211,9 @@ export function RunCard(props: {
       {error && <div className="run-error small">{error}</div>}
       {open && (
         <div className="run-detail">
-          <div className="run-full mono">{(proc?.command ?? props.title).replace(/^Run in terminal: /, '')}</div>
+          <div className="run-full mono">
+            <HighlightedCode text={formatBashCommand((proc?.command ?? props.title).replace(/^Run in terminal: /, ''))} lang="shell" />
+          </div>
           {proc?.ptyId ? (
             <>
               <div className="run-detail-label">
@@ -350,10 +355,12 @@ export function StepCard({ t, rel, open, onToggle }: { t: ToolItem; rel: (p: str
                 <span>Command</span>
                 <CopyBtn text={cmdText} label="Copy" />
               </div>
-              <pre className="step-pre mono">{cmdText}</pre>
+              <pre className="step-pre mono">
+                <HighlightedCode text={formatBashCommand(cmdText)} lang="shell" />
+              </pre>
             </div>
           ) : (
-            parts.type === 'file' && <div className="step-path mono">{t.locations.length ? t.locations.map(rel).join('\n') : parts.dim ? `${parts.dim}/${parts.main}` : parts.main}</div>
+            parts.type === 'file' && <div className="step-path mono">{t.locations?.length ? t.locations.map(rel).join('\n') : parts.dim ? `${parts.dim}/${parts.main}` : parts.main}</div>
           )}
           {parsed.input && parts.type !== 'cmd' && (
             <div className="step-block">
@@ -382,20 +389,31 @@ export function StepCard({ t, rel, open, onToggle }: { t: ToolItem; rel: (p: str
               </div>
             );
           })}
-          {parsed.output ? (
-            <div className="step-block">
-              <div className="step-block-head">
-                <span>
-                  Response
-                  {code !== undefined && <span className={`step-code ${bad ? 'bad' : ''}`}>exit {code}</span>}
-                </span>
-                <CopyBtn text={parsed.output} label="Copy response" />
+          {parsed.output ? (() => {
+            const clipped = parsed.output.length > 8000 ? `${parsed.output.slice(0, 8000)}\n… (${parsed.output.length - 8000} more characters)` : parsed.output;
+            const resLang = bad || parsed.output.length > 8000 ? null : parts.type === 'cmd' ? detectResultLang(cmdText, clipped) : (() => {
+              const l = langFromPath(t.locations?.[0]);
+              return l ? { lang: l, gutters: undefined, perLine: false } : null;
+            })();
+            return (
+              <div className="step-block">
+                <div className="step-block-head">
+                  <span>
+                    Response
+                    {code !== undefined && <span className={`step-code ${bad ? 'bad' : ''}`}>exit {code}</span>}
+                  </span>
+                  <CopyBtn text={parsed.output} label="Copy response" />
+                </div>
+                <pre className="step-pre mono">
+                  {resLang ? (
+                    <HighlightedCode text={clipped} lang={resLang.lang} gutters={resLang.gutters} perLine={resLang.perLine} />
+                  ) : (
+                    <LinkedText text={clipped} />
+                  )}
+                </pre>
               </div>
-              <pre className="step-pre mono">
-                <LinkedText text={parsed.output.length > 8000 ? `${parsed.output.slice(0, 8000)}\n… (${parsed.output.length - 8000} more characters)` : parsed.output} />
-              </pre>
-            </div>
-          ) : (
+            );
+          })() : (
             !diffs.length && <div className="small muted">{parsed.isCommand && !bad ? 'No output (completed silently).' : 'No output was shared for this step.'}</div>
           )}
           <div className="step-meta">

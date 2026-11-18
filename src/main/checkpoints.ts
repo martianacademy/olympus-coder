@@ -336,6 +336,53 @@ export async function restore(projectId: string, cwd: string, to: string, paths:
   return backup;
 }
 
+function gitWithInput(projectId: string, cwd: string, args: string[], input: string, timeout = 30_000): Promise<string> {
+  const env = {
+    ...process.env,
+    GIT_DIR: repoDir(projectId),
+    GIT_WORK_TREE: cwd,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_OPTIONAL_LOCKS: '0',
+  };
+  const base = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.quotepath=false', '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false'];
+  return new Promise((res, rej) => {
+    const child = execFile('git', [...base, ...args], { cwd, env, maxBuffer: 16 * 1024 * 1024, timeout, windowsHide: true }, (e, out, err) => {
+      if (e) rej(new Error(String(err || e.message).trim()));
+      else res(String(out));
+    });
+    child.stdin?.end(input);
+  });
+}
+
+/** Checks whether each unified-diff hunk is currently applied, already reverted, or modified in `cwd`. */
+export function checkHunkStates(projectId: string, cwd: string, patches: readonly string[]): Promise<('applied' | 'reverted' | 'modified')[]> {
+  return queued(projectId, async () => {
+    const states: ('applied' | 'reverted' | 'modified')[] = [];
+    for (const patch of patches) {
+      const canRevert = await gitWithInput(projectId, cwd, ['apply', '--check', '--reverse', '-C1'], patch).then(() => true).catch(() => false);
+      if (canRevert) {
+        states.push('applied');
+        continue;
+      }
+      const canApply = await gitWithInput(projectId, cwd, ['apply', '--check', '-C1'], patch).then(() => true).catch(() => false);
+      states.push(canApply ? 'reverted' : 'modified');
+    }
+    return states;
+  });
+}
+
+/** Applies or reverse-applies a single verified hunk patch onto the working tree (`cwd`). */
+export async function applyHunkPatch(projectId: string, cwd: string, patch: string, reverse: boolean): Promise<void> {
+  await queued(projectId, async () => {
+    const baseArgs = ['apply', ...(reverse ? ['--reverse'] : [])];
+    try {
+      await gitWithInput(projectId, cwd, baseArgs, patch);
+    } catch {
+      await gitWithInput(projectId, cwd, [...baseArgs, '-C1'], patch);
+    }
+  });
+}
+
 /** Drops a project's snapshots (when the project is removed from the app). */
 export function forgetCheckpoints(projectId: string) {
   rmSync(repoDir(projectId), { recursive: true, force: true });

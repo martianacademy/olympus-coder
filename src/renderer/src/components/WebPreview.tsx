@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Globe, RotateCw, SquareArrowOutUpRight, X } from 'lucide-react';
 import { api } from '../api';
-import { composeInChat } from '../compose';
+import { triggerFixError } from '../fixError';
 
 /** Asks the workbench to show a local dev server in its Web tab. */
 export const openWebPreview = (url: string) => window.dispatchEvent(new CustomEvent('olympus:web-preview', { detail: { url } }));
@@ -28,13 +28,33 @@ interface LogLine {
   source?: string;
 }
 
-type WebviewEl = HTMLElement & { reload: () => void; getURL: () => string; loadURL: (u: string) => Promise<void> };
+type WebviewEl = HTMLElement & {
+  reload: () => void;
+  getURL: () => string;
+  loadURL: (u: string) => Promise<void>;
+  capturePage?: () => Promise<{ toPNG?: () => Uint8Array; toDataURL?: () => string }>;
+};
+
+async function captureWebviewBase64(el: WebviewEl | null): Promise<string | undefined> {
+  if (!el?.capturePage) return undefined;
+  try {
+    const img = await el.capturePage();
+    if (typeof img?.toDataURL === 'function') {
+      const url = img.toDataURL();
+      const idx = url.indexOf('base64,');
+      if (idx >= 0) return url.slice(idx + 7);
+    }
+  } catch {
+    /* webview not ready or remote browser */
+  }
+  return undefined;
+}
 
 /**
  * The Web tab: a local dev server shown inside the app, with its console errors and warnings kept in a drawer
- * at the bottom (closed until there is something), and "Ask agent to fix" for them.
+ * at the bottom (closed until there is something), and "Ask agent to fix" (including screenshot + git diff).
  */
-export function WebPreview({ url, onClose }: { url: string; onClose: () => void }) {
+export function WebPreview({ url, projectId, onClose }: { url: string; projectId?: string; onClose: () => void }) {
   const view = useRef<WebviewEl | null>(null);
   const [current, setCurrent] = useState(url);
   const [logs, setLogs] = useState<LogLine[]>([]);
@@ -82,13 +102,28 @@ export function WebPreview({ url, onClose }: { url: string; onClose: () => void 
 
   const errors = logs.filter((l) => l.level === 'error').length;
   const warnings = logs.length - errors;
-  const askFix = () =>
-    composeInChat(
-      `The page at ${current} shows these console ${errors ? 'errors' : 'warnings'}. Find the cause and fix ${logs.length > 1 ? 'them' : 'it'}.\n\n\`\`\`text\n${logs
+  const askFix = async () => {
+    const screenshotBase64 = await captureWebviewBase64(view.current);
+    await triggerFixError({
+      source: 'web-console',
+      title: current,
+      output: logs
         .slice(-30)
         .map((l) => `[${l.level}] ${l.text}${l.source ? `  (${l.source})` : ''}`)
-        .join('\n')}\n\`\`\``,
-    );
+        .join('\n'),
+      projectId,
+      screenshotBase64,
+    });
+  };
+  const askFixLoad = () => {
+    if (!failed) return;
+    void triggerFixError({
+      source: 'web-load',
+      title: current,
+      output: failed,
+      projectId,
+    });
+  };
 
   return (
     <div className="web-preview">
@@ -115,9 +150,14 @@ export function WebPreview({ url, onClose }: { url: string; onClose: () => void 
             <div>Couldn't load the page.</div>
             <div className="small muted">{failed}</div>
             <div className="small muted">Is the dev server running?</div>
-            <button className="btn small" onClick={() => view.current?.reload()}>
-              <RotateCw size={12} /> Try again
-            </button>
+            <div className="row" style={{ gap: 8, justifyContent: 'center' }}>
+              <button className="btn small" onClick={() => view.current?.reload()}>
+                <RotateCw size={12} /> Try again
+              </button>
+              <button className="btn small primary" data-testid="web-fix-load" onClick={askFixLoad}>
+                Ask agent to fix
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -131,7 +171,7 @@ export function WebPreview({ url, onClose }: { url: string; onClose: () => void 
               {warnings > 0 && <span className="wc-count warning">{warnings} warning{warnings > 1 ? 's' : ''}</span>}
             </button>
             <span className="grow" />
-            <button className="btn small primary" onClick={askFix} title="Puts these messages into the chat's message box, for you to send">
+            <button className="btn small primary" data-testid="web-fix-error" onClick={() => void askFix()} title="Puts these messages, recent git diff, and a screenshot into the chat's message box">
               Ask agent to fix
             </button>
             <button className="btn ghost small" onClick={() => setLogs([])}>

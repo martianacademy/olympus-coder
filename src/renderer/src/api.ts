@@ -122,8 +122,28 @@ export const api = {
   ports: () => call<PortInfo[]>('ports.list'),
   stopPort: (pid: number) => call<void>('ports.stop', pid),
   testCommand: (projectId: string) => call<string | null>('tests.command', projectId),
-  turnChanges: (threadId: string, itemId: string) => call<{ files: TurnFileChange[]; undone: boolean }>('turn.changes', threadId, itemId),
+  verifyGateInfo: (projectId: string) =>
+    call<{ config: { enabled: boolean; command?: string; maxRetries?: number }; detectedCommand: string | null }>('projects.verifyGateInfo', projectId),
+  setVerifyGate: (projectId: string, config: { enabled: boolean; command?: string; maxRetries?: number }) =>
+    call<Project | undefined>('projects.setVerifyGate', projectId, config),
+  runVerifyGate: (projectId: string) =>
+    call<{ ok: boolean; command: string; exitCode: number; durationMs: number; output: string }>('projects.runVerifyGate', projectId),
+  turnChanges: (threadId: string, itemId: string) =>
+    call<{ files: TurnFileChange[]; undone: boolean; fileStates?: Record<string, 'applied' | 'reverted' | 'partial'> }>('turn.changes', threadId, itemId),
   turnFileDiff: (threadId: string, itemId: string, path: string) => call<string>('turn.fileDiff', threadId, itemId, path),
+  turnFileReview: (threadId: string, itemId: string, path: string) =>
+    call<{ diff: string; hunkStates: ('applied' | 'reverted' | 'modified')[] }>('turn.fileReview', threadId, itemId, path),
+  turnSetFile: (threadId: string, itemId: string, path: string, to: 'before' | 'after') =>
+    call<{ files: TurnFileChange[]; undone: boolean; fileStates: Record<string, 'applied' | 'reverted' | 'partial'> }>('turn.setFile', threadId, itemId, path, to),
+  turnSetHunk: (threadId: string, itemId: string, path: string, hunkIndex: number, action: 'revert' | 'apply') =>
+    call<{ diff: string; hunkStates: ('applied' | 'reverted' | 'modified')[]; fileStates: Record<string, 'applied' | 'reverted' | 'partial'> }>(
+      'turn.setHunk',
+      threadId,
+      itemId,
+      path,
+      hunkIndex,
+      action,
+    ),
   turnUndoCheck: (threadId: string, itemId: string) => call<{ files: string[]; changedSince: string[] }>('turn.undoCheck', threadId, itemId),
   turnUndo: (threadId: string, itemId: string) => call<void>('turn.undo', threadId, itemId),
   secondOpinion: (threadId: string, itemId: string, agentIds: string[]) => call<string[]>('chat.secondOpinion', threadId, itemId, agentIds),
@@ -153,6 +173,7 @@ export const api = {
     status: (pid: string) => call<GitStatus>('git.status', pid),
     init: (pid: string) => call<string>('git.init', pid),
     diff: (pid: string, path: string, staged: boolean, untracked: boolean) => call<string>('git.diff', pid, path, staged, untracked),
+    workingDiff: (pid: string, maxChars?: number) => call<string>('git.workingDiff', pid, maxChars),
     stage: (pid: string, paths: string[]) => call<string>('git.stage', pid, paths),
     stageAll: (pid: string) => call<string>('git.stageAll', pid),
     unstage: (pid: string, paths: string[]) => call<string>('git.unstage', pid, paths),
@@ -280,6 +301,7 @@ export const api = {
     context: () => panelCall<PanelContext | null>('context'),
     setContext: (c: PanelContext | null) => panelCall<PanelContext | null>('setContext', c),
     showInMain: (a: { tab: string; path?: string; line?: number; ptyId?: string; threadId?: string }) => panelCall<boolean>('showInMain', a),
+    composeInMain: (text: string, files: AttachmentView[] = []) => panelCall<boolean>('composeInMain', { text, files }),
   },
 };
 

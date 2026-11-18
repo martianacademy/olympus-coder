@@ -94,6 +94,19 @@ export async function diff(projectId: string, path: string, staged: boolean, unt
   return git(projectId, ['diff', '--no-color', ...(staged ? ['--cached'] : []), ...paths(projectId, [path])]);
 }
 
+/** Compact uncommitted status + diff summary for 1-click "Fix this error" prompts (empty if clean or not a repo). */
+export async function workingDiff(projectId: string, maxChars = 3500): Promise<string> {
+  try {
+    const short = (await git(projectId, ['status', '--short', '--untracked-files=normal'], { timeout: 8000 })).trim();
+    if (!short) return '';
+    const patch = (await git(projectId, ['diff', 'HEAD', '--no-color', '-U2'], { timeout: 8000, maxBuffer: 4 * 1024 * 1024 }).catch(() => '')).trim();
+    const combined = patch ? `${short}\n\n${patch}` : short;
+    return combined.length > maxChars ? `${combined.slice(0, maxChars)}\n… (diff truncated)` : combined;
+  } catch {
+    return '';
+  }
+}
+
 export const stage = (projectId: string, files: string[]) => git(projectId, ['add', '-A', ...paths(projectId, files)]);
 export const stageAll = (projectId: string) => git(projectId, ['add', '-A']);
 export const unstage = (projectId: string, files: string[]) => git(projectId, ['restore', '--staged', ...paths(projectId, files)]);

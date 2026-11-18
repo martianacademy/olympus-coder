@@ -84,6 +84,7 @@ export const EVENTS = new Set([
   'catalog:progress',
   'agents:changed',
   'thread:deleted',
+  'projects:changed',
   'update:available',
   // ACP config slice (src/shared/acpConfig.ts AcpConfigEvents).
   'mcp:status',

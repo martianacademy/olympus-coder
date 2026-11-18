@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
 import type { AgentDef, AgentStatus, AppState, AttachmentView, DeskEvents, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import { api, onEvent, remoteWatch } from './api';
+import { collectSubsessions } from '@shared/acpSessions';
 import { acpSessionsApi } from './acpSessionsApi';
 import { DeleteChatDialog } from './components/DeleteChatDialog';
 import { ImportSessionsDialog } from './components/ImportSessionsDialog';
@@ -101,6 +102,9 @@ export default function App() {
   const lastStatus = useRef<string | undefined>(undefined);
   const menuHandler = useRef<(cmd: string) => void>(() => {});
   const threadGone = useRef<(d: { id: string; projectId: string; parentId?: string }) => void>(() => {});
+  const projectsChanged = useRef<(list: Project[]) => void>(() => {});
+  const deletedIds = useRef(new Set<string>());
+  const openingFallback = useRef<string | null>(null);
 
   const locked = Boolean(state?.lock.locked);
   const settings = state?.settings;
@@ -134,6 +138,7 @@ export default function App() {
     mainRef,
     onMenuCommand: (cmd) => menuHandler.current(cmd),
     onThreadDeleted: (d) => threadGone.current(d),
+    onProjectsChanged: (list) => projectsChanged.current(list),
   });
 
   const loadAgents = useCallback(async () => {
@@ -156,7 +161,11 @@ export default function App() {
       // Any way of opening another chat (sidebar, Home, Search, a parent link): a skeleton until it has loaded.
       if (id !== activeId.current) markOpening(id);
       const r = await api.thread(id);
-      if (!r) return doneOpening(id);
+      if (!r || deletedIds.current.has(id)) {
+        if (openingFallback.current === id) openingFallback.current = null;
+        return doneOpening(id);
+      }
+      if (openingFallback.current === id) openingFallback.current = null;
       setPage('thread');
       setActive(r.thread);
       setSession(r.session);
@@ -186,16 +195,31 @@ export default function App() {
   }, [loadAll]);
 
   // The open chat was deleted (here, by an agent's delete_subsession, or from a phone): show its parent, else the
-  // project's newest chat, else nothing.
+  // project's newest chat, else nothing. `deletedIds` + `openingFallback` handle multi-delete batches cleanly even
+  // when a sub-session was active and its parent gets deleted right after it in the same batch.
   threadGone.current = (d) => {
-    if (activeId.current !== d.id) return;
-    const list = (threads[d.projectId] ?? []).filter((t) => t.id !== d.id);
+    if (deletedIds.current.size > 500) deletedIds.current.clear();
+    deletedIds.current.add(d.id);
+    if (!activeId.current || !deletedIds.current.has(activeId.current)) return;
+    if (openingFallback.current && !deletedIds.current.has(openingFallback.current)) return;
+    const list = (threads[d.projectId] ?? []).filter((t) => !deletedIds.current.has(t.id));
     const next = list.find((t) => t.id === d.parentId) ?? list.find((t) => !t.parentId) ?? list[0];
+    if (next) {
+      openingFallback.current = next.id;
+      return void openThread(next.id);
+    }
+    openingFallback.current = null;
     activeId.current = null;
-    if (next) return void openThread(next.id);
     setActive(null);
     setSession(null);
     if (modeRef.current === 'chat') setPage('home');
+  };
+
+  // projects.json changed (live event): take the list as main sends it (order + `missing`), and load the chats of
+  // projects this window has not loaded yet. Fold state lives in sidebarState.ts and is keyed by id, so it stays.
+  projectsChanged.current = (list) => {
+    setProjects(list);
+    for (const p of list) if (!(p.id in threads)) void loadThreads(p.id);
   };
 
   const allThreads = useMemo(() => Object.values(threads).flat().sort((a, b) => b.updatedAt - a.updatedAt), [threads]);
@@ -586,7 +610,15 @@ export default function App() {
             totalChats={Object.values(threads).reduce((n, l) => n + l.length, 0)}
             onUpdateSettings={(patch) => void updateSettings(patch)}
           />
-          {deleting && <DeleteChatDialog thread={deleting} agents={agents} onCancel={() => setDeleting(null)} onDeleted={() => void afterDelete(deleting)} />}
+          {deleting && (
+            <DeleteChatDialog
+              thread={deleting}
+              initialSubsessions={collectSubsessions(threads[deleting.projectId] ?? [], deleting.id).map((s) => ({ id: s.id, title: s.title }))}
+              agents={agents}
+              onCancel={() => setDeleting(null)}
+              onDeleted={() => void afterDelete(deleting)}
+            />
+          )}
           {importFor && (
             <ImportSessionsDialog
               projectId={importFor.id}

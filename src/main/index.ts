@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, realpathSync, statSync } from 'nod
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AppState, AttachmentView, DeskEvents, ProcAction, Settings } from '@shared/types';
+import type { AppState, AttachmentView, DeskEvents, ProcAction, Settings, VerifyGateConfig } from '@shared/types';
 import * as agents from './agents';
 import * as attachments from './attachments';
 import { readClipboardMessage, writeClipboard, type ClipboardPayload } from './clipboard';
@@ -15,7 +15,9 @@ import { listEditors, openDefault, openInEditor } from './openWith';
 import * as git from './git';
 import * as lock from './lock';
 import { openInDefaultApp, openPreview, readPreviewRaw, revealInFinder, savePreviewAs } from './preview';
-import { initOrchestrator, listTasks, secondOpinion, setChatDeleter, stopOrchestrator, userCancelled, userSent } from './orchestrator';
+import { collectNativeSubagents } from '@shared/acpSessions';
+import { pauseAgentTimersForQuit, restoreAgentTimers } from './agenttimers';
+import { forgetOrchestratorThread, initOrchestrator, listTasks, secondOpinion, setChatDeleter, stopOrchestrator, userCancelled, userSent } from './orchestrator';
 import { controlTask, runningTasks } from './processes';
 import { listPorts, stopPortOwner } from './ports';
 import { startHeatWatch } from './heat';
@@ -25,6 +27,8 @@ import { clearNotes, deleteNote, listNotes } from './usernotes';
 import { relayLink } from './relay';
 import { cleanUpCheckpoints, forgetCheckpoints } from './checkpoints';
 import { detectTestCommand } from './testcmd';
+import { isMuted, notifyAgent } from './appmsg';
+import { detectVerifyCommand, effectiveVerifyCommand, evaluateTurnVerifyGate, resetVerifyRetries, runVerifyCommand } from './verifyGate';
 import { busyTerminals, closeTerminal, flushTerminals, listTerminals, openTerminal, rerunTerminal, restoreTerminals, setTerminalEmitter } from './terminals';
 import { createMemory, deleteMemoryFile, getMemoryView, globalInstructionsPath, memoryDir, readMemoryFile, writeGlobalInstructions, writeMemoryFile, writeProjectInstructions } from './memory';
 import * as connectors from './connectors';
@@ -32,6 +36,7 @@ import * as skills from './skills';
 import { forgetPty, killAllPtys, killPty, ptyBuffer, resizePty, startPty, writePty } from './pty';
 import * as schedules from './schedules';
 import * as store from './store';
+import { watchProjectsFile, type ProjectsWatcher } from './projectWatch';
 import { modelTags, startModelTags } from './modelTags';
 import { cancelDownload, checkNow, currentUpdate, installAndRestart, lastUpdateCheck, onAppWillQuit, skipUpdate, startUpdateChecker, updateSettingChanged } from './updates';
 import * as acpSessions from './acpSessionService';
@@ -77,6 +82,15 @@ if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', userData);
 }
 
+// Guard against running two copies on the same `userData` before registering services or `will-quit` hooks
+// (a duplicate instance exiting must never touch the primary instance's whisper-server or staged updates).
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  bootMainProcess();
+}
+
+function bootMainProcess() {
 loadLoginShellPath();
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -99,8 +113,47 @@ const emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) =>
   sendToWindows(channel, payload);
 };
 agents.setEmitter(emit);
+agents.onFreshUserTurn((threadId) => resetVerifyRetries(threadId));
+agents.onAfterTurnCheckpoint(({ thread, changedFiles }) => {
+  const project = store.getProject(thread.projectId);
+  if (!project || project.id === store.GENERAL_PROJECT_ID || !project.verifyGate?.enabled) return;
+  void evaluateTurnVerifyGate({
+    threadId: thread.id,
+    project,
+    changedFilesCount: changedFiles,
+    muted: isMuted(thread.id),
+    isReadOnlyRole: Boolean(thread.nativeSubagent || thread.secondOpinion),
+    shell: userShell().command,
+    env: agentEnv(),
+  }).then((out) => {
+    if (out.action === 'skipped' || !out.result) return;
+    const secs = `${(out.result.durationMs / 1000).toFixed(1)}s`;
+    if (out.action === 'passed') {
+      agents.appendNoticeToThread(thread.id, 'info', 'Verify gate passed', `$ ${out.result.command} (exit 0 in ${secs})`);
+    } else if (out.action === 'retry' && out.prompt) {
+      agents.appendNoticeToThread(
+        thread.id,
+        'warning',
+        `Verify gate failed (${out.attempt}/${out.maxRetries})`,
+        `$ ${out.result.command} exited with ${out.result.exitCode} in ${secs} — asking agent to fix`,
+      );
+      notifyAgent(thread.id, out.prompt);
+    } else if (out.action === 'exhausted') {
+      agents.appendNoticeToThread(
+        thread.id,
+        'error',
+        `Verify gate still failing after ${out.maxRetries} retries`,
+        `$ ${out.result.command} exited with ${out.result.exitCode}. Auto-retry stopped.`,
+      );
+    }
+  });
+});
 // Every deletion in main (sidebar, delete_subsession, disposable sub-sessions) tells the window and the phone.
 store.onThreadDeleted((t) => emit('thread:deleted', { id: t.id, projectId: t.projectId, ...(t.parentId ? { parentId: t.parentId } : {}) }));
+// projects.json written by the app or from outside (an agent, a script): the sidebar updates without a reload.
+let projectsWatch: ProjectsWatcher | null = null;
+const announceProjects = () => emit('projects:changed', store.listProjectsWithMissing());
+store.onProjectsWritten(() => projectsWatch?.notify());
 initOrchestrator(emit);
 setTerminalEmitter(emit);
 /** The ACP client features' events (live agent terminals, files agents wrote): same channel and lock rule as `emit`. */
@@ -158,7 +211,10 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'settings.update': (patch: Partial<Settings>) => {
     const s = store.updateSettings(patch);
     if (patch.theme) nativeTheme.themeSource = s.theme.mode;
-    if (patch.sharedRoot) mkdirSync(patch.sharedRoot, { recursive: true });
+    if (patch.sharedRoot) {
+      mkdirSync(patch.sharedRoot, { recursive: true });
+      projectsWatch?.rearm();
+    }
     if ('updateMode' in patch || 'updateWifiOnly' in patch) updateSettingChanged();
     return s;
   },
@@ -173,7 +229,9 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     });
     if (r.canceled || !r.filePaths[0]) return null;
     mkdirSync(r.filePaths[0], { recursive: true });
-    return store.updateSettings({ sharedRoot: r.filePaths[0] });
+    const s = store.updateSettings({ sharedRoot: r.filePaths[0] });
+    projectsWatch?.rearm();
+    return s;
   },
   'profile.update': (patch: Partial<Settings['profile']>) => store.updateSettings({ profile: { ...store.getSettings().profile, ...patch } }),
 
@@ -260,6 +318,21 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     const p = store.getProject(projectId);
     return p ? detectTestCommand(p.path) : null;
   },
+  'projects.verifyGateInfo': (projectId: string) => {
+    const p = projectOrThrow(projectId);
+    return { config: p.verifyGate ?? { enabled: false }, detectedCommand: detectVerifyCommand(p.path) };
+  },
+  'projects.setVerifyGate': (projectId: string, cfg: VerifyGateConfig) => {
+    const updated = store.updateProjectVerifyGate(projectId, cfg);
+    announceProjects();
+    return updated ?? null;
+  },
+  'projects.runVerifyGate': async (projectId: string) => {
+    const p = projectOrThrow(projectId);
+    const cmd = effectiveVerifyCommand(p);
+    if (!cmd) throw new Error('No verify command configured.');
+    return runVerifyCommand(p.path, cmd, { shell: userShell().command, env: agentEnv() });
+  },
   'procs.list': () => runningTasks(),
   'ports.list': () => listPorts(),
   'ports.stop': (pid: number) => stopPortOwner(pid),
@@ -290,6 +363,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'git.status': (pid: string) => git.status(pid),
   'git.init': (pid: string) => git.init(pid),
   'git.diff': (pid: string, path: string, staged: boolean, untracked: boolean) => git.diff(pid, path, staged, untracked),
+  'git.workingDiff': (pid: string, maxChars?: number) => git.workingDiff(pid, maxChars),
   'git.stage': (pid: string, paths: string[]) => git.stage(pid, paths),
   'git.stageAll': (pid: string) => git.stageAll(pid),
   'git.unstage': (pid: string, paths: string[]) => git.unstage(pid, paths),
@@ -382,10 +456,19 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'threads.delete': (id: string) => {
     const t = store.findThread(id);
     if (!t) return;
-    void agents.cancel(id).catch(() => {});
-    agents.forgetThread(id);
-    promptQueue.forget(id);
-    store.deleteThread(t);
+    const all = [
+      ...collectNativeSubagents(store.listThreads(t.projectId), id)
+        .map((m) => store.findThread(m.id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c)),
+      t,
+    ];
+    for (const cur of all) {
+      void agents.cancel(cur.id).catch(() => {});
+      agents.forgetThread(cur.id);
+      promptQueue.forget(cur.id);
+      forgetOrchestratorThread(cur.id);
+      store.deleteThread(cur);
+    }
   },
 
   // ACP session lifecycle (src/main/acpSessionService.ts): import from an agent, delete / rename / fork with the
@@ -408,10 +491,13 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'acpSessions.archive': (agentId: string, sessionId: string, archived: boolean) => acpSessions.setNativeArchived(agentId, sessionId, archived),
   'acpSessions.deleteNative': (agentId: string, sessionId: string) => acpSessions.deleteNative(agentId, sessionId),
   'acpSessions.deletable': (threadId: string) => acpSessions.deletableSessions(threadId),
-  /** Delete a chat; with `alsoAgentSessions` (opt-in in the dialog) each agent deletes its own saved session too. */
-  'acpSessions.deleteChat': async (id: string, alsoAgentSessions: boolean) => {
-    const results = store.findThread(id) ? await acpSessions.beforeDeleteChat(id, Boolean(alsoAgentSessions)) : {};
-    await handlers['threads.delete'](id);
+  'acpSessions.deleteTargets': (threadId: string) => acpSessions.deleteTargets(threadId),
+  /** Delete a chat; opt-in checkboxes in DeleteChatDialog can also delete its sub-sessions and/or saved agent sessions. */
+  'acpSessions.deleteChat': async (id: string, alsoAgentSessions: boolean, alsoSubsessions = false) => {
+    const subIds = alsoSubsessions ? acpSessions.subsessionsOf(id).map((s) => s.id) : [];
+    const ids = store.findThread(id) ? [...subIds, id] : subIds;
+    const results = ids.length ? await acpSessions.beforeDeleteChats(ids, Boolean(alsoAgentSessions)) : {};
+    for (const tid of ids) await handlers['threads.delete'](tid);
     return results;
   },
   /** Rename a chat and the agent sessions behind it; resolves the title the chat ends up with. */
@@ -447,6 +533,10 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'chat.states': () => agents.allRunStates(),
   'turn.changes': (threadId: string, itemId: string) => agents.turnChanges(threadId, itemId),
   'turn.fileDiff': (threadId: string, itemId: string, path: string) => agents.turnFileDiff(threadId, itemId, path),
+  'turn.fileReview': (threadId: string, itemId: string, path: string) => agents.turnFileReview(threadId, itemId, path),
+  'turn.setFile': (threadId: string, itemId: string, path: string, to: 'before' | 'after') => agents.turnSetFile(threadId, itemId, path, to),
+  'turn.setHunk': (threadId: string, itemId: string, path: string, hunkIndex: number, action: 'revert' | 'apply') =>
+    agents.turnSetHunk(threadId, itemId, path, hunkIndex, action),
   'turn.undoCheck': (threadId: string, itemId: string) => agents.undoCheck(threadId, itemId),
   'turn.undo': (threadId: string, itemId: string) => agents.undoTurn(threadId, itemId),
   'chat.secondOpinion': (threadId: string, itemId: string, agentIds: string[]) => secondOpinion(threadId, itemId, agentIds),
@@ -696,6 +786,7 @@ app.whenReady().then(() => {
     }
   }
   mkdirSync(store.sharedRoot(), { recursive: true });
+  projectsWatch = watchProjectsFile({ dir: store.sharedRoot, onChange: announceProjects });
   // Microphone only for the app's own window, audio only (src/main/permissions.ts).
   installPermissionHandlers(join(here, '../renderer'), process.env.ELECTRON_RENDERER_URL);
   initVoice();
@@ -715,12 +806,27 @@ app.whenReady().then(() => {
   startHeatWatch(emit);
   startJobWatch();
   createWindow();
-  // Messages still queued when the app last closed go out once their agent connects (src/main/promptQueue.ts).
-  setTimeout(() => resumeQueues(), 1500);
+  // Messages and agent wake-up timers still pending when the app last closed resume once ready.
+  setTimeout(() => {
+    resumeQueues();
+    restoreAgentTimers(join(app.getPath('userData'), 'agent-timers.json'), (id) => Boolean(store.findThread(id)));
+  }, 1500);
   app.on('activate', () => {
     // The main window, even when a detached tool window is still open.
     if (!win) createWindow();
   });
+});
+
+app.on('second-instance', () => {
+  if (!app.isReady()) return;
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (TEST_HIDDEN) return;
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
 });
 
 // Inside a web preview, links that open new windows go to the user's browser.
@@ -773,7 +879,9 @@ app.on('before-quit', (e) => {
     return;
   }
   store.flushThreads();
+  projectsWatch?.close();
   flushTerminals();
+  pauseAgentTimersForQuit();
   stopRemote();
   agents.shutdownAgents();
   stopOrchestrator();
@@ -783,6 +891,7 @@ app.on('before-quit', (e) => {
 });
 // The quit is certain now: a downloaded update is installed by a detached helper once this process has exited.
 app.on('will-quit', () => {
+  app.releaseSingleInstanceLock();
   // The warm whisper-server never outlives the app.
   shutdownVoice();
   try {
@@ -794,3 +903,4 @@ app.on('will-quit', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+}
