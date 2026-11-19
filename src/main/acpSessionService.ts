@@ -8,7 +8,7 @@ import {
   type NativeArchiveFilter,
   type NativeSessionPage,
 } from '@shared/acpSessions';
-import type { AgentId, ConfigOptionView, Project, Settings, Thread, ThreadMeta } from '@shared/types';
+import type { AgentId, ConfigOptionView, Project, Settings, Thread, ThreadMeta, WorktreeStatusView } from '@shared/types';
 import {
   archiveSession,
   bestEffort,
@@ -59,6 +59,8 @@ export interface AcpSessionDeps {
   ensureSession(threadId: string): Promise<boolean>;
   /** The options the app last saw for this agent (agents.knownOptionsForAgent), for agents without `session/options`. */
   knownOptions(agentId: AgentId): ConfigOptionView[];
+  /** A chat's git worktree status (worktreeChats.ts), for the delete dialog's unmerged-work warning. */
+  worktreeStatus?(threadId: string): Promise<WorktreeStatusView | null>;
 }
 
 let deps: AcpSessionDeps | undefined;
@@ -201,7 +203,9 @@ export async function deleteTargets(threadId: string): Promise<DeleteChatTargets
   const subs = subsessionsOf(threadId);
   const own = await deletableSessions(threadId);
   const ownAgents = [...new Set(own.map((s) => s.agentId))];
-  if (!subs.length) return { ownAgents, subsessions: [], allAgents: ownAgents };
+  const unmerged = await unmergedWorktrees([threadId, ...subs.map((s) => s.id)]);
+  const extra = unmerged.length ? { unmergedWorktrees: unmerged } : {};
+  if (!subs.length) return { ownAgents, subsessions: [], allAgents: ownAgents, ...extra };
   const allSet = new Set<AgentId>(ownAgents);
   for (const sub of subs) {
     for (const s of await deletableSessions(sub.id)) allSet.add(s.agentId);
@@ -210,7 +214,22 @@ export async function deleteTargets(threadId: string): Promise<DeleteChatTargets
     ownAgents,
     subsessions: subs.map((s) => ({ id: s.id, title: s.title })),
     allAgents: [...allSet],
+    ...extra,
   };
+}
+
+/** Chats among `ids` whose worktree has commits not in its base branch or uncommitted changes. */
+async function unmergedWorktrees(ids: string[]): Promise<NonNullable<DeleteChatTargets['unmergedWorktrees']>> {
+  const d = deps;
+  if (!d?.worktreeStatus) return [];
+  const out: NonNullable<DeleteChatTargets['unmergedWorktrees']> = [];
+  for (const id of ids) {
+    const t = d.store.findThread(id);
+    if (!t?.worktree) continue;
+    const st = await d.worktreeStatus(id).catch(() => null);
+    if (st && st.exists && (st.ahead > 0 || st.dirtyFiles > 0)) out.push({ id, title: t.title, branch: st.branch, ahead: st.ahead, dirtyFiles: st.dirtyFiles });
+  }
+  return out;
 }
 
 /** Release the agent side of a chat: `session/close` on every agent that is running and supports it. */

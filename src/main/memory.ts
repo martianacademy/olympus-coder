@@ -2,10 +2,11 @@ import { shell } from 'electron';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { buildFreshCarryoverSection, DEFAULT_CARRYOVER_TRANSCRIPT_CHARS, isFreshCarryoverPending } from '@shared/freshCarryover';
 import type { MemoryView, Project, Thread } from '@shared/types';
 import { notesForAgents } from './usernotes';
 import { pathSlug } from './relocate';
-import { GENERAL_PROJECT_ID, getSettings, listThreads, sharedRoot } from './store';
+import { baseProject, baseProjectId, GENERAL_PROJECT_ID, getSettings, listThreads, sharedRoot } from './store';
 
 /**
  * Shared memory lives in one folder that every agent reads and writes:
@@ -18,14 +19,15 @@ import { GENERAL_PROJECT_ID, getSettings, listThreads, sharedRoot } from './stor
 
 /** Same rule as Claude Code's ~/.claude/projects/<slug> (relocate.ts). */
 export const projectSlug = pathSlug;
-export const memoryDir = (p: Project) => join(sharedRoot(), 'memory', projectSlug(p.path));
+/** Memory always belongs to the base project, also for a worktree chat's virtual project (store.baseProject). */
+export const memoryDir = (p: Project) => join(sharedRoot(), 'memory', projectSlug(baseProject(p).path));
 
 /**
  * The auto-memory folder Claude Code uses for this project when it runs outside Olympus (Claude desktop, the
  * `claude` CLI): ~/.claude/projects/<slug>/memory, same slug rule as ours. Returned only when it has an index.
  */
 export function claudeNativeMemory(p: Project): string | undefined {
-  const dir = join(homedir(), '.claude', 'projects', projectSlug(p.path), 'memory');
+  const dir = join(homedir(), '.claude', 'projects', projectSlug(baseProject(p).path), 'memory');
   try {
     return statSync(join(dir, 'MEMORY.md')).size > 0 ? dir : undefined;
   } catch {
@@ -212,7 +214,8 @@ export function claudeLoadsMemoryIndex(p: Project): boolean {
  */
 function buildRecentSessionsSummary(p: Project, currentThreadId: string, maxSessions = 8): string {
   if (p.id === GENERAL_PROJECT_ID) return '';
-  const metas = listThreads(p.id).filter(
+  const projectId = baseProjectId(p.id);
+  const metas = listThreads(projectId).filter(
     (t) => t.id !== currentThreadId && !t.nativeSubagent && !t.spawnedBy && !t.secondOpinion && t.title !== 'New chat',
   );
   if (!metas.length) return '';
@@ -220,7 +223,7 @@ function buildRecentSessionsSummary(p: Project, currentThreadId: string, maxSess
     .slice(0, maxSessions)
     .map((t) => {
       const who = AGENT_NAMES[t.agentId] ?? t.agentId;
-      const txPath = join(sharedRoot(), 'threads', p.id, `${t.id}.json`);
+      const txPath = join(sharedRoot(), 'threads', projectId, `${t.id}.json`);
       return `- ${fmtStamp(t.updatedAt)} UTC · [${who}] "${t.title}" — session \`${t.id}\` (\`${txPath}\`)`;
     })
     .join('\n');
@@ -259,6 +262,8 @@ export function transcript(thread: Thread, maxChars: number): string {
       entries.push({ text: `${who} [error]: ${it.text}`, item: it });
     } else if (it.kind === 'switch') {
       entries.push({ text: `--- switched from ${AGENT_NAMES[it.from] ?? it.from} to ${AGENT_NAMES[it.to] ?? it.to} ---`, item: it });
+    } else if (it.kind === 'context-reset') {
+      entries.push({ text: `--- fresh context started (${AGENT_NAMES[it.agentId] ?? it.agentId}) ---`, item: it });
     }
   }
   const full = entries.map((e) => e.text).join('\n\n');
@@ -359,8 +364,22 @@ export function buildPreamble(p: Project, thread: Thread, agentId: string, inclu
     );
   }
   if (includeHistory) {
-    const t = transcript(thread, 24_000);
-    if (t) parts.push(`## Conversation so far in this chat (earlier turns may have been answered by a different agent)\n\n${t}`);
+    if (isFreshCarryoverPending(thread.items)) {
+      const compact = transcript(thread, DEFAULT_CARRYOVER_TRANSCRIPT_CHARS);
+      const lastReset = [...thread.items].reverse().find((i): i is Extract<Thread['items'][number], { kind: 'context-reset' }> => i.kind === 'context-reset');
+      const txPath = join(sharedRoot(), 'threads', baseProjectId(p.id), `${thread.id}.json`);
+      parts.push(
+        buildFreshCarryoverSection({
+          thread,
+          compactTranscript: compact,
+          transcriptPath: txPath,
+          previousUsed: lastReset?.previousUsed,
+        }),
+      );
+    } else {
+      const t = transcript(thread, 24_000);
+      if (t) parts.push(`## Conversation so far in this chat (earlier turns may have been answered by a different agent)\n\n${t}`);
+    }
   }
   return `<olympus-context agent="${agentId}">\n${parts.join('\n\n')}\n</olympus-context>`;
 }

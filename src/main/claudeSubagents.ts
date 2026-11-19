@@ -9,6 +9,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { SubTaskView, Thread } from '@shared/types';
+import { workspaceProjectId } from '@shared/worktree';
 import { createThread, findThread, getProject, listThreads, saveThread, threadMeta } from './store';
 import {
   applyClaudeRecords,
@@ -51,7 +52,8 @@ const watches = new Map<string, Watch>();
 const parents = new Map<string, ParentWatch>();
 
 const projectsDir = () => process.env.OLYMPUS_CLAUDE_PROJECTS_DIR || join(homedir(), '.claude', 'projects');
-const projectSlug = (root: Thread) => (getProject(root.projectId)?.path ?? process.cwd()).replaceAll('/', '-');
+// Claude Code keeps a session's JSONL under the slug of its cwd: the chat's worktree when it runs in one.
+const projectSlug = (root: Thread) => (getProject(workspaceProjectId(root))?.path ?? process.cwd()).replaceAll('/', '-');
 const sessionDir = (sid: string, root: Thread) => join(projectsDir(), projectSlug(root), sid);
 const isLive = (s: SubTaskView['status']) => s === 'starting' || s === 'running';
 

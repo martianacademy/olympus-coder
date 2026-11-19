@@ -49,6 +49,8 @@ export const Workbench = forwardRef<
     only?: PanelTool;
     /** The Web tool's page when it opens detached. */
     initialWebUrl?: string;
+    /** The chat's thread record changed (its git worktree was removed): reload it. */
+    onThreadChanged?: () => void;
   }
 >(function Workbench(props, ref) {
   const only = props.only;

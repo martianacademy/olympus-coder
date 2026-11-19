@@ -189,11 +189,13 @@ export function useAppSync(params: AppSyncParams): { dark: boolean; refreshKey: 
           if (!m.nativeSubagent) {
             setThreads((all) => {
               const list = all[m.projectId] ?? [];
-              const next = list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? { ...x, ...m } : x)) : [m, ...list];
+              // `worktree` is replaced, not merged: a removed worktree is absent from the meta (JSON drops undefined).
+              const next = list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? { ...x, ...m, worktree: m.worktree } : x)) : [m, ...list];
               return { ...all, [m.projectId]: next.sort((a, b) => b.updatedAt - a.updatedAt) };
             });
           }
-          if (m.id === activeIdRef.current) setActive((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove } : t));
+          // `worktree` too: it is cleared when the chat's git worktree is removed (thread:meta always carries the full meta).
+          if (m.id === activeIdRef.current) setActive((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove, worktree: m.worktree } : t));
           break;
         }
         case 'projects:changed':

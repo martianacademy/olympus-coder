@@ -43,6 +43,8 @@ import type {
   Settings,
   Thread,
   ThreadMeta,
+  WorktreeMergeResult,
+  WorktreeStatusView,
 } from '@shared/types';
 
 declare global {
@@ -206,7 +208,14 @@ export const api = {
 
   threads: (projectId: string) => call<ThreadMeta[]>('threads.list', projectId),
   thread: (id: string) => call<{ thread: Thread; session: SessionView } | null>('threads.get', id),
-  createThread: (projectId: string, agentId: string, mode?: 'chat' | 'code') => call<Thread>('threads.create', projectId, agentId, mode),
+  createThread: (projectId: string, agentId: string, mode?: 'chat' | 'code', opts?: { worktree?: boolean }) =>
+    opts ? call<Thread>('threads.create', projectId, agentId, mode, opts) : call<Thread>('threads.create', projectId, agentId, mode),
+  /** Git worktree chats (src/shared/worktree.ts): status, merge back into the base branch, remove. */
+  worktree: {
+    status: (threadId: string) => call<WorktreeStatusView | null>('worktree.status', threadId),
+    merge: (threadId: string, mode: 'merge' | 'squash', message?: string) => call<WorktreeMergeResult>('worktree.merge', threadId, mode, message),
+    remove: (threadId: string) => call<{ ok: boolean; branchKept?: boolean; error?: string }>('worktree.remove', threadId),
+  },
   allThreads: () => call<ThreadMeta[]>('threads.all'),
   pinThread: (id: string, pinned: boolean) => call<ThreadMeta>('threads.pin', id, pinned),
   generalProject: () => call<Project>('projects.general'),
@@ -230,6 +239,7 @@ export const api = {
   cancel: (threadId: string) => call<void>('chat.cancel', threadId),
   stopTool: (threadId: string, toolItemId: string) => call<void>('chat.stopTool', threadId, toolItemId),
   switchAgent: (threadId: string, agentId: string) => call<SessionView>('chat.switchAgent', threadId, agentId),
+  resetContext: (threadId: string) => call<SessionView>('chat.resetContext', threadId),
   setConfig: (threadId: string, configId: string, value: string) => call<SessionView>('chat.setConfig', threadId, configId, value),
   permission: (threadId: string, itemId: string, optionId: string | null) => call<void>('chat.permission', threadId, itemId, optionId),
   /** Answer a question from the agent (ACP elicitation): accept with the form's content, decline, or cancel. */

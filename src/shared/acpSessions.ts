@@ -72,6 +72,8 @@ export interface DeleteChatTargets {
   subsessions: { id: string; title: string }[];
   /** Deletable agent IDs across the target chat and all its sub-sessions. */
   allAgents: AgentId[];
+  /** Worktrees (own or sub-sessions) that still contain unmerged commits or uncommitted changes. */
+  unmergedWorktrees?: { id: string; title: string; branch: string; ahead: number; dirtyFiles: number }[];
 }
 
 /**

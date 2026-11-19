@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
 import type { Project, SearchHit, Settings, Thread, ThreadItem, ThreadMeta, UserProfile } from '@shared/types';
 import { DEFAULT_THEME, migrateThemeColors } from '@shared/themes';
+import { parseWorktreeProjectId } from '@shared/worktree';
 import { chatMediaDir, removeChatMedia } from './acpContent';
 import { defaultSharedRoot, migrateLegacySharedRoot } from './sharedMigration';
 import { relocateOnDisk } from './relocate';
@@ -194,6 +195,7 @@ export function projectRecord(id: string): Project | undefined {
 
 /** Points a project at its renamed or moved folder; memory and Claude Code's sessions follow (relocate.ts). */
 export function relocateProject(id: string, newPath: string): Project {
+  id = baseProjectId(id);
   const p = projectRecord(id);
   if (!p) throw new Error('Project not found.');
   const r = relocateOnDisk({ sharedRoot: sharedRoot(), home: homedir(), oldPath: p.path, newPath, projectId: id });
@@ -238,7 +240,20 @@ export function removeProject(id: string): void {
   projectsWritten();
 }
 
+/**
+ * The real project behind an id: a worktree chat's virtual id (`<projectId>__wt_<threadId>`, src/shared/worktree.ts)
+ * maps to its base project id. Every WRITE keyed by a project id (Verify Gate, stats, relocate, memory) uses this.
+ */
+export const baseProjectId = (id: string): string => parseWorktreeProjectId(id)?.projectId ?? id;
+
+/** The base project of a (possibly virtual) project record: memory and settings always belong to it. */
+export function baseProject(p: Project): Project {
+  const base = parseWorktreeProjectId(p.id) ? projectRecord(baseProjectId(p.id)) : undefined;
+  return base ?? p;
+}
+
 export function updateProjectVerifyGate(id: string, verifyGate: Project['verifyGate']): Project | undefined {
+  id = baseProjectId(id);
   if (id === GENERAL_PROJECT_ID) return undefined;
   const all = readJson<Project[]>(projectsFile(), []);
   const idx = all.findIndex((p) => p.id === id);
@@ -250,7 +265,19 @@ export function updateProjectVerifyGate(id: string, verifyGate: Project['verifyG
   return updated;
 }
 
+/**
+ * A reachable project by id. A worktree chat's virtual id resolves to the base project with `id` = the virtual id
+ * and `path` = the worktree folder (undefined when the chat, its worktree or the folder is gone), so files, git,
+ * terminals, preview, Verify Gate and turn checkpoints follow the worktree. listProjects never returns these.
+ */
 export function getProject(id: string): Project | undefined {
+  const wt = parseWorktreeProjectId(id);
+  if (wt) {
+    const base = getProject(wt.projectId);
+    const t = base && getThread(wt.projectId, wt.threadId);
+    const path = t?.worktree?.path;
+    return base && path && existsSync(path) ? { ...base, id, path } : undefined;
+  }
   if (id === GENERAL_PROJECT_ID) return generalProject();
   return listProjects().find((p) => p.id === id);
 }

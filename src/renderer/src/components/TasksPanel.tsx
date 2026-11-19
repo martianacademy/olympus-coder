@@ -9,6 +9,7 @@ import { agentLabel, DoneList, finishedTools, LIVE, liveNow, PlanBox, RunCard, S
 import { TaskCard } from './TaskSubagentCard';
 import { ElicitationCard } from './ElicitationCard';
 import { PanelSkeleton } from './Skeleton';
+import { workspaceProjectId } from '@shared/worktree';
 
 export { liveNow };
 /** `loading`: this chat's list has not arrived yet (the panel shows a skeleton meanwhile). */
@@ -118,7 +119,7 @@ export function TasksPanel(props: {
   const [showAllDone, setShowAllDone] = useState(false);
   const now = liveNow(thread);
   const childIdSet = new Set(data.children.map((c) => c.meta.id));
-  const parentProcs = allProcs.filter((p) => (p.source === 'agent' ? p.threadId === thread.id : p.projectId === thread.projectId));
+  const parentProcs = allProcs.filter((p) => (p.source === 'agent' ? p.threadId === thread.id : p.projectId === thread.projectId || p.projectId === workspaceProjectId(thread)));
   const subagentProcs = allProcs.filter((p) => p.source === 'agent' && p.threadId && childIdSet.has(p.threadId));
   const liveChildren = data.children.filter((c) => LIVE.has(c.status));
   const doneChildren = data.children.filter((c) => !LIVE.has(c.status));

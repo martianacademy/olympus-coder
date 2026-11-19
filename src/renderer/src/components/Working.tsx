@@ -3,6 +3,7 @@ import type { ThreadItem } from '@shared/types';
 import { estimateTokens, fmtTokens } from '../tokens';
 import { useBackgroundWork } from '../threadStatus';
 import { parseToolStep } from '../toolStep';
+import { QUIET_AFTER_MS, quietLabel, quietTip, stepSignature, useQuietMs } from '../liveQuiet';
 
 /**
  * Shared animated Olympus Coder brand mark: the erupting volcano, curly-brace cloud,
@@ -76,6 +77,9 @@ export function WorkingIndicator({ items, agentName }: { items: ThreadItem[]; ag
   const waitingAnswer = turn.some((i) => i.kind === 'elicitation' && !i.resolved);
   const tool = [...turn].reverse().find((i) => i.kind === 'tool' && (i.status === 'in_progress' || i.status === 'pending'));
   const written = estimateTokens(turn);
+  const quiet = useQuietMs(stepSignature(last), Date.now(), last?.kind === 'tool' ? last.endedAt : undefined);
+  // Only the agent's own silence counts: a running tool or a question for the user is quiet on purpose.
+  const silent = Boolean(last) && !waitingPerm && !waitingAnswer && !tool;
 
   let text: string;
   if (waitingPerm) text = 'Waiting for your approval';
@@ -87,16 +91,24 @@ export function WorkingIndicator({ items, agentName }: { items: ThreadItem[]; ag
     else if (p.headerTitle) text = `${p.toolLabel} · ${p.headerTitle}`;
     else text = `Running ${p.toolLabel}…`;
   } else if (last.kind === 'thought') text = 'Thinking…';
-  else if (last.kind === 'agent') text = 'Writing the reply…';
+  // A reply that stopped growing is finished; the agent is preparing a step it has not sent yet.
+  else if (last.kind === 'agent') text = quiet < QUIET_AFTER_MS ? 'Writing the reply…' : 'Working out the next step…';
   else if (last.kind === 'tool') text = 'Working out the next step…';
   else text = 'Working…';
+  const quietText = silent ? quietLabel(quiet) : '';
 
   return (
-    <div className={`working-brand ${waitingPerm || waitingAnswer ? 'paused' : ''}`} role="status" aria-live="polite">
+    <div
+      className={`working-brand ${waitingPerm || waitingAnswer ? 'paused' : ''}`}
+      role="status"
+      aria-live="polite"
+      title={silent ? quietTip(agentName, quiet) : undefined}
+    >
       <BrandWorkingMark />
       <span className="wb-text shimmer ellipsis">{text}</span>
       <span className="wb-meta">
-        {secs}s{written > 0 ? ` · ≈${fmtTokens(written)} tokens` : ''}
+        {secs}s{quietText ? ` · ${quietText}` : ''}
+        {written > 0 ? ` · ≈${fmtTokens(written)} tokens` : ''}
       </span>
     </div>
   );

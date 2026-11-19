@@ -6,6 +6,7 @@ import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url';
 import type { FilePreview } from '@shared/types';
 import { mimeOf } from './attachments';
+import { parseWorktreeProjectId } from '@shared/worktree';
 import { generalProject, getProject, listProjects } from './store';
 
 /**
@@ -94,7 +95,9 @@ function owningProject(abs: string, preferId?: string): { projectId: string; rel
   } catch {
     /* missing file: compare the path as given */
   }
-  const projects = listProjects().sort((a, b) => (a.id === preferId ? -1 : b.id === preferId ? 1 : b.path.length - a.path.length));
+  // A worktree chat's virtual project (folder = its worktree) is never in listProjects: check it first.
+  const virtual = preferId && parseWorktreeProjectId(preferId) ? getProject(preferId) : undefined;
+  const projects = [...(virtual ? [virtual] : []), ...listProjects()].sort((a, b) => (a.id === preferId ? -1 : b.id === preferId ? 1 : b.path.length - a.path.length));
   for (const p of projects) {
     let root = p.path;
     try {

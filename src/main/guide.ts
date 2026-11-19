@@ -7,7 +7,7 @@ import { olympusServerName, sharesMcpRegistry } from '@shared/olympusServer';
 import { claudeNativeMemory, globalInstructionsPath, memoryDir, projectInstructionsPath, readProjectInstructions } from './memory';
 import { skillsDir, skillsForGuide } from './skills';
 import { learningOn } from './usernotes';
-import { findThread, GENERAL_PROJECT_ID, getSettings, sharedRoot, writeJson } from './store';
+import { baseProjectId, findThread, GENERAL_PROJECT_ID, getSettings, sharedRoot, writeJson } from './store';
 
 /**
  * The operating guide every agent session gets: who and where it is, the strict two-tier Persistent Context &
@@ -68,7 +68,9 @@ You are ${agentName(agentId)}, working as a coding agent inside Olympus Coder: a
   const workspaceLine =
     project.id === GENERAL_PROJECT_ID
       ? `- Workspace: General — ${project.path} (scratch folder for Chat mode, not a user code repository)`
-      : `- Project: ${project.name} — ${project.path} (your working directory${thread.mode === 'chat' ? '; Chat mode' : ''})`;
+      : thread.worktree
+        ? `- Project: ${project.name} — ${project.path} (your working directory: an isolated git worktree on branch \`${thread.worktree.branch}\`, branched from \`${thread.worktree.baseBranch}\`; commit here, the user merges it from the app)`
+        : `- Project: ${project.name} — ${project.path} (your working directory${thread.mode === 'chat' ? '; Chat mode' : ''})`;
   const lines = [
     `- Session id: ${thread.id} (Olympus Coder's id for this chat)`,
     `- Title: ${thread.title}`,
@@ -115,7 +117,7 @@ You are ${agentName(agentId)}, working as a coding agent inside Olympus Coder: a
 
 Knowledge every agent shares lives under \`${root}\`:
 - **Shared Memory** \`${mem}/\`: the \`MEMORY.md\` index, topic \`.md\` files, and the solved-bug log \`${join(mem, 'BUGS.md')}\`. Your opening context lists the summaries with their paths.
-- **Session transcripts** \`${join(root, 'threads', project.id)}/<session-id>.json\`: raw logs of past sessions of every agent. Read them (targeted \`grep\` or line ranges; never edit them) only when your task continues an earlier chat or memory lacks a detail.
+- **Session transcripts** \`${join(root, 'threads', baseProjectId(project.id))}/<session-id>.json\`: raw logs of past sessions of every agent. Read them (targeted \`grep\` or line ranges; never edit them) only when your task continues an earlier chat or memory lacks a detail.
 ${globalLine}${legacyLine}
 
 - **Memory first:** before any codebase research or edit, read the memory files whose summaries match your task, and grep \`BUGS.md\` for a distinctive part of any error you investigate.
@@ -129,7 +131,7 @@ ${writeBackRule}`,
 
 You retrieve and persist knowledge across conversations and across agents via two shared mechanisms under \`${root}\`:
 1. **Shared Memory Items (\`${mem}/\`)** — Curated, distilled project knowledge (\`MEMORY.md\` index + topic \`.md\` artifacts) and solved bug log (\`${join(mem, 'BUGS.md')}\`). **Always check Shared Memory first.**
-2. **Session Transcripts (\`${join(root, 'threads', project.id)}/<session-id>.json\`)** — Raw conversation logs from past sessions across all agents.
+2. **Session Transcripts (\`${join(root, 'threads', baseProjectId(project.id))}/<session-id>.json\`)** — Raw conversation logs from past sessions across all agents.
 ${globalLine}${legacyLine}
 
 **Strict retrieval priority order:** \`Shared Memory (${mem}/) → Session Transcripts → Fresh codebase research\`.
@@ -152,7 +154,7 @@ Actively check Shared Memory in all of these scenarios:
 Memory files are snapshots of past work and can become stale as code evolves. Always cross-reference any file path, function signature, API surface, or flag pulled from memory against the live workspace code before editing.
 
 ### 3. When to Read Session Transcripts
-Read \`${join(root, 'threads', project.id)}/<session-id>.json\` (using targeted \`grep\` or line-range reads on large files — never dump whole multi-MB transcripts blindly, and never edit them) **only** when:
+Read \`${join(root, 'threads', baseProjectId(project.id))}/<session-id>.json\` (using targeted \`grep\` or line-range reads on large files — never dump whole multi-MB transcripts blindly, and never edit them) **only** when:
 - The user references an earlier chat or asks what another agent did;
 - A recent session listed in \`<olympus-context>\` directly continues your current task; or
 - Shared Memory artifacts are insufficient and you need exact raw details.
@@ -257,6 +259,7 @@ ${writeBackRule}`,
 
 You are the main session. Your job is to think, plan, delegate and check — not to do all the hands-on work yourself. Sub-sessions run in parallel, each with a fresh context of its own, and the user watches them live in the Tasks panel on the right.
 Prefer \`spawn_subsession\` for delegated tasks (it lets you pick any installed CLI agent or model, check quotas, and steer or resume sub-sessions), though native sub-agents are also shown live in the Tasks panel. When the user asks for "sub-sessions", "subagents", "agents", "helpers" or parallel work in any words or language, use \`spawn_subsession\` — each one shows in the user's Tasks panel.
+When parallel sub-sessions would edit the same files, pass \`worktree: true\` so each works in its own git worktree and branch.
 
 Tools (\`${server}\` MCP server): list_agents, spawn_subsession, configure_subsession, wait_for_subsessions, get_subsession, message_subsession, cancel_subsession, delete_subsession, list_schedules, save_schedule, delete_schedule, run_schedule, search_agent_registry, add_agent, add_custom_agent, remove_agent, create_project, session_info, set_timer, run_in_terminal, read_terminal.
 

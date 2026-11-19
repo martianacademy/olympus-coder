@@ -27,6 +27,7 @@ import { promptQueueApi, usePromptQueue } from '../promptQueueApi';
 import { quotaState } from '../quota';
 import { AttachButton, AttachmentChips, useAttachments } from './Attachments';
 import { CompactButton } from './CompactButton';
+import { FreshContextButton } from './FreshContextButton';
 import { ConfigPill } from './ConfigPills';
 import { QueuedMessages } from './QueuedMessages';
 import { useSlashMenu } from './SlashMenu';
@@ -43,6 +44,10 @@ export interface ChatComposerProps {
   session: SessionView | null;
   /** The agent is compacting this chat's context (`isCompacting` over the thread's items). */
   compacting?: boolean;
+  /** True once this chat has at least one turn (enables 1-click Fresh context carryover). */
+  hasHistory?: boolean;
+  /** Timestamp of the latest user/agent turn for >5m cache-cold hint. */
+  lastTurnTs?: number;
   agentDef?: AgentDef;
   agentDefs: Record<string, AgentDef>;
   agentStatus?: AgentStatus;
@@ -493,6 +498,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           {props.compactInComposer !== false && (
             <CompactButton threadId={threadId} session={session} compacting={Boolean(props.compacting)} queue={queue} variant="chip" />
           )}
+          <FreshContextButton
+            threadId={threadId}
+            session={session}
+            hasHistory={Boolean(props.hasHistory)}
+            lastTurnTs={props.lastTurnTs}
+            onlyWhenElevated={props.compactInComposer === false}
+            variant="chip"
+          />
           <ContextMeter usage={session?.usage} onClick={props.onUsage} />
           <div className="composer-send">
             {mic === 'record' && rec === 'recording' && (

@@ -42,12 +42,14 @@ if (standalone) {
   root.classList.add('standalone');
   const vv = window.visualViewport;
   let state: FitState = { orientation: '', base: 0 };
+  let applied = '';
   const fit = () => {
     if (!iosStandalone) return root.style.setProperty('--app-h', `${window.innerHeight}px`);
     if (vv && vv.scale > 1.01) return; // pinch-zoomed: keep the layout as it is
     const r = fitHeight({ visible: vv?.height ?? window.innerHeight, innerWidth: window.innerWidth, screenWidth: screen.width, screenHeight: screen.height }, state);
     state = r.state;
-    root.style.setProperty('--app-h', `${r.height}px`);
+    const h = `${r.height}px`;
+    if (h !== applied) root.style.setProperty('--app-h', (applied = h));
     root.classList.toggle('kb-open', r.keyboard);
     // iOS scrolled the whole page up to show the focused box; the app now fits above the keyboard, so undo that.
     if (window.scrollY || (vv?.offsetTop ?? 0)) window.scrollTo(0, 0);
@@ -57,6 +59,26 @@ if (standalone) {
   vv?.addEventListener('resize', fit);
   vv?.addEventListener('scroll', fit);
   window.addEventListener('orientationchange', () => setTimeout(fit, 250));
+
+  // Tapping a box opens the keyboard, but iOS does not always send a resize for it: the app stayed full height
+  // (composer under the keyboard) until the first keystroke scrolled the caret into view. So re-measure every
+  // frame while the keyboard slides in or out after a box gains or loses focus.
+  if (iosStandalone) {
+    let until = 0;
+    let frame = 0;
+    const tick = () => {
+      fit();
+      frame = performance.now() < until ? requestAnimationFrame(tick) : 0;
+    };
+    const settle = (e: FocusEvent) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement) || !(el.matches('input, textarea, select') || el.isContentEditable)) return;
+      until = performance.now() + 1000;
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    document.addEventListener('focusin', settle);
+    document.addEventListener('focusout', settle);
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

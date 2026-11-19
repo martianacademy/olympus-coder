@@ -319,6 +319,16 @@ export type ThreadItem =
     }
   | { kind: 'switch'; id: string; from: AgentId; to: AgentId; ts: number }
   | {
+      kind: 'context-reset';
+      id: string;
+      agentId: AgentId;
+      ts: number;
+      previousUsed?: number;
+      previousSize?: number;
+      estimatedCarryover?: number;
+      editedFilesCount?: number;
+    }
+  | {
       kind: 'error';
       id: string;
       agentId: AgentId;
@@ -407,6 +417,46 @@ export interface ThreadMeta {
   /** 'chat' = general conversation (Chat mode); 'code' (default) = coding session in a project. */
   mode?: UiMode;
   pinned?: boolean;
+  /** Present when this chat runs in an isolated git worktree (`<sharedRoot>/worktrees/<projectId>/<shortId>`). */
+  worktree?: ThreadWorktree;
+}
+
+export interface ThreadWorktree {
+  /** Absolute path to the isolated git worktree folder. */
+  path: string;
+  /** Branch checked out in this worktree (e.g. `olympus/auth-fix-a1b2`). */
+  branch: string;
+  /** Base branch in the main repository this worktree branched from (e.g. `main`). */
+  baseBranch: string;
+  /** Base commit SHA when the worktree was created. */
+  baseCommit: string;
+  createdAt: number;
+  /** Last time this worktree was merged or squashed into `baseBranch` (the worktree stays usable after it). */
+  mergedAt?: number;
+}
+
+export interface WorktreeStatusView {
+  exists: boolean;
+  path: string;
+  branch: string;
+  baseBranch: string;
+  /** Commits on `branch` not yet in `baseBranch`. */
+  ahead: number;
+  /** Commits on `baseBranch` not yet in `branch`. */
+  behind: number;
+  /** Modified, staged, or untracked files inside the worktree working directory. */
+  dirtyFiles: number;
+  /** Distinct file paths changed in `baseBranch...HEAD` or dirty in the worktree. */
+  changedFiles: string[];
+  merged?: boolean;
+}
+
+export interface WorktreeMergeResult {
+  ok: boolean;
+  mode: 'merge' | 'squash';
+  commitSha?: string;
+  conflicts?: string[];
+  error?: string;
 }
 
 export interface Thread extends ThreadMeta {

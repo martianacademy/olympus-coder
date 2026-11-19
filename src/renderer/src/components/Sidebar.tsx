@@ -6,6 +6,7 @@ import type { AgentDef, Project, ThreadMeta } from '@shared/types';
 import { AgentLogo } from '../logos';
 import { createFoldPruner, isProjectFolded, isThreadFolded, revealFreshThreadOnce, setProjectOpen, setThreadOpen, useSidebarFolds, type SidebarFolds } from '../sidebarState';
 import { SidebarRowMenu } from './SidebarRowMenu';
+import '../worktree.css';
 
 interface Props {
   projects: Project[];
@@ -240,6 +241,11 @@ function ThreadNode(
         ) : (
           <span className="title" title={t.title}>
             {t.title}
+          </span>
+        )}
+        {!editing && t.worktree && (
+          <span className="wt-glyph" title={`Runs in its own git worktree: ${t.worktree.branch}`} data-testid="sidebar-worktree-glyph">
+            <GitBranch size={11} />
           </span>
         )}
 

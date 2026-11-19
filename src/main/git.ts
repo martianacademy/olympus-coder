@@ -3,6 +3,8 @@ import type { GitBranch, GitCommit, GitFileChange, GitStash, GitStatus } from '@
 import { agentEnv } from './env';
 import { inside } from './files';
 import { getProject } from './store';
+import { parseWorktreeProjectId } from '@shared/worktree';
+import { setupLinks } from './worktrees';
 
 /**
  * Git for the Code view: everything runs the user's own `git` in the project folder, with arguments passed
@@ -41,6 +43,32 @@ function paths(projectId: string, list: string[]): string[] {
   return ['--', ...list];
 }
 
+/**
+ * A worktree chat's setup symlinks (`node_modules`, `.venv`, `venv` linked from the base folder, worktrees.ts) as
+ * git reports them while untracked: repo-root-relative paths (`prefix` + name). A symlink is a file to git, so
+ * `node_modules/` in a .gitignore does not hide it; the app hides it itself instead of touching the user's
+ * repository config or the shared `info/exclude`. Empty for normal projects and when nothing is reported.
+ */
+async function untrackedSetupLinks(projectId: string): Promise<string[]> {
+  if (!parseWorktreeProjectId(projectId)) return [];
+  const names = setupLinks(cwd(projectId));
+  if (!names.length) return [];
+  const out = await git(projectId, ['status', '--porcelain', '-z', '--untracked-files=all', '--', ...names]);
+  return out
+    .split('\0')
+    .filter((l) => l.startsWith('?? '))
+    .map((l) => l.slice(3));
+}
+
+/**
+ * Pathspecs for "everything in the repository except the setup links git reports here" (`:/` = the repository
+ * root, like a bare `git add -A`), or [] when there is nothing to leave out.
+ */
+async function allExceptSetup(projectId: string): Promise<string[]> {
+  const reported = await untrackedSetupLinks(projectId);
+  return reported.length ? ['--', ':/', ...reported.map((p) => `:(top,exclude)${p}`)] : [];
+}
+
 export async function status(projectId: string): Promise<GitStatus> {
   let out: string;
   try {
@@ -76,6 +104,9 @@ export async function status(projectId: string): Promise<GitStatus> {
       st.files.push({ path: line.slice(2), index: '.', worktree: '?', untracked: true, conflicted: false });
     }
   }
+  // Worktree chats: hide our untracked setup symlinks (a staged one stays visible, so it is never committed unseen).
+  const hidden = new Set(await untrackedSetupLinks(projectId).catch(() => [] as string[]));
+  if (hidden.size) st.files = st.files.filter((f) => !(f.untracked && hidden.has(f.path)));
   return st;
 }
 
@@ -97,7 +128,7 @@ export async function diff(projectId: string, path: string, staged: boolean, unt
 /** Compact uncommitted status + diff summary for 1-click "Fix this error" prompts (empty if clean or not a repo). */
 export async function workingDiff(projectId: string, maxChars = 3500): Promise<string> {
   try {
-    const short = (await git(projectId, ['status', '--short', '--untracked-files=normal'], { timeout: 8000 })).trim();
+    const short = (await git(projectId, ['status', '--short', '--untracked-files=normal', ...(await allExceptSetup(projectId))], { timeout: 8000 })).trim();
     if (!short) return '';
     const patch = (await git(projectId, ['diff', 'HEAD', '--no-color', '-U2'], { timeout: 8000, maxBuffer: 4 * 1024 * 1024 }).catch(() => '')).trim();
     const combined = patch ? `${short}\n\n${patch}` : short;
@@ -108,7 +139,10 @@ export async function workingDiff(projectId: string, maxChars = 3500): Promise<s
 }
 
 export const stage = (projectId: string, files: string[]) => git(projectId, ['add', '-A', ...paths(projectId, files)]);
-export const stageAll = (projectId: string) => git(projectId, ['add', '-A']);
+/** Stage everything, except a worktree chat's setup symlinks (never committed by the app). */
+export async function stageAll(projectId: string): Promise<string> {
+  return git(projectId, ['add', '-A', ...(await allExceptSetup(projectId))]);
+}
 export const unstage = (projectId: string, files: string[]) => git(projectId, ['restore', '--staged', ...paths(projectId, files)]);
 export const unstageAll = (projectId: string) => git(projectId, ['reset', '-q']);
 

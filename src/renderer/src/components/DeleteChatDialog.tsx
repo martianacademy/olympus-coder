@@ -6,6 +6,15 @@ import type { AgentsInfo } from '../App';
 import { acpSessionsApi } from '../acpSessionsApi';
 import '../acpSessions.css';
 
+/** "3 unmerged commits", "2 uncommitted files", or both. Uncommitted files are committed to the branch before the folder goes. */
+function unmergedText(ahead: number, dirty: number): string {
+  const parts = [
+    ahead ? `${ahead} unmerged commit${ahead === 1 ? '' : 's'}` : '',
+    dirty ? `${dirty} uncommitted file${dirty === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  return parts.join(' and ') || 'unmerged work';
+}
+
 const listNames = (names: string[]) => (names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 /**
@@ -59,6 +68,8 @@ export function DeleteChatDialog(props: {
   const agentIds = targets ? (deleteSubs ? targets.allAgents : targets.ownAgents) : null;
   const nameOf = (id: string) => props.agents.defs.find((d) => d.id === id)?.name ?? id;
   const names = listNames((agentIds ?? []).map(nameOf));
+  // Worktrees that would lose their folder: this chat's own, plus its sub-sessions' when those are deleted too.
+  const worktrees = (targets?.unmergedWorktrees ?? []).filter((w) => w.id === props.thread.id || deleteSubs);
 
   async function remove() {
     setBusy(true);
@@ -123,6 +134,15 @@ export function DeleteChatDialog(props: {
                     </span>
                   </span>
                 </label>
+              )}
+              {worktrees.length > 0 && (
+                <div className="col small" style={{ gap: 4 }} data-testid="delete-chat-worktrees">
+                  {worktrees.map((w) => (
+                    <div key={w.id} className="muted">
+                      <span className="mono">{w.branch}</span> has {unmergedText(w.ahead, w.dirtyFiles)}. The folder is removed; the branch is kept.
+                    </div>
+                  ))}
+                </div>
               )}
               {failed[0] === '__chat' && <div className="error-text">The chat couldn't be deleted. Try again.</div>}
             </>

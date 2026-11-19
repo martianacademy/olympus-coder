@@ -872,7 +872,8 @@ html:not([data-platform='darwin']) .app.sb-collapsed .main-head { padding-left: 
 .wb-code i.s { background: color-mix(in srgb, var(--accent) 55%, #ffd8b8); }
 .wb-code i.t { background: var(--text); animation-name: sp-tok-ink; }
 .wb-text { min-width: 0; color: var(--text); opacity: .8; }
-.wb-meta { flex: none; font-size: .85em; font-variant-numeric: tabular-nums; opacity: .8; }
+/* On a narrow chat the meta gives way before the label ("Working out the next step…" must stay readable). */
+.wb-meta { flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85em; font-variant-numeric: tabular-nums; opacity: .8; }
 .working-brand.paused .wb-code i, .working-brand.paused .wb-ball, .working-brand.paused .wb-cloud, .working-brand.paused .wb-glow { animation-play-state: paused; }
 .working-brand.paused .wb-text { color: var(--warning); }
 @keyframes sp-draw { 0% { stroke-dashoffset: 100; } 45%, 60% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }

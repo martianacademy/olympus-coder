@@ -6,19 +6,38 @@ import { useModelTags } from '../modelTags';
 import { PanelSkeleton } from './Skeleton';
 import { AgentLogo } from '../logos';
 import { isRemoteBrowser } from '../responsive';
+import { lastTurnTimestamp, threadHasConversation } from '@shared/freshCarryover';
 import { canCompact, CompactButton, isCompacting } from './CompactButton';
+import { FreshContextButton } from './FreshContextButton';
 import { McpStatusSection } from './McpStatusSection';
 import { usePromptQueue } from '../promptQueueApi';
 import { SessionStats } from './TokenStats';
 import { LimitBars, LimitsFreshness } from './Usage';
 import { VerifyGateSection } from './VerifyGateSection';
+import { WorktreeSection } from './WorktreeSection';
+import { parseWorktreeProjectId } from '@shared/worktree';
 import type { WorkbenchTab } from './Workbench';
 
-/** "Compact context" under the context ring (only for agents that advertise `compact`). */
-function InfoCompact({ thread, session }: { thread: Thread; session: SessionView | null }) {
+/** "Compact context" + universal "Fresh context" under the context ring in the Info panel. */
+function InfoContextActions({ thread, session }: { thread: Thread; session: SessionView | null }) {
   const queue = usePromptQueue(thread.id);
   const compacting = isCompacting(thread.items, session?.status === 'running');
-  return <CompactButton threadId={thread.id} session={session} compacting={compacting} queue={queue} variant="full" />;
+  const supportsCompact = canCompact(session);
+  const hasHistory = threadHasConversation(thread.items);
+  if (!supportsCompact && !hasHistory) return null;
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      {supportsCompact && <CompactButton threadId={thread.id} session={session} compacting={compacting} queue={queue} variant="full" />}
+      <FreshContextButton
+        threadId={thread.id}
+        session={session}
+        hasHistory={hasHistory}
+        lastTurnTs={lastTurnTimestamp(thread.items)}
+        hasCompactNotice={supportsCompact}
+        variant="full"
+      />
+    </div>
+  );
 }
 
 /** Ports in use on this machine, programs Olympus started first, each with Stop (asked once inline). */
@@ -104,13 +123,17 @@ export function InfoPanel(props: {
   refreshKey: number;
   onOpenFile: (p: string) => void;
   onTab: (t: WorkbenchTab) => void;
+  onThreadChanged?: () => void;
 }) {
   const remote = isRemoteBrowser();
   const tags = useModelTags();
   const [mem, setMem] = useState<MemoryView | null>(null);
+  // A worktree chat's panels get the virtual project id (`<projectId>__wt_<threadId>`); shared memory stays the
+  // base project's.
+  const memoryProjectId = parseWorktreeProjectId(props.project.id)?.projectId ?? props.project.id;
   useEffect(() => {
-    void api.memory(props.project.id).then(setMem);
-  }, [props.project.id, props.refreshKey]);
+    void api.memory(memoryProjectId).then(setMem);
+  }, [memoryProjectId, props.refreshKey]);
 
   // Files the agent changed or created in this chat (not ones it only read), newest first.
   const outputs = [
@@ -163,7 +186,7 @@ export function InfoPanel(props: {
             modelValue={model?.currentValue}
             tags={tags}
             agentDefs={{ ...(props.agentDefs ?? {}), ...(props.agentDef ? { [props.agentDef.id]: props.agentDef } : {}) }}
-            action={canCompact(props.session) ? <InfoCompact thread={props.thread} session={props.session} /> : undefined}
+            action={<InfoContextActions thread={props.thread} session={props.session} />}
           />
         </div>
       )}
@@ -189,7 +212,7 @@ export function InfoPanel(props: {
       )}
       <div className="info-section">
         <div className="info-title">Shared memory</div>
-        <div className={`info-row ${remote ? '' : 'link-like'}`} onClick={remote ? undefined : () => void api.revealMemory(props.project.id)}>
+        <div className={`info-row ${remote ? '' : 'link-like'}`} onClick={remote ? undefined : () => void api.revealMemory(memoryProjectId)}>
           <Brain size={15} className="muted" /> {mem ? `${mem.files.filter((f) => f.name !== 'MEMORY.md').length} memories` : '…'}
           {!remote && (
             <span className="small muted" style={{ marginLeft: 'auto' }}>
@@ -200,6 +223,15 @@ export function InfoPanel(props: {
         {mem?.index && <pre className="info-pre">{mem.index.replace(/^# Shared memory index[\s\S]*?\n\n(?:One line[^\n]*\n\n)?/, '').trim() || '(empty)'}</pre>}
       </div>
       <PortsCard />
+      {props.thread?.worktree && (
+        <WorktreeSection
+          thread={props.thread}
+          running={props.session?.status === 'running'}
+          refreshKey={props.refreshKey}
+          onOpenFile={props.onOpenFile}
+          onThreadChanged={props.onThreadChanged}
+        />
+      )}
       {props.project.id !== 'general' && <VerifyGateSection project={props.project} />}
       <div className="info-section">
         <div className="info-title row">

@@ -17,6 +17,7 @@ import { StepBox } from './StepBox';
 import { StepIcon, toolStepKind, type StepKind } from './stepIcons';
 import { ToolRow } from './ToolRow';
 import { BrandWorkingMark } from './Working';
+import { QUIET_AFTER_MS, quietLabel, stepSignature, useQuietMs } from '../liveQuiet';
 
 type ThoughtItem = Extract<ThreadItem, { kind: 'thought' }>;
 type PlanItem = Extract<ThreadItem, { kind: 'plan' }>;
@@ -243,12 +244,19 @@ export const WorkGroup = memo(
       : undefined;
     const lastItem = items[items.length - 1];
     const liveElapsed = live ? fmtStepDuration(Math.max(0, now - items[0].ts)) : '';
+    const quiet = useQuietMs(stepSignature(lastItem), now, lastItem.kind === 'tool' ? lastItem.endedAt : undefined);
+    // The newest tool already finished and nothing came after it: the agent is preparing a step it has not sent.
+    const betweenSteps = live && !activeTool && lastItem.kind === 'tool' && quiet >= QUIET_AFTER_MS;
+    const liveQuiet = live && !activeTool ? quietLabel(quiet) : '';
 
     let liveVerb = '';
     let liveKind: StepKind = 'tool';
     let liveTarget = '';
     let liveMono = false;
-    if (live) {
+    if (betweenSteps) {
+      liveVerb = 'Working out the next step';
+      liveKind = 'think';
+    } else if (live) {
       if (activeTool || lastItem.kind === 'tool') {
         const a = describeToolAction((activeTool ?? lastItem) as ToolItem, true);
         liveVerb = a.verb;
@@ -295,7 +303,12 @@ export const WorkGroup = memo(
                 {liveVerb}
               </span>
               <span className={`grow ellipsis wg-target wg-live-detail ${liveMono ? 'mono' : ''}`}>{liveTarget}</span>
-              {liveElapsed && <span className="wg-time">{liveElapsed}</span>}
+              {liveElapsed && (
+                <span className="wg-time">
+                  {liveElapsed}
+                  {liveQuiet ? ` · ${liveQuiet}` : ''}
+                </span>
+              )}
             </>
           ) : (
             <span className="grow wg-settled-title">

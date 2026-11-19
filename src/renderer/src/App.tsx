@@ -23,6 +23,9 @@ import { isRemoteBrowser, useResponsiveShell } from './responsive';
 import { setActiveThread } from './threadStatus';
 import { doneOpening, markOpening } from './openingThread';
 import { useAppSync } from './useAppSync';
+import { workspaceProjectId } from '@shared/worktree';
+import { addDraftFiles, getDraft, setDraftText } from './drafts';
+import { cleanError } from './worktreeUi';
 
 export interface AgentsInfo {
   defs: AgentDef[];
@@ -259,6 +262,28 @@ export default function App() {
     await openThread(t.id);
   }
 
+  /**
+   * The empty code chat's "Worktree: Off / Isolated" switch. A chat's worktree is set when it is created, so this
+   * replaces the still-empty chat with a new one (same project and agent, the draft carried over) and deletes the
+   * empty one. Throws a readable error (e.g. the folder is not a git repository) and then changes nothing.
+   */
+  async function setEmptyChatWorktree(t: ThreadMeta, on: boolean) {
+    if (Boolean(t.worktree) === on) return;
+    const next = await api.createThread(t.projectId, t.agentId, 'code', on ? { worktree: true } : undefined);
+    const draft = getDraft(t.id);
+    if (draft.text) setDraftText(next.id, draft.text);
+    if (draft.files.length) addDraftFiles(next.id, draft.files);
+    await openThread(next.id);
+    // The empty chat's `thread:deleted` must not move the window away from the new one (threadGone).
+    activeId.current = next.id;
+    try {
+      await acpSessionsApi.deleteChat(t.id, true, false);
+    } catch (e) {
+      alert(`The new chat is open, but the empty one couldn't be deleted: ${cleanError(e)}`);
+    }
+    await loadThreads(t.projectId);
+  }
+
   function newChatHome(projectId = 'general') {
     setActive(null);
     setSession(null);
@@ -364,7 +389,10 @@ export default function App() {
   };
 
   // Detached Workbench tool windows (src/main/panels.ts) follow this window's current code project and chat.
-  const panelProjectId = mode === 'code' && page === 'thread' && active && modeOf(active) === 'code' && active.projectId !== 'general' ? active.projectId : undefined;
+  // A worktree chat's workbench (files, git, terminals, preview, Verify Gate) works in its worktree: the virtual
+  // project id from src/shared/worktree.ts. The sidebar, thread lists and memory stay on the real `projectId`.
+  const workspaceId = active ? workspaceProjectId(active) : undefined;
+  const panelProjectId = mode === 'code' && page === 'thread' && active && modeOf(active) === 'code' && active.projectId !== 'general' ? workspaceId : undefined;
   useEffect(() => {
     if (!panelProjectId || !api.panels.available()) return;
     api.panels.setContext({ projectId: panelProjectId, ...(activeId.current ? { threadId: activeId.current } : {}) }).catch(() => {});
@@ -375,7 +403,7 @@ export default function App() {
     setWbOpen(true);
     // Wait a frame so the Workbench is mounted (it may have been closed) before it opens a file or a page.
     requestAnimationFrame(() => {
-      if (d.ptyId && active?.projectId) addTerminal(active.projectId, d.ptyId);
+      if (d.ptyId && workspaceId) addTerminal(workspaceId, d.ptyId);
       if (d.tab === 'files' && d.path) return workbench.current?.openFile(d.path, d.line);
       if (d.tab === 'web' && d.path) return void window.dispatchEvent(new CustomEvent('olympus:web-preview', { detail: { url: d.path } }));
       setWbTab(d.tab as WorkbenchTab);
@@ -397,7 +425,7 @@ export default function App() {
   }, []);
 
   const agentDefs = useMemo(() => Object.fromEntries(agents.defs.map((d) => [d.id, d])), [agents.defs]);
-  const activeProjectId = active?.projectId;
+  const activeProjectId = workspaceId;
   const runCommand = useCallback((cmd: string) => {
     if (activeProjectId) void api.runInTerminal(activeProjectId, cmd);
   }, [activeProjectId]);
@@ -414,13 +442,15 @@ export default function App() {
     return <Onboarding state={state} onState={setState} onDone={async () => { await updateSettings({ onboarded: true }); await loadAll(); }} />;
   }
 
-  const project = active ? (active.projectId === 'general' ? general ?? undefined : projects.find((p) => p.id === active.projectId)) : undefined;
+  const baseProject = active ? (active.projectId === 'general' ? general ?? undefined : projects.find((p) => p.id === active.projectId)) : undefined;
+  // The project the chat's panels see: for a worktree chat, the base project with the virtual id and the worktree folder.
+  const project = baseProject && active?.worktree && workspaceId ? { ...baseProject, id: workspaceId, path: active.worktree.path } : baseProject;
   const profile: UserProfile = state.settings.profile;
   const picker = <AgentPicker agents={agents} current={currentAgent} onPick={pickAgent} onManage={() => setSettingsTab('agents')} onLogin={setLoginAgent} />;
   const showThread = Boolean(page === 'thread' && active && project && modeOf(active) === mode);
   const codeWorkbench = Boolean(mode === 'code' && showThread && active && active.projectId !== 'general');
   const chatTasksPanel = Boolean(!codeWorkbench && showThread && active && project);
-  previewCtx.current = { projectId: active?.projectId ?? homeProject, workbench: codeWorkbench, tasksAvailable: codeWorkbench || chatTasksPanel };
+  previewCtx.current = { projectId: workspaceId ?? homeProject, workbench: codeWorkbench, tasksAvailable: codeWorkbench || chatTasksPanel };
   const showSidebarOpenBtn = sbCollapsed || isDrawerSidebar;
   const closePreview = () => {
     setPreview(null);
@@ -525,6 +555,7 @@ export default function App() {
               setWbOpen(true);
             }}
             onAutoApprove={(on) => setActive((t) => (t ? { ...t, autoApprove: on } : t))}
+            onSetWorktree={setEmptyChatWorktree}
           />
 
           {(codeWorkbench || chatTasksPanel) && wbOpen && project && (
@@ -550,6 +581,7 @@ export default function App() {
                     dark={dark}
                     refreshKey={refreshKey}
                     onDetach={api.panels.available() ? detachTool : undefined}
+                    onThreadChanged={() => active && void openThread(active.id)}
                   />
                 ) : (
                   active && (

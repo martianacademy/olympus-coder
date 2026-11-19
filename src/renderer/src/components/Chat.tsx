@@ -14,6 +14,7 @@ import {
   Radio,
   ShieldAlert,
 } from 'lucide-react';
+import { lastTurnTimestamp, threadHasConversation } from '@shared/freshCarryover';
 import type { AgentDef, AgentStatus, Project, SessionView, Thread, ThreadItem } from '@shared/types';
 import { api } from '../api';
 import { LinkedText, RefBaseContext, useOpenFile } from '../fileLinks';
@@ -25,6 +26,7 @@ import type { WorkStepItem } from '../workStepSummary';
 import { attachFileListToDraft, AttachmentChips } from './Attachments';
 import { ChatComposer } from './ChatComposer';
 import { isCompacting } from './CompactButton';
+import { ContextResetRow } from './FreshContextButton';
 import { Markdown, normalizeMath } from './ChatMarkdown';
 import { MessageParts } from './RichContent';
 import { openViewer } from './MediaViewer';
@@ -39,6 +41,7 @@ import { useStickToBottom } from '../useStickToBottom';
 import { doneOpening, useOpeningThread } from '../openingThread';
 import { ChatSkeleton } from './Skeleton';
 import { SentTicks } from './DeliveryTicks';
+import { WorktreeChip, WorktreeToggle } from './WorktreeChatBits';
 
 export { Markdown, normalizeMath };
 
@@ -67,6 +70,10 @@ export function Chat(props: {
   onSwitchAgent?: (agentId: string) => void;
   /** The "Approve all" pill changed this chat's setting. */
   onAutoApprove?: (on: boolean) => void;
+  /** Empty code chat: run it in its own git worktree (or not). Absent where worktrees don't apply. */
+  onSetWorktree?: (on: boolean) => Promise<void>;
+  /** Open the Info panel (the worktree chip's target). */
+  onWorktreeInfo?: () => void;
 }) {
   const { thread, session, agentDef } = props;
   const [sending, setSending] = useState(false);
@@ -154,7 +161,7 @@ export function Chat(props: {
   const hasLiveWorkGroup = Boolean(running && lastGroup?.kind === 'work');
 
   return (
-    <ProjectIdContext.Provider value={thread.projectId}>
+    <ProjectIdContext.Provider value={props.project.id}>
     <RefBaseContext.Provider value={props.project.path}>
       <div className="main-head">
         {props.headerLeft}
@@ -163,10 +170,12 @@ export function Chat(props: {
           {thread.parentId ? (
             <span className="small muted ellipsis link-like" onClick={() => props.onOpenThread(thread.parentId!)} title="Open parent chat">
               <CornerLeftUp size={11} /> Sub-session of: {props.parentTitle ?? 'parent chat'}
+              {thread.worktree && <WorktreeChip worktree={thread.worktree} onOpen={props.onWorktreeInfo} />}
             </span>
           ) : (
             <span className="head-sub ellipsis" title={props.project.path}>
               <Folder size={12} /> {props.project.id === 'general' ? 'General chat' : props.project.name}
+              {thread.worktree && <WorktreeChip worktree={thread.worktree} onOpen={props.onWorktreeInfo} />}
             </span>
           )}
         </div>
@@ -212,6 +221,9 @@ export function Chat(props: {
                 <br />
                 the new agent reads the earlier conversation and the shared memory.
               </p>
+              {props.onSetWorktree && !thread.parentId && !running && !sending && (
+                <WorktreeToggle threadId={thread.id} worktree={thread.worktree} onChange={props.onSetWorktree} />
+              )}
             </div>
           )}
           {!switching && startIdx > 0 && (
@@ -252,6 +264,8 @@ export function Chat(props: {
         autoApprove={thread.autoApprove}
         session={session}
         compacting={compacting}
+        hasHistory={threadHasConversation(thread.items)}
+        lastTurnTs={lastTurnTimestamp(thread.items)}
         agentDef={agentDef}
         agentDefs={props.agentDefs}
         agentStatus={props.agentStatus}
@@ -421,6 +435,8 @@ const Item = memo(function Item({
         </div>
       );
     }
+    case 'context-reset':
+      return <ContextResetRow item={item} />;
     case 'error':
       return (
         <div className="err-box row" style={{ alignItems: 'center', gap: 10 }}>

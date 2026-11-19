@@ -20,6 +20,7 @@ import type {
   AuthMethodView,
   ConfigOptionView,
   DeskEvents,
+  Project,
   SessionView,
   Thread,
   ThreadItem,
@@ -32,13 +33,15 @@ import { insertIndex, lastStreamItem } from '@shared/itemOrder';
 import { recordUsage } from './usage';
 import { fetchAgyQuota } from './agyQuota';
 import { agentEnv, spawnable, which } from './env';
-import { buildPreamble, ensureMemory } from './memory';
+import { buildPreamble, ensureMemory, transcript } from './memory';
+import { DEFAULT_CARRYOVER_TRANSCRIPT_CHARS, extractCarryoverMeta, threadHasConversation } from '@shared/freshCarryover';
 import { buildGuide, claudeSessionMeta, guideHash, guideUpdate, readSessionGuide, reattachSystemText, sessionSystemPrompt, writeSessionGuide } from './guide';
 import { mcpServersFor } from './orchestrator';
 import { claimOlympusServerName, sharesMcpRegistry } from '@shared/olympusServer';
 import { keepWake, scheduleOf } from './agenttimers';
 import { acpServersFor } from './connectors';
 import { parseDiffHunks } from '@shared/diffHunks';
+import { workspaceProjectId } from '@shared/worktree';
 import { applyHunkPatch, changedSince, changes, checkHunkStates, fileDiff, restore, snapshot } from './checkpoints';
 import {
   beginAgentInitiatedTurn,
@@ -838,6 +841,8 @@ interface Runtime {
   usage?: ContextUsage;
   /** Session cost already written to the usage log, to log each turn's share only. */
   loggedCost: number;
+  /** Config option values to restore onto the next fresh `session/new` (used by `resetContext` to keep model/mode/effort). */
+  pendingConfigOverrides?: [string, string][];
   /** A throwaway runtime that renders a `session/load` replay into items: nothing is saved, sent or scheduled. */
   scratch?: boolean;
 }
@@ -938,12 +943,21 @@ export function sessionView(threadId: string): SessionView {
   return { threadId, agentId: rt.agentId, status: rt.running ? 'running' : rt.status, error: rt.error, configOptions: rt.configOptions, commands: rt.commands, usage: rt.usage };
 }
 
+/**
+ * The folder a chat works in, as a project record: its git worktree (virtual project id, src/shared/worktree.ts)
+ * while one is active, else its project. Session cwd, turn checkpoints (shadow repo keyed by the virtual id),
+ * client fs roots and terminals all use this; shared memory stays with the base project (memory.ts memoryDir).
+ */
+export function workspaceFor(thread: Pick<Thread, 'id' | 'projectId' | 'worktree'>): Project | undefined {
+  return getProject(workspaceProjectId(thread));
+}
+
 /** Start (or resume) the ACP session for this chat's current agent. */
 const warmed = new Set<string>();
 export function ensureSession(threadId: string): Promise<boolean> {
   const rt = runtimeFor(threadId);
   // Take the project's first snapshot in the background when a chat opens, so the first turn doesn't wait for it.
-  const p = getProject(rt.thread.projectId);
+  const p = workspaceFor(rt.thread);
   if (p && !warmed.has(p.id)) {
     warmed.add(p.id);
     void snapshot(p.id, p.path, 'baseline');
@@ -954,8 +968,8 @@ export function ensureSession(threadId: string): Promise<boolean> {
 }
 
 async function doEnsure(rt: Runtime): Promise<boolean> {
-  const project = getProject(rt.thread.projectId);
-  if (!project) throw new Error('Project not found.');
+  const project = workspaceFor(rt.thread);
+  if (!project) throw new Error(rt.thread.worktree ? `This chat's git worktree is missing: ${rt.thread.worktree.path}` : 'Project not found.');
   rt.status = 'starting';
   rt.error = undefined;
   pushSession(rt);
@@ -1154,8 +1168,13 @@ async function doEnsure(rt: Runtime): Promise<boolean> {
     }
     saveThread(rt.thread);
   }
+  const configOverrides = rt.pendingConfigOverrides;
+  rt.pendingConfigOverrides = undefined;
   if (!res.__resumed && !res.__forked) {
-    for (const [id, value] of defaultsToApply(getSettings().agentDefaults?.[rt.agentId], rt.configOptions)) await applyConfig(rt, id, value).catch(() => {});
+    const toApply: [string, string][] = configOverrides?.length
+      ? configOverrides
+      : defaultsToApply(getSettings().agentDefaults?.[rt.agentId], rt.configOptions);
+    for (const [id, value] of toApply) await applyConfig(rt, id, value).catch(() => {});
   }
   rt.status = 'idle';
   if (c.status.state !== 'ready') c.setStatus({ state: 'ready', detail: undefined });
@@ -1183,6 +1202,64 @@ export function switchAgent(threadId: string, agentId: string): SessionView {
   rt.commands = [];
   rt.usage = undefined;
   rt.loggedCost = 0;
+  rt.pendingConfigOverrides = undefined;
+  rt.status = 'idle';
+  rt.error = undefined;
+  saveThread(rt.thread);
+  emit('thread:meta', threadMeta(rt.thread));
+  pushSession(rt);
+  void ensureSession(threadId);
+  return sessionView(threadId);
+}
+
+/**
+ * Start a clean ACP session for the SAME agent inside the same chat thread, keeping 100% of visible
+ * messages and shadow-git Undo checkpoints intact while dropping bloated raw tool outputs from the
+ * agent's context window. The next prompt carries a compact (~2k-4k token) Fresh Context Carryover brief.
+ */
+export function resetContext(threadId: string): SessionView {
+  const rt = runtimeFor(threadId);
+  if (rt.running) throw new Error('Wait for the current reply to finish, or press Stop.');
+  if (!threadHasConversation(rt.thread.items)) return sessionView(threadId);
+
+  let lastPromptTokens: number | undefined;
+  for (let i = rt.thread.items.length - 1; i >= 0; i--) {
+    const it = rt.thread.items[i];
+    if (it.kind === 'user' && it.usage?.prompt) {
+      lastPromptTokens = it.usage.prompt;
+      break;
+    }
+  }
+  const previousUsed = rt.usage?.used || lastPromptTokens;
+  const previousSize = rt.usage?.size;
+  const compact = transcript(rt.thread, DEFAULT_CARRYOVER_TRANSCRIPT_CHARS);
+  const meta = extractCarryoverMeta(rt.thread, compact);
+
+  // Preserve the user's current model, mode, and reasoning effort across the fresh session.
+  const preservedConfigs: [string, string][] = rt.configOptions
+    .filter((o) => o.id && o.currentValue)
+    .map((o) => [o.id, o.currentValue]);
+
+  addItem(rt, {
+    kind: 'context-reset',
+    id: randomUUID(),
+    agentId: rt.agentId,
+    ts: Date.now(),
+    ...(previousUsed ? { previousUsed } : {}),
+    ...(previousSize ? { previousSize } : {}),
+    estimatedCarryover: meta.estimatedTokens,
+    editedFilesCount: meta.editedFiles.length,
+  });
+
+  delete rt.thread.acpSessions[rt.agentId];
+  closeRuntimeSession(rt);
+  if (rt.sessionId) dropSession(rt.sessionId);
+  rt.sessionId = undefined;
+  rt.conn = undefined;
+  rt.preambleSent = false;
+  rt.usage = undefined;
+  rt.loggedCost = 0;
+  rt.pendingConfigOverrides = preservedConfigs.length ? preservedConfigs : undefined;
   rt.status = 'idle';
   rt.error = undefined;
   saveThread(rt.thread);
@@ -1212,12 +1289,12 @@ initAgentInitiated({
   pushItem: (rt, item, throttle) => pushItem(rt as Runtime, item, throttle),
   pushSession: (rt) => pushSession(rt as Runtime),
   snapshotBefore: async (rt, label) => {
-    const project = getProject((rt as Runtime).thread.projectId);
+    const project = workspaceFor((rt as Runtime).thread);
     return project ? snapshot(project.id, project.path, `before: ${label.slice(0, 60)}`) : undefined;
   },
   finishCheckpoint: async (rt, item, before) => {
     const runtime = rt as Runtime;
-    const project = getProject(runtime.thread.projectId);
+    const project = workspaceFor(runtime.thread);
     if (project) await finishCheckpoint(runtime, item, project.id, project.path, before);
   },
   onTurnEnd,
@@ -1272,7 +1349,7 @@ export function startPrompt(threadId: string, text: string, attachments: Attachm
 
 async function runTurn(rt: Runtime, userItem: ThreadItem, text: string, attachments: AttachmentView[], hadHistory: boolean): Promise<void> {
   const threadId = rt.thread.id;
-  const project = getProject(rt.thread.projectId)!;
+  const project = workspaceFor(rt.thread)!;
   const ok = await ensureSession(threadId);
   if (!ok) {
     rt.running = false;
@@ -1496,7 +1573,7 @@ function turnFor(threadId: string, itemId: string) {
   const rt = runtimeFor(threadId);
   const item = rt.thread.items.find((i) => i.id === itemId);
   if (!item || item.kind !== 'user' || !item.checkpoint?.after) throw new Error('No snapshot for this turn.');
-  const project = getProject(rt.thread.projectId);
+  const project = workspaceFor(rt.thread);
   if (!project) throw new Error('Project not found.');
   return { rt, item, cp: item.checkpoint, project };
 }
@@ -1937,7 +2014,7 @@ function sessionRuntime(sessionId: unknown): Runtime {
 }
 
 function runtimeProject(rt: Runtime) {
-  const project = getProject(rt.thread.projectId);
+  const project = workspaceFor(rt.thread);
   if (!project) throw RequestError.internalError(undefined, 'The project of this chat is gone.');
   return project;
 }

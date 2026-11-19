@@ -1,0 +1,46 @@
+/* Git worktree chats: Info panel section, chat-header chip, new-chat toggle, sidebar glyph. Monochrome, quiet. */
+
+.wt-branch-line { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .9em; padding: 2px 0; }
+.wt-branch { min-width: 0; flex: 0 1 auto; }
+.wt-base { min-width: 0; flex: 0 1 auto; color: var(--muted); }
+.wt-arrow { flex: none; }
+.wt-counts { margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+
+.wt-disclosure {
+  display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: var(--muted);
+  font: inherit; font-size: .86em; padding: 3px 0; cursor: pointer;
+}
+.wt-disclosure:hover { color: var(--text); }
+
+.wt-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-width: 0; }
+.wt-actions .btn { min-width: 0; max-width: 100%; }
+.wt-remove { margin-left: auto; }
+
+.wt-confirm, .wt-conflicts {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 8px 10px;
+  border: 1px solid var(--hairline, var(--border)); border-radius: calc(var(--radius) - 2px);
+}
+.wt-conflicts .btn { align-self: flex-start; }
+.wt-conflict-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.wt-conflict-list li { max-width: 100%; }
+.wt-notice { margin-top: 6px; color: var(--muted); }
+
+/* Chat header: "⑂ branch" after the project name (inside .head-sub, which already ellipsizes). */
+.wt-chip {
+  display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 220px; margin-left: 4px;
+  padding: 0 6px; border-radius: 99px; border: 1px solid var(--hairline, var(--border));
+  color: var(--muted); background: none; font: inherit; font-size: .95em; line-height: 1.5; cursor: pointer;
+}
+.wt-chip:hover { color: var(--text); }
+.wt-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 520px) { .wt-chip { max-width: 120px; } }
+
+/* Empty code chat: "Worktree  Off | Isolated". */
+.wt-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font-size: .88em; flex-wrap: wrap; justify-content: center; }
+.wt-toggle .seg button { padding: 4px 10px; font-size: .95em; }
+.wt-toggle .seg button:disabled { cursor: default; }
+.wt-toggle-label { color: var(--muted); }
+.wt-toggle-error { flex-basis: 100%; text-align: center; }
+
+/* Sidebar: tiny branch glyph on worktree chats. */
+.thread-row .wt-glyph { flex: none; display: inline-flex; align-items: center; color: var(--muted); opacity: .75; margin-left: -2px; }

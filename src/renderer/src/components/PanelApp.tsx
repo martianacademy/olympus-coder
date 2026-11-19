@@ -4,6 +4,7 @@ import { withItem } from '@shared/itemOrder';
 import { PANEL_TITLES, type PanelContext, type PanelTool } from '@shared/panels';
 import type { AgentDef, AgentStatus, AppState, DeskEvents, Project, SessionView, Thread, ThreadItem, ThreadMeta } from '@shared/types';
 import { api, onEvent } from '../api';
+import { parseWorktreeProjectId, workspaceProjectId } from '@shared/worktree';
 import { applyTheme, onSystemThemeChange } from '../theme';
 import { addTerminal, Workbench, type WorkbenchHandle } from './Workbench';
 
@@ -43,7 +44,7 @@ export function PanelApp({ tool, url }: { tool: PanelTool; url?: string }) {
     let c = reported;
     if (!c) {
       const last = s.settings.lastThreadId ? (await api.allThreads()).find((t) => t.id === s.settings.lastThreadId) : undefined;
-      if (last && last.projectId !== 'general') c = { projectId: last.projectId, threadId: last.id };
+      if (last && last.projectId !== 'general') c = { projectId: workspaceProjectId(last), threadId: last.id };
       else if (s.settings.lastProjectId && s.settings.lastProjectId !== 'general') c = { projectId: s.settings.lastProjectId };
     }
     setCtx(c ?? null);
@@ -63,9 +64,15 @@ export function PanelApp({ tool, url }: { tool: PanelTool; url?: string }) {
     }
     let live = true;
     void (async () => {
-      const p = (await api.projects()).find((x) => x.id === ctx.projectId) ?? null;
-      const r = ctx.threadId ? await api.thread(ctx.threadId) : null;
+      // A worktree chat's context carries the virtual id (src/shared/worktree.ts): show the base project with the
+      // worktree's folder, under the virtual id every panel's IPC uses.
+      const wt = parseWorktreeProjectId(ctx.projectId);
+      const base = (await api.projects()).find((x) => x.id === (wt?.projectId ?? ctx.projectId)) ?? null;
+      const tid = ctx.threadId ?? wt?.threadId;
+      const r = tid ? await api.thread(tid) : null;
       if (!live) return;
+      const worktree = wt ? r?.thread.worktree : undefined;
+      const p = base && worktree ? { ...base, id: ctx.projectId, path: worktree.path } : base;
       setProject(p);
       setThread(r?.thread ?? null);
       setSession(r?.session ?? null);
@@ -127,7 +134,7 @@ export function PanelApp({ tool, url }: { tool: PanelTool; url?: string }) {
           }
           case 'thread:meta': {
             const m = payload as ThreadMeta;
-            if (m.id === threadId.current) setThread((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove } : t));
+            if (m.id === threadId.current) setThread((t) => (t ? { ...t, title: m.title, agentId: m.agentId, autoApprove: m.autoApprove, worktree: m.worktree } : t));
             break;
           }
           case 'session:state':

@@ -51,6 +51,8 @@ export interface AppMainProps {
   onForkActive: (uptoItemId?: string) => void;
   onOpenInfoWorkbench: () => void;
   onAutoApprove: (on: boolean) => void;
+  /** Empty code chat's "Worktree: Off / Isolated" switch (App.setEmptyChatWorktree). */
+  onSetWorktree?: (t: Thread, on: boolean) => Promise<void>;
 }
 
 /**
@@ -206,6 +208,8 @@ export function AppMain(props: AppMainProps) {
           allStatuses={agents.statuses}
           onSwitchAgent={props.onPickAgent}
           onAutoApprove={props.onAutoApprove}
+          onSetWorktree={mode === 'code' && active.projectId !== 'general' && props.onSetWorktree ? (on) => props.onSetWorktree!(active, on) : undefined}
+          onWorktreeInfo={mode === 'code' && codeWorkbench ? props.onOpenInfoWorkbench : undefined}
         />
       ) : mode === 'chat' ? (
         <>

@@ -7,6 +7,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { join } from 'node:path';
 import type { DeskEvents, SubTaskView, Thread, ThreadItem } from '@shared/types';
 import { isModelUnavailableMessage, isQuotaErrorText, isQuotaMessage } from '@shared/quota';
+import { workspaceProjectId } from '@shared/worktree';
+import { startChatWorktree } from './worktreeChats';
 import {
   agentStatuses,
   configureSession,
@@ -319,7 +321,7 @@ const fmtDur = (ms: number) => {
 };
 
 export function describe(v: SubTaskView, full: boolean, replyMax = 8000): string {
-  const kind = v.meta.spawnedBy ? ` · ${v.meta.disposable ? 'disposable' : 'kept'}` : '';
+  const kind = `${v.meta.spawnedBy ? ` · ${v.meta.disposable ? 'disposable' : 'kept'}` : ''}${v.meta.worktree ? ` · worktree ${v.meta.worktree.branch}` : ''}`;
   const lines = [`### ${v.meta.title} — ${v.status}`, `id: ${v.meta.id} · agent: ${agentName(v.meta.agentId)}${kind}`];
   const dur = v.startedAt ? fmtDur((v.endedAt ?? Date.now()) - v.startedAt) : undefined;
   lines.push([dur && `time: ${dur}`, `${v.toolCount} tool calls`, v.filesTouched.length ? `files changed: ${v.filesTouched.join(', ')}` : 'no file edits'].filter(Boolean).join(' · '));
@@ -356,7 +358,7 @@ function ownChild(parent: Thread, id: unknown): Thread {
 }
 
 function sessionInfo(t: Thread): string {
-  const project = getProject(t.projectId);
+  const project = getProject(workspaceProjectId(t)) ?? getProject(t.projectId);
   const parent = t.parentId ? findThread(t.parentId) : undefined;
   const o = getSettings().orchestrator;
   const role = sessionRole(t);
@@ -376,6 +378,7 @@ function sessionInfo(t: Thread): string {
     `Agent: ${agentName(t.agentId)}`,
     `Role: ${roleLabel}`,
     `Project: ${project?.name ?? t.projectId} — ${project?.path ?? ''}`,
+    ...(t.worktree ? [`Worktree: branch ${t.worktree.branch} (from ${t.worktree.baseBranch})`] : []),
     `Transcript: ${threadFilePath(t)}`,
   ];
   if (parent) lines.push(`Parent session: ${parent.id} — "${parent.title}" (${agentName(parent.agentId)}), transcript ${threadFilePath(parent)}`);
@@ -460,6 +463,7 @@ async function spawn(parent: Thread, args: any): Promise<string> {
   await assertAgentQuotaAvailable(agentId, cfg.model);
 
   const keep = args?.keep === true || args?.keep === 'true';
+  const inWorktree = args?.worktree === true || args?.worktree === 'true';
   const child = createThread(parent.projectId, agentId, {
     title,
     parentId: parent.id,
@@ -469,6 +473,14 @@ async function spawn(parent: Thread, args: any): Promise<string> {
     ...(keep ? {} : { disposable: true }),
     ...(parent.autoApprove ? { autoApprove: true } : {}),
   });
+  if (inWorktree) {
+    try {
+      await startChatWorktree(child, parent);
+    } catch (e: any) {
+      deleteThread(child);
+      throw new ToolError(e?.message ?? String(e));
+    }
+  }
   starting.add(child.id);
   let appliedNote = '';
   try {
@@ -495,7 +507,8 @@ async function spawn(parent: Thread, args: any): Promise<string> {
   void sendPrompt(child.id, task, [], { fromAgent: parent.agentId }).catch(() => {});
   starting.delete(child.id);
   const life = keep ? 'Kept until you delete it.' : 'Disposable: deleted automatically after you read its final report and your turn ends.';
-  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}. The user can watch it in the Tasks panel. ${life} Olympus sends you its result the moment it finishes; call wait_for_subsessions only if you need it in this turn.`;
+  const where = child.worktree ? ` in its own git worktree (branch ${child.worktree.branch})` : '';
+  return `Started sub-session "${title}" (id ${child.id}) with ${agentName(agentId)}${appliedNote}${where}. The user can watch it in the Tasks panel. ${life} Olympus sends you its result the moment it finishes; call wait_for_subsessions only if you need it in this turn.`;
 }
 
 async function waitFor(parent: Thread, args: any, closed: () => boolean): Promise<string> {
@@ -695,6 +708,7 @@ export function toolsFor(t: Thread) {
           effort: { type: 'string' },
           config: { type: 'object' },
           keep: { type: 'boolean', description: 'Keep after report (default false).' },
+          worktree: { type: 'boolean', description: 'Own git worktree.' },
         },
         required: ['title', 'task'],
         additionalProperties: false,
@@ -805,13 +819,13 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         if (t.secondOpinion) throw new ToolError('Second-opinion sessions are read-only and cannot run terminal commands.');
         const command = String(args?.command ?? '').trim();
         if (!command) throw new ToolError('"command" is required.');
-        const r = openTerminal(t.projectId, command, typeof args?.title === 'string' ? args.title : undefined, t.id);
+        const r = openTerminal(workspaceProjectId(t), command, typeof args?.title === 'string' ? args.title : undefined, t.id);
         text = `Opened terminal "${r.title}" (id ${r.ptyId}) in the user's right panel and typed: ${command}\nThe user sees the output live. Check it with read_terminal {"id": "${r.ptyId}"}.${t.projectId === 'general' ? ' (In Chat mode the user sees terminals only after switching to Code mode.)' : ''}`;
         break;
       }
       case 'read_terminal': {
         const id = String(args?.id ?? '');
-        if (terminalProject(id) && terminalProject(id) !== t.projectId) throw new ToolError('That terminal belongs to another project.');
+        if (terminalProject(id) && terminalProject(id) !== t.projectId && terminalProject(id) !== workspaceProjectId(t)) throw new ToolError('That terminal belongs to another project.');
         try {
           text = readTerminal(id, Number(args?.lines) || 60);
         } catch (e: any) {

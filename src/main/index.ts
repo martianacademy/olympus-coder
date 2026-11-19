@@ -44,6 +44,9 @@ import * as acpConfig from './acpConfigService';
 import type { AcpConfigEvents, ProviderInput } from '@shared/acpConfig';
 import { usageSummary } from './usage';
 import { projectStats } from './projectstats';
+import { workspaceProjectId } from '@shared/worktree';
+import { configureWorktreeGit } from './worktrees';
+import { chatWorktreeStatus, mergeChatWorktree, removeChatWorktree, removeDeletedChatWorktree, startChatWorktree } from './worktreeChats';
 import type { AcpClientEvents, EditorBufferReport } from '@shared/acpClient';
 import { setAgentWriteEmitter } from './acpClientFs';
 import { acpTerminals, acpTerminalStore } from './acpTerminals';
@@ -115,7 +118,8 @@ const emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) =>
 agents.setEmitter(emit);
 agents.onFreshUserTurn((threadId) => resetVerifyRetries(threadId));
 agents.onAfterTurnCheckpoint(({ thread, changedFiles }) => {
-  const project = store.getProject(thread.projectId);
+  // A worktree chat's checks run in its worktree (virtual project: base settings, worktree folder).
+  const project = store.getProject(workspaceProjectId(thread));
   if (!project || project.id === store.GENERAL_PROJECT_ID || !project.verifyGate?.enabled) return;
   void evaluateTurnVerifyGate({
     threadId: thread.id,
@@ -149,7 +153,12 @@ agents.onAfterTurnCheckpoint(({ thread, changedFiles }) => {
   });
 });
 // Every deletion in main (sidebar, delete_subsession, disposable sub-sessions) tells the window and the phone.
-store.onThreadDeleted((t) => emit('thread:deleted', { id: t.id, projectId: t.projectId, ...(t.parentId ? { parentId: t.parentId } : {}) }));
+store.onThreadDeleted((t) => {
+  emit('thread:deleted', { id: t.id, projectId: t.projectId, ...(t.parentId ? { parentId: t.parentId } : {}) });
+  // Its git worktree goes too: uncommitted work is committed on the branch first and an unmerged branch is kept.
+  void removeDeletedChatWorktree(t);
+});
+configureWorktreeGit(() => agentEnv());
 // projects.json written by the app or from outside (an agent, a script): the sidebar updates without a reload.
 let projectsWatch: ProjectsWatcher | null = null;
 const announceProjects = () => emit('projects:changed', store.listProjectsWithMissing());
@@ -323,7 +332,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     return { config: p.verifyGate ?? { enabled: false }, detectedCommand: detectVerifyCommand(p.path) };
   },
   'projects.setVerifyGate': (projectId: string, cfg: VerifyGateConfig) => {
-    const updated = store.updateProjectVerifyGate(projectId, cfg);
+    const updated = store.updateProjectVerifyGate(store.baseProjectId(projectId), cfg);
     announceProjects();
     return updated ?? null;
   },
@@ -400,11 +409,13 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     return p;
   },
   'projects.remove': (id: string) => {
+    id = store.baseProjectId(id);
     store.removeProject(id);
     forgetCheckpoints(id);
   },
   /** The project's folder was renamed or moved: pick it (or pass the path) and point the project there. */
   'projects.relocate': async (id: string, path?: string) => {
+    id = store.baseProjectId(id);
     const p = store.projectRecord(id);
     if (!p) return null;
     let dir = path;
@@ -430,10 +441,35 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'threads.all': () => store.listAllThreads(),
   'threads.pin': (id: string, pinned: boolean) => store.updateThreadMeta(id, { pinned }),
   'projects.general': () => store.generalProject(),
-  'threads.create': (projectId: string, agentId: string, mode?: 'chat' | 'code') => {
+  'threads.create': async (projectId: string, agentId: string, mode?: 'chat' | 'code', opts?: { worktree?: boolean }) => {
+    projectId = store.baseProjectId(projectId);
     const t = store.createThread(projectId, agentId, { ...(mode ? { mode } : {}), ...(agents.autoApproveDefault(agentId) ? { autoApprove: true } : {}) });
+    if (opts?.worktree) {
+      // The worktree exists before any agent session, so the first session/new already gets it as cwd.
+      try {
+        await startChatWorktree(t);
+        emit('thread:meta', store.threadMeta(t));
+      } catch (e: any) {
+        store.deleteThread(t);
+        throw new Error(e?.message ?? String(e));
+      }
+    }
     store.updateSettings({ lastThreadId: t.id, lastProjectId: projectId });
     return t;
+  },
+  /** Git worktree chats (src/main/worktreeChats.ts): live status, merge / squash into the base branch, remove. */
+  'worktree.status': (threadId: string) => chatWorktreeStatus(threadId),
+  'worktree.merge': async (threadId: string, mode: 'merge' | 'squash', message?: string) => {
+    const r = await mergeChatWorktree(threadId, mode, message);
+    const t = store.findThread(threadId);
+    if (r.ok && t) emit('thread:meta', store.threadMeta(t));
+    return r;
+  },
+  'worktree.remove': async (threadId: string) => {
+    const r = await removeChatWorktree(threadId);
+    const t = store.findThread(threadId);
+    if (r.ok && t) emit('thread:meta', store.threadMeta(t));
+    return { ok: r.ok, ...(r.branchKept ? { branchKept: true } : {}), ...(r.error ? { error: r.error } : {}) };
   },
   'threads.rename': (id: string, title: string) => {
     const t = store.findThread(id);
@@ -579,6 +615,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     return agents.stopTool(threadId, toolItemId);
   },
   'chat.switchAgent': (threadId: string, agentId: string) => agents.switchAgent(threadId, agentId),
+  'chat.resetContext': (threadId: string) => agents.resetContext(threadId),
   'chat.setConfig': (threadId: string, configId: string, value: string) => agents.setConfigOption(threadId, configId, value),
   'chat.autoApprove': (threadId: string, on: boolean) => agents.setAutoApprove(threadId, on),
   'chat.permission': (threadId: string, itemId: string, optionId: string | null) => agents.resolvePermission(threadId, itemId, optionId),
@@ -591,7 +628,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'schedules.runNow': (id: string) => schedules.runSchedule(id, emit),
 
   'usage.summary': (days?: number) => usageSummary(days),
-  'projects.stats': (projectId: string, days?: number) => projectStats(projectOrThrow(projectId), days),
+  'projects.stats': (projectId: string, days?: number) => projectStats(projectOrThrow(store.baseProjectId(projectId)), days),
 
   'memory.get': (projectId: string) => {
     const p = store.getProject(projectId);
@@ -659,6 +696,7 @@ acpSessions.initAcpSessionService({
   store,
   ensureSession: (threadId) => agents.ensureSession(threadId),
   knownOptions: (agentId) => agents.knownOptionsForAgent(agentId),
+  worktreeStatus: (threadId) => chatWorktreeStatus(threadId),
 });
 // The orchestrator's delete_subsession tool removes a chat exactly like the sidebar's Delete (agent session closed,
 // the agent's own saved session kept).
