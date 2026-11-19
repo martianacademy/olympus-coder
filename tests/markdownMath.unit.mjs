@@ -93,6 +93,24 @@ t('inline code keeps $', () => {
   assert.deepEqual(mathIn(md), []);
 });
 
+// --- money around inline code (reported 2026-11-19): remark-math opens at the first `$` and skips over backticks ---
+const BUG3 =
+  '(1) Payment ke liye **Dodo Payments** (4%+$0.40, India GST/FIRA friendly) rakhna hai ya **Polar.sh**, aur (2) **Slice 1 (Cloudflare Credit Proxy + Durable Object Wallet + `oly` integration)** ~45 min me end-to-end local/staging par test ho jaye ($0 cost)?';
+t('reported line: prices on both sides of inline code stay text', () => {
+  assert.deepEqual(mathIn(BUG3), []);
+  assert.match(textIn(BUG3), /\$0\.40, India/);
+  assert.match(textIn(BUG3), /\(\$0 cost\)/);
+  assert.equal(normalizeMath(BUG3).includes('`oly`'), true, 'inline code kept');
+});
+t('price, inline code, price', () => assert.deepEqual(mathIn('Pay $5 via `card` or $6 cash.'), []));
+t('real math on both sides of inline code still renders', () =>
+  assert.deepEqual(mathIn('Let $x$ run `f()` then $y^2$ grows.'), ['x', 'y^2']));
+t('a $ inside inline code that opens first stays code', () => {
+  const md = 'Run `echo $A` then pay $5 and `cost=$B` too.';
+  assert.deepEqual(mathIn(md), []);
+  assert.equal(normalizeMath(md).includes('`echo $A`') && normalizeMath(md).includes('`cost=$B`'), true);
+});
+
 // --- leaves text alone when nothing would change ---
 t('lone $ untouched', () => assert.equal(normalizeMath('Only $5 here.'), 'Only $5 here.'));
 t('no $ at all untouched', () => assert.equal(normalizeMath('plain text'), 'plain text'));

@@ -309,7 +309,10 @@ export function isSlashCommand(text: string): boolean {
  */
 export function agentTitleFor(thread: Thread, title: unknown): string | undefined {
   if (typeof title !== 'string') return undefined;
-  const clean = title.replace(/\s+/g, ' ').trim().slice(0, 120);
+  // Agents that name a chat after its first prompt (ZCode) see Olympus's own `<olympus-context>` block first: drop
+  // it, so a cut-off block gives no title and a whole one leaves the user's own words.
+  const own = title.replace(/^\s*<olympus-context\b[^>]*>[\s\S]*?(?:<\/olympus-context>|$)/, '');
+  const clean = own.replace(/\s+/g, ' ').trim().slice(0, 120);
   if (!clean || clean === thread.title || thread.titleSetByUser) return undefined;
   const appNamed = thread.nativeSubagent || thread.spawnedBy || thread.secondOpinion || thread.scheduleId;
   if (appNamed && thread.title !== 'New chat') return undefined;

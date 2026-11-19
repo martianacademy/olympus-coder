@@ -14,8 +14,6 @@
 
 /** A fenced code block, closed or (while streaming) open until the end of the text. */
 const FENCE = /(^[ \t]*(?:```|~~~)[^\n]*(?:\n[\s\S]*?^[ \t]*(?:```|~~~)[ \t]*$|[\s\S]*$))/m;
-/** Display math and inline code spans: nothing inside them is touched. */
-const PROTECTED = /\$\$[\s\S]*?\$\$|(`+)[\s\S]*?\1/g;
 
 export function normalizeMath(md: string): string {
   if (!md.includes('$') && !/\\\[|\\\(/.test(md)) return md;
@@ -36,58 +34,84 @@ function normalizeProse(text: string): string {
   return s.includes('$') ? escapeMoney(s) : s;
 }
 
-/** Escapes every single `$` that cannot be one end of an inline-math pair (outside code and `$$` blocks). */
+/**
+ * Escapes every single `$` that cannot be one end of an inline-math pair (outside code and `$$` blocks).
+ *
+ * The text is read left to right the way remark does: whatever opens first wins. A code span that opens first keeps
+ * its `$` as written; a `$` that opens first is closed by the next single `$` on its line even when that one comes
+ * after or inside a code span (remark-math skips over backticks). So "($0.40 … `oly` … ($0 cost)" used to slip
+ * through when the text was cut at the code span and each piece held one "lone" `$`.
+ */
 export function escapeMoney(text: string): string {
+  const escape = new Set<number>();
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\\') {
+      i += 2; // an escaped character (`\$`, `\``) is plain text
+      continue;
+    }
+    if (c === '`') {
+      CODE.lastIndex = i;
+      const m = CODE.exec(text);
+      i = m ? CODE.lastIndex : i + runLength(text, i, '`');
+      continue;
+    }
+    if (c !== '$') {
+      i++;
+      continue;
+    }
+    if (text[i + 1] === '$') {
+      DISPLAY.lastIndex = i;
+      i = DISPLAY.exec(text) ? DISPLAY.lastIndex : i + runLength(text, i, '$'); // `$$` is not ours to judge
+      continue;
+    }
+    const close = nextDollar(text, i + 1);
+    // A lone `$` never becomes math, so it is left exactly as written.
+    if (close < 0) {
+      i++;
+      continue;
+    }
+    const isMath =
+      !isSpace(text[i + 1]) && !isSpace(text[close - 1]) && !isDigit(text[close + 1]) && !text.slice(i, close).includes('`');
+    if (isMath) i = close + 1;
+    else {
+      escape.add(i);
+      i++;
+    }
+  }
+  if (escape.size === 0) return text;
   let out = '';
   let last = 0;
-  for (const m of text.matchAll(PROTECTED)) {
-    out += escapeLines(text.slice(last, m.index)) + m[0];
-    last = m.index + m[0].length;
+  for (const at of [...escape].sort((a, b) => a - b)) {
+    out += `${text.slice(last, at)}\\$`;
+    last = at + 1;
   }
-  return out + escapeLines(text.slice(last));
+  return out + text.slice(last);
 }
 
-function escapeLines(text: string): string {
-  return text.includes('$') ? text.split('\n').map(escapeLine).join('\n') : text;
+/** A code span: a run of backticks, then the same run (not longer) later on. */
+const CODE = /(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/y;
+/** A `$$…$$` block. */
+const DISPLAY = /\$\$[\s\S]*?\$\$/y;
+
+const runLength = (text: string, i: number, ch: string): number => {
+  let n = 0;
+  while (text[i + n] === ch) n++;
+  return n;
+};
+
+/** Where remark-math would close a single `$` opened before `from`: the next unescaped single `$` on the line. */
+function nextDollar(text: string, from: number): number {
+  for (let j = from; j < text.length && text[j] !== '\n'; j++) {
+    if (text[j] === '\\') j++;
+    else if (text[j] === '$') {
+      if (text[j + 1] !== '$') return j;
+      j += runLength(text, j, '$') - 1; // a `$$` run cannot close a single `$`
+    }
+  }
+  return -1;
 }
 
 const isSpace = (c: string | undefined): boolean => c === undefined || /\s/.test(c);
 const isDigit = (c: string | undefined): boolean => c !== undefined && c >= '0' && c <= '9';
-
-function isEscaped(line: string, i: number): boolean {
-  let n = 0;
-  for (let k = i - 1; k >= 0 && line[k] === '\\'; k--) n++;
-  return n % 2 === 1;
-}
-
-function escapeLine(line: string): string {
-  const dollars: number[] = [];
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] !== '$') continue;
-    if (line[i + 1] === '$') {
-      i++; // `$$` is not ours to judge
-      continue;
-    }
-    if (!isEscaped(line, i)) dollars.push(i);
-  }
-  // A lone `$` never becomes math, so it is left exactly as written.
-  if (dollars.length < 2) return line;
-
-  // remark-math always pairs a `$` with the very next one, so only that one can close it.
-  const escape = new Set<number>();
-  let k = 0;
-  while (k < dollars.length) {
-    const open = dollars[k];
-    const close = dollars[k + 1];
-    if (close !== undefined && !isSpace(line[open + 1]) && !isSpace(line[close - 1]) && !isDigit(line[close + 1])) {
-      k += 2;
-    } else {
-      escape.add(open);
-      k++;
-    }
-  }
-  if (escape.size === 0) return line;
-  let out = '';
-  for (let i = 0; i < line.length; i++) out += escape.has(i) ? '\\$' : line[i];
-  return out;
-}

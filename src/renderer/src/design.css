@@ -140,7 +140,12 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 .msg-agent hr { border: none; border-top: 1px solid var(--hairline); margin: 1.2em 0; }
 .msg-agent a { text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .msg-agent :not(pre) > code { background: color-mix(in srgb, var(--text) 7%, transparent); border: 1px solid var(--hairline); padding: .1em .38em; border-radius: calc(var(--radius) * 0.6); font-size: .86em; }
-.msg-agent table { border-collapse: separate; border-spacing: 0; border: 1px solid var(--hairline); border-radius: var(--radius); overflow: hidden; margin: .8em 0; font-size: .93em; }
+/* Wide tables scroll sideways inside the message (overflow-x, not hidden: styles.css makes the table a block for
+   exactly this). Cells undo the message's `overflow-wrap: anywhere`, which lets a column shrink to one letter and
+   split every word ("P/l/a/n") on a phone; words now wrap only at spaces and each column keeps a readable width. */
+.msg-agent table { border-collapse: separate; border-spacing: 0; border: 1px solid var(--hairline); border-radius: var(--radius); overflow-x: auto; overflow-y: hidden; margin: .8em 0; font-size: .93em; overscroll-behavior-x: contain; }
+.msg-agent th, .msg-agent td { overflow-wrap: break-word; word-break: normal; min-width: 6.5em; }
+.msg-agent th code, .msg-agent td code { overflow-wrap: break-word; word-break: normal; }
 .msg-agent th { background: color-mix(in srgb, var(--text) 4%, transparent); font-weight: 600; text-align: left; }
 .msg-agent th, .msg-agent td { border: none; border-bottom: 1px solid var(--hairline); padding: 7px 11px; }
 .msg-agent tr:last-child td { border-bottom: none; }

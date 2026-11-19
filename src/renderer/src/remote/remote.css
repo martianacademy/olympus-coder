@@ -140,3 +140,30 @@ html.remote.standalone body,
 html.remote.standalone #root {
   height: var(--app-h, 100dvh);
 }
+
+/* Keyboard open (remote/main.tsx): the home indicator is under the keyboard, so no safe-area band above it. */
+html.remote.standalone.kb-open .composer-wrap {
+  padding-bottom: 8px;
+}
+
+/* Full-screen layers (drawer, sheets, phone modals) would stop short at the same wrong 100dvh there. */
+/* Same breakpoints as responsive.css, where these layers become full-screen. */
+html.remote.standalone .sidebar.is-drawer,
+html.remote.standalone .workbench-col.is-sheet {
+  height: var(--app-h, 100dvh);
+}
+
+@media (max-width: 820px) {
+  html.remote.standalone .preview-panel,
+  html.remote.standalone .memory-panel {
+    height: var(--app-h, 100dvh);
+  }
+}
+
+@media (max-width: 680px) {
+  html.remote.standalone .modal,
+  html.remote.standalone .search-modal {
+    height: var(--app-h, 100dvh);
+    max-height: var(--app-h, 100dvh);
+  }
+}
