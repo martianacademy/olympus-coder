@@ -155,6 +155,7 @@ export function RunCard(props: {
   const parts = stepParts(parsedTool?.isCommand ? parsedTool.command : props.title, parsedTool?.isCommand ? 'execute' : tool?.toolKind, props.rel);
   const runSummary = parsedTool?.summary;
   const output = parsedTool?.output ?? '';
+  const diffs = (tool?.content ?? []).filter((c): c is DiffContent => c.type === 'diff');
   return (
     <div className={`run-card ${proc?.paused ? 'paused' : ''} ${proc ? heat(proc.cpu) : ''} ${open ? 'open' : ''}`} data-testid="run-card">
       <div className="run-card-head" onClick={() => setOpen((o) => !o)} title={open ? 'Hide details' : 'Show what it is doing'}>
@@ -233,8 +234,15 @@ export function RunCard(props: {
                 <LinkedText text={output.split('\n').slice(-20).join('\n')} />
               </pre>
             </>
+          ) : diffs.length ? (
+            <>
+              <div className="small muted">The agent is applying this change; the result shows when the step finishes.</div>
+              <StepDiffs diffs={diffs} rel={props.rel} label="Change" />
+            </>
           ) : (
-            <div className="small muted">{proc ? "The agent hasn't shared this command's output yet." : 'This step runs inside the agent; there is no output to show yet.'}</div>
+            <div className="small muted">
+              {proc ? "The agent hasn't shared this command's output yet." : 'This step runs inside the agent, which sends its output only when the step finishes.'}
+            </div>
           )}
         </div>
       )}
@@ -313,6 +321,35 @@ export function DoneList({ thread, items, rel, limit }: { thread: Thread; items:
   );
 }
 
+type DiffContent = ToolItem['content'][number] & { type: 'diff' };
+
+/** The file changes a step carries (an edit's diff), as compact +/- blocks. */
+function StepDiffs({ diffs, rel, label = 'Changes' }: { diffs: DiffContent[]; rel: (p: string) => string; label?: string }) {
+  return (
+    <>
+      {diffs.map((d, i) => {
+        const oldL = (d.oldText ?? '').split('\n');
+        const newL = (d.newText ?? '').split('\n');
+        return (
+          <div key={i} className="step-block">
+            <div className="step-block-head">
+              <span>{label}{d.path ? ` · ${rel(d.path)}` : ''}</span>
+              <span className="step-diffstat">
+                <span className="add">+{d.newText ? newL.length : 0}</span> <span className="del">−{d.oldText ? oldL.length : 0}</span>
+              </span>
+            </div>
+            <pre className="step-pre mono step-diff">
+              {d.oldText ? oldL.slice(0, 40).map((l, j) => <div key={`o${j}`} className="diff-del">- {l}</div>) : null}
+              {newL.slice(0, 60).map((l, j) => <div key={`n${j}`} className="diff-add">+ {l}</div>)}
+              {newL.length > 60 && <div className="muted">… {newL.length - 60} more lines</div>}
+            </pre>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function StepCard({ t, rel, open, onToggle }: { t: ToolItem; rel: (p: string) => string; open: boolean; onToggle: () => void }) {
   const parsed = parseToolStep(t);
   const parts = stepParts(parsed.isCommand ? parsed.command : t.title, parsed.isCommand ? 'execute' : t.toolKind, rel);
@@ -321,7 +358,7 @@ export function StepCard({ t, rel, open, onToggle }: { t: ToolItem; rel: (p: str
   const stopped = t.status === 'interrupted';
   const kind = t.olympus && !parsed.isCommand ? undefined : KIND_INFO[parsed.isCommand ? 'execute' : (t.toolKind ?? '')];
   const info = kind ?? { label: t.olympus ? 'Olympus' : 'Step', tone: 'var(--muted)', icon: <CircleCheck size={14} /> };
-  const diffs = open ? t.content.filter((c) => c.type === 'diff') : [];
+  const diffs = open ? t.content.filter((c): c is DiffContent => c.type === 'diff') : [];
   const dur = parsed.durationMs && parsed.durationMs >= 1000 ? fmtDur(parsed.durationMs) : '';
   const cmdText = parsed.command || t.title;
   return (
@@ -370,25 +407,7 @@ export function StepCard({ t, rel, open, onToggle }: { t: ToolItem; rel: (p: str
               <pre className="step-pre mono small-pre">{parsed.input.length > 3000 ? `${parsed.input.slice(0, 3000)}\n…` : parsed.input}</pre>
             </div>
           )}
-          {diffs.map((d, i) => {
-            const oldL = (d.oldText ?? '').split('\n');
-            const newL = (d.newText ?? '').split('\n');
-            return (
-              <div key={i} className="step-block">
-                <div className="step-block-head">
-                  <span>Changes{d.path ? ` · ${rel(d.path)}` : ''}</span>
-                  <span className="step-diffstat">
-                    <span className="add">+{d.newText ? newL.length : 0}</span> <span className="del">−{d.oldText ? oldL.length : 0}</span>
-                  </span>
-                </div>
-                <pre className="step-pre mono step-diff">
-                  {d.oldText ? oldL.slice(0, 40).map((l, j) => <div key={`o${j}`} className="diff-del">- {l}</div>) : null}
-                  {newL.slice(0, 60).map((l, j) => <div key={`n${j}`} className="diff-add">+ {l}</div>)}
-                  {newL.length > 60 && <div className="muted">… {newL.length - 60} more lines</div>}
-                </pre>
-              </div>
-            );
-          })}
+          <StepDiffs diffs={diffs} rel={rel} />
           {parsed.output ? (() => {
             const clipped = parsed.output.length > 8000 ? `${parsed.output.slice(0, 8000)}\n… (${parsed.output.length - 8000} more characters)` : parsed.output;
             const resLang = bad || parsed.output.length > 8000 ? null : parts.type === 'cmd' ? detectResultLang(cmdText, clipped) : (() => {

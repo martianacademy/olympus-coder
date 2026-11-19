@@ -44,6 +44,8 @@ interface AgentInitiatedHost {
   snapshotBefore: (rt: AgentInitiatedRuntime, label: string) => Promise<string | undefined>;
   finishCheckpoint: (rt: AgentInitiatedRuntime, item: ThreadItem, before: string) => Promise<void>;
   onTurnEnd: (threadId: string) => void;
+  /** An agent-initiated turn started (true) or ended (false) on this runtime. */
+  onAgentTurn?: (rt: AgentInitiatedRuntime, running: boolean) => void;
 }
 
 let host: AgentInitiatedHost | undefined;
@@ -113,7 +115,10 @@ function rewriteSessionUpdateLine(line: string): string {
   }
 }
 
-const IDLE_TURN_SETTLE_MS = 2_500;
+const IDLE_TURN_SETTLE_MS = Number(process.env.OLYMPUS_IDLE_SETTLE_MS) || 2_500;
+// Antigravity streams `agent_thought_chunk`, then stays silent for 10–65s while generating tool-call JSON arguments
+// before sending the first `tool_call`. Hold the autonomous turn open across that silent generation gap.
+const THOUGHT_TOOL_GEN_SETTLE_MS = Number(process.env.OLYMPUS_THOUGHT_SETTLE_MS) || 90_000;
 
 /** Starts a distinct, checkpointed turn for work initiated by the agent. */
 export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: string, hasTaskLifecycle = false): void {
@@ -147,6 +152,7 @@ export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: strin
   activeTurns.set(rt.thread.id, active);
   rt.running = true;
   rt.turn = {};
+  host.onAgentTurn?.(rt, true);
   host.addItem(rt, userItem);
   host.pushSession(rt);
   if (!hasTaskLifecycle) scheduleIdleSettle(rt, active);
@@ -304,6 +310,7 @@ function endAgentInitiatedTurn(rt: AgentInitiatedRuntime): void {
   clearSettleTimer(active);
   activeTurns.delete(rt.thread.id);
   rt.running = false;
+  host.onAgentTurn?.(rt, false);
   host.pushSession(rt);
   host.onTurnEnd(rt.thread.id);
   void active.before.then(async (before) => {
@@ -327,6 +334,12 @@ function hasOpenTurnWork(rt: AgentInitiatedRuntime, active: ActiveTurn): boolean
   return false;
 }
 
+function settleDelayMs(rt: AgentInitiatedRuntime, active: ActiveTurn): number {
+  const last = rt.thread.items.length > active.startedAtIndex ? rt.thread.items[rt.thread.items.length - 1] : undefined;
+  if (!last || last.kind === 'thought') return THOUGHT_TOOL_GEN_SETTLE_MS;
+  return IDLE_TURN_SETTLE_MS;
+}
+
 function scheduleIdleSettle(rt: AgentInitiatedRuntime, active: ActiveTurn): void {
   clearSettleTimer(active);
   active.settleTimer = setTimeout(() => {
@@ -336,7 +349,7 @@ function scheduleIdleSettle(rt: AgentInitiatedRuntime, active: ActiveTurn): void
       return;
     }
     endAgentInitiatedTurn(rt);
-  }, IDLE_TURN_SETTLE_MS);
+  }, settleDelayMs(rt, active));
   active.settleTimer.unref?.();
 }
 

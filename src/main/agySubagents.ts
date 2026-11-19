@@ -136,9 +136,9 @@ export function discoverAgySubagents(thread: Thread): void {
 }
 
 /** Notifies the watcher when an Antigravity turn starts or finishes on a session. */
-export function noteAgyParentTurn(rt: NativeRuntimeHandle, running: boolean): void {
+export function noteAgyParentTurn(rt: NativeRuntimeHandle, running: boolean, opts: { liveAcp?: boolean } = {}): void {
   if (rt.agentId !== 'antigravity' || !rt.sessionId) return;
-  if (host) setAgyIdleTurn(rt, host, !running);
+  if (host) setAgyIdleTurn(rt, host, !running, opts);
   const root = rootUserThread(rt.thread);
   watchParent(rt.sessionId, root.id);
   const scan = parentScans.get(root.id);
@@ -219,7 +219,8 @@ export function onAgyToolEvent(rt: NativeRuntimeHandle, u: any): void {
     return;
   }
   if (u?.sessionUpdate !== 'tool_call') return;
-  if (rt.sessionId) noteAgyParentTurn(rt, true);
+  // A live tool call: agy is streaming this work over ACP, so the transcript mirror must not show it again.
+  if (rt.sessionId) noteAgyParentTurn(rt, true, { liveAcp: true });
   const name = toolBaseName(u.title, u.name);
   if (name === 'invoke_subagent' || name === 'swarm') ensurePolling();
   // A kill shows at once; its result in the parent's transcript is read too (that also covers an app restart).

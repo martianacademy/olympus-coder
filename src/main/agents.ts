@@ -1221,6 +1221,8 @@ initAgentInitiated({
     if (project) await finishCheckpoint(runtime, item, project.id, project.path, before);
   },
   onTurnEnd,
+  // Antigravity streams work it started itself over ACP: its transcript mirror stays quiet meanwhile (no duplicates).
+  onAgentTurn: (rt, running) => noteAgyParentTurn(rt as Runtime, running, { liveAcp: true }),
 });
 
 export interface PromptOpts {
