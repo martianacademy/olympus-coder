@@ -1,0 +1,13 @@
+{
+  "name": "olympus-cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "../node_modules/.bin/tsc --noEmit -p tsconfig.json",
+    "build": "../node_modules/.bin/tsc -p tsconfig.json",
+    "test": "npm run build && node tests/cloud.unit.mjs && node tests/oauthPortal.unit.mjs",
+    "dev": "../relay/node_modules/.bin/wrangler dev",
+    "dry-run": "../relay/node_modules/.bin/wrangler deploy --dry-run",
+    "deploy": "../relay/node_modules/.bin/wrangler deploy"
+  }
+}

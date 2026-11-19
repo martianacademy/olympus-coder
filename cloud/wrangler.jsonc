@@ -1,0 +1,31 @@
+{
+  // Olympus Cloud — Stateless Zero-Content-Logging Credit Gateway for Olympus CLI (`oly`).
+  // Never stores prompts, code, or chat transcripts: only auth hashes, atomic Durable Object credit
+  // wallets, global free-tier kill-switch state, and numeric-only token/cost usage ledger rows.
+  "name": "olympus-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "WALLETS", "class_name": "UserWalletDO" },
+      { "name": "GLOBAL_BUDGET", "class_name": "GlobalBudgetDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["UserWalletDO", "GlobalBudgetDO"] }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "olympus-cloud-db",
+      "database_id": "5c845b92-3ea1-404d-9276-91c4117d8622"
+    }
+  ],
+  "vars": {
+    "GLOBAL_FREE_DAILY_USD_CAP": "0",
+    "FREE_DAILY_REQ_LIMIT": "0",
+    "ALLOW_DEV_AUTH": "false"
+  },
+  // Strict zero-logging policy: disable Cloudflare observability request logs by default.
+  "observability": { "enabled": false }
+}

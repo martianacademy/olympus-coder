@@ -54,7 +54,7 @@ Olympus Coder never locks the IDE behind a login or subscription. You can instal
 
 | Agent / CLI | Recurring Free Allowance | 1-Click Install / Add | Direct In-App Sign-In |
 | :--- | :--- | :--- | :--- |
-| **Olympus CLI** (`oly`) | Daily free pool (`olympus/auto-free`), OpenRouter `:free` models & unlimited local Ollama (`$0`) | Built-in (`npm` 1-click install) | 1-click GitHub OAuth, Keychain API key, Local Ollama, or `oly login` terminal |
+| **Olympus CLI** (`oly`) | OpenRouter `:free` models (BYO key) & unlimited local Ollama (`$0`) | Built-in (`npm` 1-click install) | BYO API keys (OpenRouter, Anthropic, OpenAI), Local Ollama, or `oly login` terminal |
 | **Qwen Code** (`qwen-code`) | **2,000 free requests / day** (`~1.5B tokens/mo` at ~25k coding context) | `npx` or local `qwen` | In-app terminal (`qwen` OAuth) or `DASHSCOPE_API_KEY` |
 | **Gemini CLI** (`gemini`) | **~1,000 free requests / day** on personal Google accounts (`~750M tokens/mo`) + free AI Studio key | `npx` or local `gemini` | Google OAuth / in-app terminal (`/auth`) or `GEMINI_API_KEY` |
 | **iFlow CLI** (`iflow`) | **Uncapped free** hosted Kimi K2, Qwen3 Coder & DeepSeek-V3 | `npx @iflow-ai/iflow-cli` or local `iflow` | In-app terminal (`iflow` sign-in) or `IFLOW_API_KEY` |
