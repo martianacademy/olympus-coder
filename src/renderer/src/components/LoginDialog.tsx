@@ -180,7 +180,9 @@ export function LoginDialog({ def, status, onClose }: { def: AgentDef; status?: 
                 {exitCode === null ? (
                   <span className="muted">Follow the steps in the terminal. Clicking a link opens your browser.</span>
                 ) : exitCode === 0 ? (
-                  <span style={{ color: 'var(--success)' }}>Login command finished. Checking status…</span>
+                  <span style={{ color: 'var(--success)' }}>
+                    {status?.state === 'ready' ? `✓ ${def.name} is signed in and ready.` : 'Login command finished. Checking status…'}
+                  </span>
                 ) : (
                   <span className="error-text">Login command failed (code {exitCode}).</span>
                 )}

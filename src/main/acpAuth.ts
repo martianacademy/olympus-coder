@@ -1,10 +1,11 @@
 import type { AuthAccountView, AuthInfoView, AuthVarView, LoginLinkView } from '@shared/acpConfig';
+import { CLI_ENV_FALLBACKS, CLI_TERMINAL_LOGINS, KNOWN_KEY_VARS, METHOD_ID_VAR, PURE_ACP_WRAPPERS } from './acpAuthCatalog';
 
 /**
  * ACP login, beyond what the SDK schema types: every auth method shape agents send, the status they report,
  * links they ask the user to open during a login, and interactive CLI / env-var fallbacks for registry agents
- * whose ACP servers omit `type: 'terminal'` (e.g. Goose `goose-provider`), omit API-key methods (e.g. Mistral
- * Vibe `MISTRAL_API_KEY`), or advertise `authMethods: []` while requiring CLI sign-in (`kilo`, `opencode`, etc.).
+ * whose ACP servers omit `type: 'terminal'` (e.g. Goose `goose-provider`, Kilo `kilo-login`, OpenCode
+ * `opencode-login`), omit API-key methods, or advertise `authMethods: []` while requiring CLI sign-in.
  */
 
 export type AuthFlow = 'terminal' | 'agent' | 'api-key' | 'env-vars' | 'gateway';
@@ -36,177 +37,6 @@ export interface AgentAuthMeta {
   command?: string;
 }
 
-/** Env var of an API-key method that does not name its own (the agents' documented variables). */
-const KNOWN_KEY_VARS: Record<string, string> = {
-  olympus: 'OPENROUTER_API_KEY',
-  codex: 'CODEX_API_KEY',
-  antigravity: 'GEMINI_API_KEY',
-  claude: 'ANTHROPIC_API_KEY',
-  gemini: 'GEMINI_API_KEY',
-  'qwen-code': 'DASHSCOPE_API_KEY',
-  'mistral-vibe': 'MISTRAL_API_KEY',
-  kimi: 'KIMI_API_KEY',
-  'kimi-code': 'KIMI_API_KEY',
-  'minimax-code': 'MINIMAX_API_KEY',
-  'glm-acp-agent': 'ZHIPU_API_KEY',
-  'grok-build': 'XAI_API_KEY',
-  kilo: 'KILOCODE_TOKEN',
-  opencode: 'ANTHROPIC_API_KEY',
-  'opencode-v2': 'ANTHROPIC_API_KEY',
-  goose: 'OPENAI_API_KEY',
-  cline: 'ANTHROPIC_API_KEY',
-  'amp-acp': 'AMP_API_KEY',
-  'factory-droid': 'FACTORY_API_KEY',
-  auggie: 'AUGMENT_SESSION_AUTH',
-  deepagents: 'OPENAI_API_KEY',
-  dirac: 'ANTHROPIC_API_KEY',
-};
-
-const METHOD_ID_VAR: [RegExp, string][] = [
-  [/^gemini[-_ ]?api[-_ ]?key$/i, 'GEMINI_API_KEY'],
-  [/^openai[-_ ]?api[-_ ]?key$/i, 'OPENAI_API_KEY'],
-  [/^anthropic[-_ ]?api[-_ ]?key$/i, 'ANTHROPIC_API_KEY'],
-  [/^mistral[-_ ]?api[-_ ]?key$/i, 'MISTRAL_API_KEY'],
-  [/^openrouter(?:[-_ ]?api[-_ ]?key)?$/i, 'OPENROUTER_API_KEY'],
-  [/^ai[-_ ]?gateway(?:[-_ ]?api[-_ ]?key)?$/i, 'AI_GATEWAY_API_KEY'],
-  [/^dashscope[-_ ]?api[-_ ]?key$/i, 'DASHSCOPE_API_KEY'],
-  [/^(?:kimi|moonshot)[-_ ]?api[-_ ]?key$/i, 'KIMI_API_KEY'],
-  [/^(?:xai|grok)[-_ ]?api[-_ ]?key$/i, 'XAI_API_KEY'],
-  [/^(?:zhipu|zai|glm)[-_ ]?api[-_ ]?key$/i, 'ZHIPU_API_KEY'],
-  [/^minimax[-_ ]?api[-_ ]?key$/i, 'MINIMAX_API_KEY'],
-];
-
-/** Interactive CLI login subcommands for registry agents (run directly against the CLI without `acp` flags). */
-const CLI_TERMINAL_LOGINS: Record<string, { name: string; description: string; args: string[] }> = {
-  goose: { name: 'Configure Goose in terminal', description: 'Runs `goose configure` interactively to pick your AI provider and API key.', args: ['configure'] },
-  opencode: { name: 'Sign in via OpenCode CLI', description: 'Runs `opencode auth login` interactively to connect Anthropic, OpenAI, GitHub Copilot, Google, or OpenRouter.', args: ['auth', 'login'] },
-  'opencode-v2': { name: 'Sign in via OpenCode CLI', description: 'Runs `opencode auth login` interactively to connect Anthropic, OpenAI, GitHub Copilot, Google, or OpenRouter.', args: ['auth', 'login'] },
-  kilo: { name: 'Sign in via Kilo CLI', description: 'Runs `kilo auth login` interactively in a terminal.', args: ['auth', 'login'] },
-  kimi: { name: 'Sign in via Kimi CLI', description: 'Runs `kimi login` interactively in a terminal.', args: ['login'] },
-  'kimi-code': { name: 'Sign in via Kimi Code CLI', description: 'Runs `kimi login` interactively in a terminal.', args: ['login'] },
-  gemini: { name: 'Sign in via Gemini CLI', description: 'Opens the interactive Gemini CLI to sign in with Google (`/auth`).', args: [] },
-  'qwen-code': { name: 'Sign in via Qwen Code CLI', description: 'Opens the interactive Qwen Code CLI to sign in with Qwen OAuth.', args: [] },
-  'github-copilot-cli': { name: 'Sign in via GitHub Copilot CLI', description: 'Runs `copilot login` interactively to authenticate with GitHub.', args: ['login'] },
-  cursor: { name: 'Sign in via Cursor CLI', description: 'Runs `cursor-agent login` interactively in a terminal.', args: ['login'] },
-  cline: { name: 'Sign in via Cline CLI', description: 'Runs `cline auth` interactively to connect your Cline account or API provider.', args: ['auth'] },
-  kiro: { name: 'Sign in via Kiro CLI', description: 'Runs `kiro-cli login` interactively in a terminal.', args: ['login'] },
-  auggie: { name: 'Sign in via Auggie CLI', description: 'Runs `auggie login` interactively in a terminal.', args: ['login'] },
-  'factory-droid': { name: 'Sign in via Factory Droid CLI', description: 'Opens `droid` interactively in a terminal to sign in.', args: [] },
-  'grok-build': { name: 'Sign in via Grok CLI', description: 'Opens `grok` interactively in a terminal to sign in.', args: [] },
-  'amp-acp': { name: 'Sign in via Amp CLI', description: 'Opens `amp` login interactively in a terminal.', args: ['login'] },
-  devin: { name: 'Sign in via Devin CLI', description: 'Runs `devin login` interactively in a terminal.', args: ['login'] },
-  qoder: { name: 'Sign in via Qoder CLI', description: 'Opens `qodercli` interactively in a terminal to sign in.', args: [] },
-};
-
-/** Environment variable credentials supported by registry CLIs (stored encrypted and injected on start). */
-const CLI_ENV_FALLBACKS: Record<string, { name: string; description?: string; link?: string; vars: AuthVarView[] }> = {
-  'mistral-vibe': {
-    name: 'Mistral API key',
-    description: 'Use a Mistral AI Studio / La Plateforme API key (`MISTRAL_API_KEY`).',
-    link: 'https://console.mistral.ai/api-keys',
-    vars: [{ name: 'MISTRAL_API_KEY', label: 'Mistral API key', secret: true, optional: false }],
-  },
-  goose: {
-    name: 'Provider & API key (environment)',
-    description: 'Set Goose’s provider and API key directly without running the interactive wizard.',
-    vars: [
-      { name: 'GOOSE_PROVIDER', label: 'Provider (e.g. openai, anthropic, google, openrouter, ollama)', secret: false, optional: false },
-      { name: 'GOOSE_MODEL', label: 'Model (optional, e.g. gpt-4o, claude-sonnet-4-0, gemini-2.5-pro)', secret: false, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI API key', secret: true, optional: true },
-      { name: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, optional: true },
-      { name: 'GOOGLE_API_KEY', label: 'Google Gemini API key', secret: true, optional: true },
-      { name: 'OPENROUTER_API_KEY', label: 'OpenRouter API key', secret: true, optional: true },
-    ],
-  },
-  opencode: {
-    name: 'Provider API key',
-    description: 'Enter one or more provider API keys for OpenCode.',
-    vars: [
-      { name: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI API key', secret: true, optional: true },
-      { name: 'GEMINI_API_KEY', label: 'Gemini API key', secret: true, optional: true },
-      { name: 'OPENROUTER_API_KEY', label: 'OpenRouter API key', secret: true, optional: true },
-    ],
-  },
-  'opencode-v2': {
-    name: 'Provider API key',
-    description: 'Enter one or more provider API keys for OpenCode.',
-    vars: [
-      { name: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI API key', secret: true, optional: true },
-      { name: 'GEMINI_API_KEY', label: 'Gemini API key', secret: true, optional: true },
-      { name: 'OPENROUTER_API_KEY', label: 'OpenRouter API key', secret: true, optional: true },
-    ],
-  },
-  kilo: {
-    name: 'Kilo / Provider API key',
-    description: 'Sign in with a Kilo token or direct provider API key.',
-    vars: [
-      { name: 'KILOCODE_TOKEN', label: 'Kilo Code token', secret: true, optional: true },
-      { name: 'OPENROUTER_API_KEY', label: 'OpenRouter API key', secret: true, optional: true },
-      { name: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI API key', secret: true, optional: true },
-    ],
-  },
-  kimi: {
-    name: 'Kimi / Moonshot API key',
-    vars: [
-      { name: 'KIMI_API_KEY', label: 'Kimi API key', secret: true, optional: true },
-      { name: 'MOONSHOT_API_KEY', label: 'Moonshot API key', secret: true, optional: true },
-    ],
-  },
-  'kimi-code': {
-    name: 'Kimi / Moonshot API key',
-    vars: [
-      { name: 'KIMI_API_KEY', label: 'Kimi API key', secret: true, optional: true },
-      { name: 'MOONSHOT_API_KEY', label: 'Moonshot API key', secret: true, optional: true },
-    ],
-  },
-  gemini: {
-    name: 'Gemini API key',
-    link: 'https://aistudio.google.com/apikey',
-    vars: [{ name: 'GEMINI_API_KEY', label: 'Gemini API key', secret: true, optional: false }],
-  },
-  'qwen-code': {
-    name: 'DashScope / OpenAI-compatible API key',
-    vars: [
-      { name: 'DASHSCOPE_API_KEY', label: 'DashScope API key', secret: true, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI-compatible API key', secret: true, optional: true },
-      { name: 'OPENAI_BASE_URL', label: 'OpenAI Base URL (optional)', secret: false, optional: true },
-      { name: 'OPENAI_MODEL', label: 'Model ID (optional)', secret: false, optional: true },
-    ],
-  },
-  'minimax-code': {
-    name: 'MiniMax API key',
-    vars: [{ name: 'MINIMAX_API_KEY', label: 'MiniMax API key', secret: true, optional: false }],
-  },
-  'glm-acp-agent': {
-    name: 'Zhipu / Z.AI API key',
-    vars: [
-      { name: 'ZHIPU_API_KEY', label: 'Zhipu API key', secret: true, optional: true },
-      { name: 'ZAI_API_KEY', label: 'Z.AI API key', secret: true, optional: true },
-    ],
-  },
-  'grok-build': {
-    name: 'xAI API key',
-    vars: [{ name: 'XAI_API_KEY', label: 'xAI API key', secret: true, optional: false }],
-  },
-  'github-copilot-cli': {
-    name: 'GitHub Personal Access Token',
-    vars: [{ name: 'GITHUB_TOKEN', label: 'GitHub token (Copilot scope)', secret: true, optional: false }],
-  },
-  cline: {
-    name: 'Provider API key',
-    vars: [
-      { name: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, optional: true },
-      { name: 'OPENROUTER_API_KEY', label: 'OpenRouter API key', secret: true, optional: true },
-      { name: 'OPENAI_API_KEY', label: 'OpenAI API key', secret: true, optional: true },
-    ],
-  },
-};
-
-const PURE_ACP_WRAPPERS = new Set(['mistral-vibe', 'amp-acp', 'claude-acp', 'codex-acp', 'antigravity-acp', 'corust-agent', 'glm-acp-agent', 'pi-acp', 'deepagents']);
-
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 
 /** Restores any fields stripped by `@agentclientprotocol/sdk`'s `zInitializeResponse` Zod parser. */
@@ -218,6 +48,21 @@ export function unwrapAuthMethod(m: any): any {
 function varFromMethodId(id: string): string | undefined {
   for (const [re, name] of METHOD_ID_VAR) if (re.test(id)) return name;
   return undefined;
+}
+
+/**
+ * Detects ACP auth methods that instruct the user to run a CLI command in a terminal (such as
+ * `Run \`kilo auth login\` in the terminal`, `Run \`opencode auth login\` in the terminal`, or
+ * `Run \`goose configure\`...`) while omitting `type: 'terminal'`, and extracts the CLI subcommand args.
+ */
+function terminalArgsFromPrompt(id: string, name: string, description?: string): string[] | null {
+  const text = `${name} ${description ?? ''}`;
+  if (id === 'goose-provider' || /\brun\s+`?goose\s+configure`?/i.test(text)) return ['configure'];
+  const backtick = /\brun\s+`([^`\r\n;|&$><]+)`/i.exec(text);
+  if (!backtick) return null;
+  const tokens = backtick[1].trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length || tokens[0].startsWith('-') || !/^[a-z0-9@_./-]+$/i.test(tokens[0])) return null;
+  return tokens.slice(1);
 }
 
 /** One raw `authMethods` entry → what the login dialog needs. */
@@ -233,15 +78,15 @@ export function authMethodDetail(agentId: string, rawInput: any): AuthMethodDeta
       ...(m.env && typeof m.env === 'object' ? { terminalEnv: m.env } : {}),
     };
   }
-  // Goose advertises `goose-provider` ("Run `goose configure`...") without `type: 'terminal'`; its `authenticate` RPC is a no-op.
-  if (base.id === 'goose-provider' || /\brun\s+`?goose\s+configure`?/i.test(`${base.name} ${base.description ?? ''}`)) {
-    return { ...base, flow: 'terminal', vars: [], terminalArgs: ['configure'], replaceAgentArgs: true };
-  }
   if (m?.type === 'env_var' || Array.isArray(m?.vars)) {
     const vars: AuthVarView[] = (Array.isArray(m?.vars) ? m.vars : [])
       .filter((v: any) => str(v?.name))
       .map((v: any) => ({ name: v.name.trim(), ...(str(v.label) ? { label: v.label.trim() } : {}), secret: v.secret !== false, optional: v.optional === true }));
     if (vars.length) return { ...base, flow: 'env-vars', vars, ...(str(m?.link) ? { link: m.link.trim() } : {}) };
+  }
+  const inferredTerminalArgs = terminalArgsFromPrompt(base.id, base.name, base.description);
+  if (inferredTerminalArgs !== null) {
+    return { ...base, flow: 'terminal', vars: [], terminalArgs: inferredTerminalArgs, replaceAgentArgs: true };
   }
   if (m?._meta?.gateway) return { ...base, flow: 'gateway', vars: [] };
   const metaKey = m?._meta?.['api-key'];
@@ -335,10 +180,12 @@ export function authenticateParams(method: AuthMethodDetail, values: Record<stri
   return params;
 }
 
-/** Missing required variables of a method, by label. When every variable is optional (any-provider key form), at least one must be provided. */
+/** Missing required variables of a method, by label. When every variable is optional (any-provider key form), at least one secret key must be provided. */
 export function missingVars(method: AuthMethodDetail, values: Record<string, string>): string[] {
   if (method.vars.length > 0 && method.vars.every((v) => v.optional)) {
-    return method.vars.some((v) => values[v.name]?.trim()) ? [] : ['at least one API key'];
+    const keyPool = method.vars.filter((v) => v.secret);
+    const pool = keyPool.length > 0 ? keyPool : method.vars;
+    return pool.some((v) => values[v.name]?.trim()) ? [] : ['at least one API key'];
   }
   return method.vars.filter((v) => !v.optional && !values[v.name]?.trim()).map((v) => v.label ?? v.name);
 }

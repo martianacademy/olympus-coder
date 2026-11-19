@@ -34,6 +34,40 @@ interface RegistryAgent {
   };
 }
 
+/**
+ * ACP agents that are not (yet) in the official registry, offered the same way. An official entry with the same
+ * id wins. Packages are pinned so a new upstream release never runs without an app update.
+ */
+const EXTRA_AGENTS: RegistryAgent[] = [
+  {
+    id: 'iflow',
+    name: 'iFlow CLI',
+    version: '0.5.19',
+    description: 'Free hosted Kimi K2, Qwen3 Coder, and DeepSeek coding agent via iFlow.',
+    website: 'https://cli.iflow.cn',
+    distribution: { npx: { package: '@iflow-ai/iflow-cli@0.5.19', args: ['--experimental-acp'] } },
+  },
+  {
+    id: 'openhands',
+    name: 'OpenHands',
+    version: '1.16.0',
+    description: 'Open-source software engineering agent supporting OpenHands Cloud, free API keys, or local models.',
+    website: 'https://openhands.dev',
+    distribution: { uvx: { package: 'openhands==1.16.0', args: ['acp'] } },
+  },
+  {
+    id: 'zcode',
+    name: 'ZCode',
+    version: '0.89.0',
+    description: 'Z.ai’s GLM coding agent, through the community zcode-acp-server bridge. Needs the ZCode app installed and signed in.',
+    website: 'https://github.com/william0wang/zcode-acp',
+    // The bridge alone would start every session in `yolo` (no approvals); `build` is ZCode's own default.
+    distribution: { npx: { package: 'zcode-acp-server@0.89.0', env: { ZCODE_ACP_MODE: 'build' } } },
+  },
+];
+
+const withExtras = (agents: RegistryAgent[]): RegistryAgent[] => [...agents, ...EXTRA_AGENTS.filter((x) => !agents.some((a) => a.id === x.id))];
+
 /** Built-in agents have their own adapters in the app; the registry copies of them are skipped. */
 const BUILTIN_REGISTRY_IDS: Record<string, string> = { 'claude-acp': 'claude', 'codex-acp': 'codex', 'antigravity-acp': 'antigravity' };
 
@@ -61,10 +95,14 @@ const LOCAL_BIN: Record<string, string> = {
   harn: 'harn',
   stakpak: 'stakpak',
   qoder: 'qodercli',
+  'codebuddy-code': 'codebuddy',
+  iflow: 'iflow',
+  openhands: 'openhands',
   dirac: 'dirac',
   bob: 'bob',
   autohand: 'autohand',
   'amp-acp': 'amp-acp',
+  zcode: 'zcode-acp-server',
   poolside: 'pool',
   sigit: 'sigit',
   junie: 'junie',
@@ -91,7 +129,12 @@ const cacheFile = () => join(sharedRoot(), 'registry-cache.json');
 let registry: RegistryAgent[] | null = null;
 let registryAt = 0;
 
+/** The official registry plus EXTRA_AGENTS. */
 async function loadRegistry(): Promise<RegistryAgent[]> {
+  return withExtras(await loadOfficialRegistry());
+}
+
+async function loadOfficialRegistry(): Promise<RegistryAgent[]> {
   if (registry && Date.now() - registryAt < CACHE_MS) return registry;
   try {
     const cached = JSON.parse(readFileSync(cacheFile(), 'utf8')) as { at: number; agents: RegistryAgent[] };
@@ -260,7 +303,10 @@ export async function planCatalogAdd(id: string, method: CatalogMethod): Promise
   if (method === 'local') {
     const path = LOCAL_BIN[id] && which(LOCAL_BIN[id]);
     if (!path) throw new Error('This agent’s CLI is not installed.');
-    return { ...base, command: path, args: binaryFor(a)?.args ?? a.distribution.npx?.args ?? a.distribution.uvx?.args ?? [] };
+    const args = binaryFor(a)?.args ?? a.distribution.npx?.args ?? a.distribution.uvx?.args ?? [];
+    // The package's env too (e.g. ZCode's safe start mode), not only its args.
+    const env = binaryFor(a)?.env ?? a.distribution.npx?.env ?? a.distribution.uvx?.env;
+    return { ...base, command: path, args, env };
   }
   if (method === 'npx') {
     const d = a.distribution.npx;

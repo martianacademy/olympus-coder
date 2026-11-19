@@ -142,9 +142,16 @@ export function Onboarding({ state, onState, onDone }: { state: AppState; onStat
                       {s?.state === 'not-installed' && <div className="small muted">{s.detail}</div>}
                     </div>
                     {s?.state === 'ready' ? (
-                      <span className="chip" style={{ color: 'var(--success)' }}>
-                        <Check size={13} /> Ready
-                      </span>
+                      <div className="row" style={{ gap: 6 }}>
+                        <span className="chip" style={{ color: 'var(--success)' }}>
+                          <Check size={13} /> Ready
+                        </span>
+                        {(s.authMethods?.length ?? 0) > 0 && (
+                          <button className="btn small" onClick={() => setLogin(d.id)}>
+                            <LogIn size={13} /> Login
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       s?.state !== 'not-installed' && (
                         <button className="btn small primary" onClick={() => setLogin(d.id)}>

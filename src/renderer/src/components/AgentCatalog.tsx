@@ -50,7 +50,30 @@ function Row({ e, error, children }: { e: CatalogEntry; error?: string; children
 }
 
 /** Well-known coding agents first; the rest of the registry follows alphabetically. */
-const POPULAR = ['gemini', 'github-copilot-cli', 'cursor', 'opencode', 'qwen-code', 'goose', 'cline', 'kilo', 'amp-acp', 'factory-droid', 'auggie', 'mistral-vibe', 'kimi-code', 'grok-build', 'junie', 'kiro', 'devin'];
+const POPULAR = [
+  'gemini',
+  'github-copilot-cli',
+  'opencode',
+  'qwen-code',
+  'iflow',
+  'kilo',
+  'cline',
+  'cursor',
+  'codebuddy-code',
+  'qoder',
+  'kiro',
+  'zcode',
+  'goose',
+  'openhands',
+  'mistral-vibe',
+  'amp-acp',
+  'factory-droid',
+  'auggie',
+  'kimi-code',
+  'grok-build',
+  'junie',
+  'devin',
+];
 const popularity = (id: string) => (POPULAR.includes(id) ? POPULAR.indexOf(id) : POPULAR.length);
 
 const bestMethod = (e: CatalogEntry): CatalogMethod | undefined => e.methods.find((m) => !e.blocked[m]);

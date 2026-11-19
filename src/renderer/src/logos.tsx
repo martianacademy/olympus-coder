@@ -21,6 +21,12 @@ import mistral from '@lobehub/icons-static-svg/icons/mistral-color.svg?raw';
 import grok from '@lobehub/icons-static-svg/icons/grok.svg?raw';
 import ollama from '@lobehub/icons-static-svg/icons/ollama.svg?raw';
 import openai from '@lobehub/icons-static-svg/icons/openai.svg?raw';
+import codebuddy from '@lobehub/icons-static-svg/icons/codebuddy-color.svg?raw';
+import qoder from '@lobehub/icons-static-svg/icons/qoder-color.svg?raw';
+import kiro from '@lobehub/icons-static-svg/icons/kiro-color.svg?raw';
+import openhands from '@lobehub/icons-static-svg/icons/openhands-color.svg?raw';
+import devin from '@lobehub/icons-static-svg/icons/devin-color.svg?raw';
+import zai from '@lobehub/icons-static-svg/icons/zai.svg?raw';
 
 interface Logo {
   name: string;
@@ -32,6 +38,7 @@ interface Logo {
 }
 
 const olympusSvg = '<svg viewBox="4 12 92 74" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#f97316" d="M 7 83 C 18.4 78.55 32.65 48.29 35.5 38.5 L 41.8 38.5 L 41.8 39.7 A 8.2 8.2 0 0 0 58.2 39.7 L 58.2 38.5 L 64.5 38.5 C 67.35 48.29 81.6 78.55 93 83 Z"/><circle fill="#fb923c" cx="50" cy="39.7" r="5.8"/><path stroke="#fdba74" stroke-width="5.5" stroke-linecap="round" d="M 25 27 C 25 21.5 25 21.5 33 21.5 L 42 21.5 C 48.5 21.5 50 16 50 16 C 50 16 51.5 21.5 58 21.5 L 67 21.5 C 75 21.5 75 21.5 75 27"/></svg>';
+const iflowSvg = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="5.4" fill="#0EA5E9"/><circle cx="7.5" cy="7.5" r="1.75" fill="#fff"/><path d="M7.5 11.2v5.6" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M11.6 15.8c1.4-4.6 3.5-7 6.2-7M11.6 15.8c1.6 0 3.4-.9 5.5-2.8" stroke="#E0F2FE" stroke-width="2.3" stroke-linecap="round"/><circle cx="17.8" cy="8.8" r="1.6" fill="#fff"/></svg>';
 
 export const LOGOS: Record<string, Logo> = {
   olympus: { name: 'Olympus', svg: olympusSvg, mono: false, match: /\bolympus\b/i },
@@ -41,11 +48,18 @@ export const LOGOS: Record<string, Logo> = {
   geminicli: { name: 'Gemini CLI', svg: geminicli, mono: false, match: /gemini/i },
   opencode: { name: 'OpenCode', svg: opencode, mono: true, match: /opencode/i },
   qwen: { name: 'Qwen Code', svg: qwen, mono: false, match: /qwen/i },
+  iflow: { name: 'iFlow CLI', svg: iflowSvg, mono: false, match: /\biflow\b/i },
   cursor: { name: 'Cursor', svg: cursor, mono: true, match: /cursor/i },
   amp: { name: 'Amp', svg: amp, mono: false, match: /\bamp\b/i },
   goose: { name: 'Goose', svg: goose, mono: true, match: /goose/i },
   cline: { name: 'Cline', svg: cline, mono: true, match: /cline/i },
   kilocode: { name: 'Kilo Code', svg: kilocode, mono: true, match: /kilo/i },
+  codebuddy: { name: 'CodeBuddy', svg: codebuddy, mono: false, match: /codebuddy/i },
+  qoder: { name: 'Qoder', svg: qoder, mono: true, match: /qoder/i },
+  kiro: { name: 'Kiro', svg: kiro, mono: false, match: /\bkiro\b/i },
+  openhands: { name: 'OpenHands', svg: openhands, mono: false, match: /openhands/i },
+  zai: { name: 'Z.ai / ZCode', svg: zai, mono: true, match: /zcode|\bzai\b|zhipu|\bglm\b/i },
+  devin: { name: 'Devin', svg: devin, mono: false, match: /\bdevin\b/i },
   kimi: { name: 'Kimi', svg: kimi, mono: false, match: /kimi|moonshot/i },
   junie: { name: 'Junie', svg: junie, mono: false, match: /junie/i },
   githubcopilot: { name: 'GitHub Copilot', svg: githubcopilot, mono: true, match: /copilot/i },

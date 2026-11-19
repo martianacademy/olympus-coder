@@ -3,7 +3,11 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — with shared project memory, multi-agent orchestration, a built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.2.1</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+    <code>v0.3.1</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+  </p>
+  <h3>⚡ 2.5B+ Free Coding Tokens / Month — 18 Free-Tier Coding CLIs Built In</h3>
+  <p>
+    <strong>100% free desktop IDE · Zero mandatory account wall.</strong> Install and sign in to <strong>18 free-tier coding agents</strong> directly inside Olympus Coder — stacking recurring free allowances across <strong>Qwen Code</strong>, <strong>Gemini CLI</strong>, <strong>iFlow CLI</strong>, <strong>OpenCode</strong>, <strong>Olympus CLI</strong>, <strong>Google Antigravity</strong>, <strong>OpenAI Codex</strong>, <strong>GitHub Copilot Free</strong>, <strong>Kiro</strong>, <strong>Kilo</strong>, <strong>Cline</strong>, <strong>Codebuddy</strong>, <strong>Qoder</strong>, <strong>Cursor</strong>, <strong>ZCode</strong>, <strong>Mistral Vibe</strong>, <strong>Goose</strong>, and <strong>OpenHands</strong> — and switch agents mid-thread without losing shared project memory when a quota resets.
   </p>
 </div>
 
@@ -14,7 +18,7 @@
   <img src="docs/screenshots/hero-code-mode.png" alt="Olympus Coder — Code Mode workspace with Antigravity, collapsible step timeline, inline diff, and CodeMirror 6 editor" width="100%" />
 </picture>
 
-> **Status:** v0.3.0, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
+> **Status:** v0.3.1, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
 
 ## Download
 
@@ -22,7 +26,7 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | [`Olympus.Coder-0.3.0-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.0-arm64.dmg) |
+| macOS, Apple silicon | [`Olympus.Coder-0.3.1-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.1-arm64.dmg) |
 | macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
 | Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
 | Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |
@@ -41,6 +45,35 @@ Modern AI-assisted engineering often splits context across disconnected CLI term
 - **One shared `~/.olympus` brain** — Every agent reads and updates the same two-tier persistent project memory (`MEMORY.md`, `INSTRUCTIONS.md`, `BUGS.md`, `AGENTS.md`, and cross-agent session transcripts) instead of writing into siloed vendor directories.
 - **Full IDE workbench built in** — Inspect live edits in **CodeMirror 6**, stage and commit in the **Git** client, run multi-tab **WebGL terminals** with 1-click test reruns, roll back any prompt via **shadow-git checkpoints**, and preview localhost apps side by side.
 - **Continue from your phone anywhere** — The exact same responsive UI runs over local Wi-Fi/Hotspot (`:47816`) or an **AES-256-GCM end-to-end encrypted Cloudflare Relay** with full chat, tool approvals, file editing, Git, and live PTY terminals.
+
+---
+
+## 2.5B+ Free Coding Tokens / Month — 18 Free-Tier Providers
+
+Olympus Coder never locks the IDE behind a login or subscription. You can install, add, and authenticate **18 free-usage coding CLIs** directly from **Settings → Agents & login** (or Onboarding), and rotate across them seamlessly inside the same conversation whenever one provider's daily or monthly window resets:
+
+| Agent / CLI | Recurring Free Allowance | 1-Click Install / Add | Direct In-App Sign-In |
+| :--- | :--- | :--- | :--- |
+| **Olympus CLI** (`oly`) | Daily free pool (`olympus/auto-free`), OpenRouter `:free` models & unlimited local Ollama (`$0`) | Built-in (`npm` 1-click install) | 1-click GitHub OAuth, Keychain API key, Local Ollama, or `oly login` terminal |
+| **Qwen Code** (`qwen-code`) | **2,000 free requests / day** (`~1.5B tokens/mo` at ~25k coding context) | `npx` or local `qwen` | In-app terminal (`qwen` OAuth) or `DASHSCOPE_API_KEY` |
+| **Gemini CLI** (`gemini`) | **~1,000 free requests / day** on personal Google accounts (`~750M tokens/mo`) + free AI Studio key | `npx` or local `gemini` | Google OAuth / in-app terminal (`/auth`) or `GEMINI_API_KEY` |
+| **iFlow CLI** (`iflow`) | **Uncapped free** hosted Kimi K2, Qwen3 Coder & DeepSeek-V3 | `npx @iflow-ai/iflow-cli` or local `iflow` | In-app terminal (`iflow` sign-in) or `IFLOW_API_KEY` |
+| **OpenCode** (`opencode`) | **12 zero-key `$0` built-in models** (`big-pickle`, `mimo-v2.6-flash-free`, `deepseek-v4.1-flash-free`, etc.) | Verified binary download or local `opencode` | Works out of the box, `opencode auth login`, or provider keys |
+| **Google Antigravity** (`agy`) | Free personal Google account quota across Gemini & frontier models | Built-in (`agy` CLI) | 1-click Google OAuth (`oauth-personal`) or `GEMINI_API_KEY` |
+| **OpenAI Codex** (`codex`) | ChatGPT Free account weekly Codex CLI allowance | Built-in (`npm` 1-click install) | 1-click ChatGPT browser / device-code login or `CODEX_API_KEY` |
+| **GitHub Copilot** (`github-copilot-cli`) | **Copilot Free** (50 agent/chat requests + 2,000 completions / month) | `npx` or local `copilot` | In-app terminal (`copilot login`) or `GITHUB_TOKEN` |
+| **Kiro CLI** (`kiro`) | AWS Builder ID Free Tier (**50 free agentic interactions / month**) | Verified binary download or local `kiro-cli` | In-app terminal (`kiro-cli login` via Builder ID / Google / GitHub) |
+| **Kilo** (`kilo`) | Free signup credits + `$0` free community models | Verified binary download, `npx`, or local `kilo` | In-app terminal (`kilo auth login`) or `KILOCODE_TOKEN` / free keys |
+| **Cline** (`cline`) | Free models + starter credits + BYO free Gemini / OpenRouter keys | `npx` or local `cline` | In-app terminal (`cline auth`) or Keychain API keys |
+| **Codebuddy Code** (`codebuddy-code`) | Tencent Cloud free tier with `Auto` model routing & starter quota | `npx` or local `codebuddy` | In-app terminal (`codebuddy login`) or `CODEBUDDY_API_KEY` |
+| **Qoder CLI** (`qoder`) | Community Free Edition + 14-day Pro trial credits | `npx` or local `qodercli` | In-app terminal (`qodercli login`) or `QODER_PERSONAL_ACCESS_TOKEN` |
+| **Cursor** (`cursor`) | Cursor Free / Hobby monthly agent request allowance | Verified binary download or local `cursor-agent` | In-app terminal (`cursor-agent login`) |
+| **ZCode** (`zcode`) | Z.ai `zai-start-plan` free GLM coding tier | `npx zcode-acp-server` bridge | ZCode desktop app session or `ZAI_API_KEY` / `ZHIPU_API_KEY` |
+| **Mistral Vibe** (`mistral-vibe`) | Mistral La Plateforme free **Experiment** API tier | Verified binary download or local `vibe-acp` | Browser sign-in or `MISTRAL_API_KEY` |
+| **Goose** (`goose`) | Open-source agent (`$0` with free Gemini / OpenRouter keys or Ollama) | Verified binary download or local `goose` | In-app terminal (`goose configure`) or `GOOSE_PROVIDER` + key |
+| **OpenHands** (`openhands`) | Open-source agent (`$0` with free Gemini / OpenRouter keys or Ollama) | `uvx openhands` or local `openhands` | In-app terminal (`openhands login`) or `LLM_API_KEY` / `GEMINI_API_KEY` |
+
+<sub><strong>How the ~2.5B+ monthly token math works:</strong> Qwen Code (`60,000 req/mo`) and Gemini CLI (`~30,000 req/mo`) alone provide ~2.25B tokens/month at a typical ~25k-token multi-file coding context, before counting uncapped free hosted models on <strong>iFlow CLI</strong>, 12 zero-key <code>$0</code> models in <strong>OpenCode</strong>, recurring monthly allowances across <strong>Antigravity</strong>, <strong>Codex</strong>, <strong>Copilot Free</strong>, <strong>Kiro</strong>, <strong>Mistral Experiment</strong>, OpenRouter <code>:free</code> pools, and unlimited local <strong>Ollama</strong> inference. Quotas are governed by each upstream provider and may change over time.</sub>
 
 ---
 
@@ -114,7 +147,7 @@ The moment a sub-session finishes, Olympus tells its parent session the result �
 ### 1. Multi-Agent ACP Hub & 1-Click Registry
 
 - **First-class built-in agents & Olympus CLI:** Ships ready for **Claude Code** (`@agentclientprotocol/claude-agent-acp`), **Codex** (`@agentclientprotocol/codex-acp`), and **Google Antigravity** (`agy acp`), reusing existing CLI logins, models, and reasoning effort levels. It also lists **Olympus** (`oly acp`), our multi-model agent for OpenRouter, Vercel AI Gateway, any OpenAI-compatible key, or local Ollama. Install it separately from [olympus-coder-cli](https://github.com/martianacademy/olympus-coder-cli).
-- **46-agent ACP Registry:** Browse, auto-detect on `PATH`, or 1-click install official ACP agents (`gemini`, `opencode`, `goose`, `cursor-agent`, `qwen`, `copilot`, and more) via `local`, `npx`, `uvx`, or `sha256`-verified binary archives into `~/.olympus/agents/`.
+- **46+ official & curated ACP agents:** Browse, auto-detect on `PATH`, or 1-click install ACP coding agents (`gemini`, `opencode`, `qwen`, `iflow`, `copilot`, `kilo`, `cline`, `codebuddy`, `qoder`, `kiro`, `cursor-agent`, `zcode`, `goose`, `openhands`, and more) via `local`, `npx`, `uvx`, or `sha256`-verified binary archives into `~/.olympus/agents/`, with unified in-app terminal & Keychain API-key login (`src/main/acpAuth.ts`, `src/main/acpAuthCatalog.ts`).
 - **Custom providers & commands:** Point any compatible agent at custom Anthropic- or OpenAI-compatible API gateways (`src/main/acpProviders.ts`) with OS-encrypted API keys, or register arbitrary stdio ACP binaries.
 - **Mid-chat agent handoff & CLI session import:** Switching the agent selector mid-thread automatically synthesizes prior goals, turns, and modified files for the incoming agent. Existing CLI conversations can also be browsed and imported via native ACP `session/list` and `session/load`.
 

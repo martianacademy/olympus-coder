@@ -247,7 +247,7 @@ class AgentConn {
       }
     }
     // Before the first initialize we don't know the methods yet; check the usual names too.
-    for (const name of ['OPENROUTER_API_KEY', 'AI_GATEWAY_API_KEY', 'OLYMPUS_OPENAI_API_KEY', 'CODEX_API_KEY', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY']) {
+    for (const name of ['OLYMPUS_CLOUD_API_KEY', 'OPENROUTER_API_KEY', 'AI_GATEWAY_API_KEY', 'OLYMPUS_OPENAI_API_KEY', 'CODEX_API_KEY', 'GEMINI_API_KEY', 'ANTHROPIC_API_KEY']) {
       const v = getSecret(`${this.def.id}:${name}`);
       if (v) env[name] = v;
     }
