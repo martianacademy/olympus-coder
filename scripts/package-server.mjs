@@ -52,8 +52,12 @@ const runtimePkg = {
     '@agentclientprotocol/claude-agent-acp': pkg.dependencies['@agentclientprotocol/claude-agent-acp'],
     '@agentclientprotocol/codex-acp': pkg.dependencies['@agentclientprotocol/codex-acp'],
     '@agentclientprotocol/sdk': pkg.dependencies['@agentclientprotocol/sdk'],
-    'node-pty': pkg.dependencies['node-pty'],
     qrcode: pkg.devDependencies?.qrcode || '^1.5.6',
+  },
+  // Optional so minimal Linux VPS hosts without python3/build-essential never fail install;
+  // CI runners with build tools compile native node-pty, and src/main/pty.ts falls back cleanly otherwise.
+  optionalDependencies: {
+    'node-pty': pkg.dependencies['node-pty'],
   },
 };
 writeFileSync(join(stageDir, 'package.json'), JSON.stringify(runtimePkg, null, 2) + '\n');
