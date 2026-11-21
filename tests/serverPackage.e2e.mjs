@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,7 +57,7 @@ try {
   console.log('  PASS  2. scripts/install-server.sh installed standalone bundle into isolated ~/.olympus/server-bin');
 
   // 3. Verify `oly serve --help` auto-discovers the installed `~/.olympus/server-bin/out/server/index.mjs`
-  const olyBin = '/Users/suru.martian/.olympus/agents/olympus-cli/bin/oly';
+  const olyBin = join(homedir(), '.olympus', 'agents', 'olympus-cli', 'bin', 'oly');
   if (existsSync(olyBin)) {
     const olyHelp = execFileSync(olyBin, ['serve', '--help'], {
       encoding: 'utf8',

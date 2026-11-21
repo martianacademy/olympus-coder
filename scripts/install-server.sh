@@ -86,8 +86,10 @@ else
     const raw = require("fs").readFileSync(0, "utf8");
     try {
       const r = JSON.parse(raw);
+      const assets = r.assets || [];
       const suffix = "-" + process.argv[1] + "-" + process.argv[2] + ".tar.gz";
-      const hit = (r.assets || []).find(a => a.name && a.name.startsWith("olympus-server-") && a.name.endsWith(suffix));
+      const hit = assets.find(a => a.name && a.name.startsWith("olympus-server-") && a.name.endsWith(suffix))
+        || assets.find(a => a.name && a.name.startsWith("olympus-server-") && a.name.endsWith("-portable.tar.gz"));
       if (hit && hit.browser_download_url) process.stdout.write(hit.browser_download_url);
     } catch {}
   ' "$PLAT_OS" "$PLAT_ARCH" || true)"
