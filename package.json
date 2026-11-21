@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:server": "electron-vite build && node scripts/build-server.mjs",
+    "package:server": "npm run build:server && node scripts/package-server.mjs",
+    "serve": "node out/server/index.mjs serve",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "postinstall": "electron-rebuild -f -w node-pty",

@@ -63,6 +63,8 @@ import { hardenWindow, showWhenReady } from './windowGuards';
 
 /** `OLYMPUS_TEST_HIDDEN=1`: an automated-test instance whose window must never take focus, clicks or screen space. */
 const TEST_HIDDEN = process.env.OLYMPUS_TEST_HIDDEN === '1';
+/** `OLYMPUS_HEADLESS=1`: pure-Node server build (`out/server/index.mjs`) with zero Electron GUI. */
+const HEADLESS = process.env.OLYMPUS_HEADLESS === '1';
 
 const APP_NAME = 'Olympus Coder';
 /** When this app's main code was built (mtime of this file at start), to notice a newer install on disk. */
@@ -86,15 +88,31 @@ if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', userData);
 }
 
-// Guard against running two copies on the same `userData` before registering services or `will-quit` hooks
-// (a duplicate instance exiting must never touch the primary instance's whisper-server or staged updates).
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  bootMainProcess();
+let headlessBootPromise: Promise<void> | undefined;
+
+/**
+ * Boot entrypoint used by `src/server/cli.ts` after CLI flags (`--port`, `--lan`, `--relay`,
+ * `--password`, `--project`) have been persisted to settings. Resolves once the HTTP/SSE/Relay
+ * remote server is bound and ready to accept connections.
+ */
+export function readyForHeadless(): Promise<void> {
+  if (!headlessBootPromise) {
+    headlessBootPromise = bootMainProcess();
+  }
+  return headlessBootPromise;
 }
 
-function bootMainProcess() {
+// Guard against running two copies on the same `userData` before registering services or `will-quit` hooks
+// (a duplicate instance exiting must never touch the primary instance's whisper-server or staged updates).
+if (!HEADLESS) {
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+  } else {
+    void bootMainProcess();
+  }
+}
+
+async function bootMainProcess(): Promise<void> {
 loadLoginShellPath();
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -706,8 +724,9 @@ setChatDeleter(async (id) => handlers['acpSessions.deleteChat'](id, false));
 
 const ALLOWED_WHILE_LOCKED = new Set(['app.state', 'lock.unlock', 'lock.touchId', 'app.buildInfo', 'app.restart']);
 
-void initRemote(handlers, () => lock.isLocked());
+const remoteInitPromise = initRemote(handlers, () => lock.isLocked());
 
+if (!HEADLESS) {
 ipcMain.handle('desk:invoke', async (_e, method: string, args: unknown[]) => {
   if (lock.isLocked() && !ALLOWED_WHILE_LOCKED.has(method)) throw new Error('LOCKED');
   const fn = handlers[method];
@@ -739,6 +758,7 @@ ipcMain.handle('desk:panels', (e, method: string, args: unknown[]) => {
   if (!isAppSender(e.sender)) throw new Error('Not allowed');
   return panelCall(e.sender, method, args ?? []);
 });
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -814,9 +834,9 @@ function buildMenu() {
   );
 }
 
-app.whenReady().then(() => {
+const readyPromise = app.whenReady().then(async () => {
   // A dev run is Electron.app, whose Dock icon is Electron's; show ours (the packaged app uses build/icon.png).
-  if (!app.isPackaged && process.platform === 'darwin') {
+  if (!HEADLESS && !app.isPackaged && process.platform === 'darwin') {
     const dockIcon = join(app.getAppPath(), 'build', 'icon-dock.png');
     if (existsSync(dockIcon)) app.dock?.setIcon(dockIcon);
     if (TEST_HIDDEN) {
@@ -827,35 +847,40 @@ app.whenReady().then(() => {
   }
   mkdirSync(store.sharedRoot(), { recursive: true });
   projectsWatch = watchProjectsFile({ dir: store.sharedRoot, onChange: announceProjects });
-  // Microphone only for the app's own window, audio only (src/main/permissions.ts).
-  installPermissionHandlers(join(here, '../renderer'), process.env.ELECTRON_RENDERER_URL);
-  initVoice();
-  // Native parts (vibrancy, menus, dialogs) follow the app's own light / dark choice.
-  nativeTheme.themeSource = store.getSettings().theme.mode;
-  lock.startLockWatchers();
+  if (!HEADLESS) {
+    // Microphone only for the app's own window, audio only (src/main/permissions.ts).
+    installPermissionHandlers(join(here, '../renderer'), process.env.ELECTRON_RENDERER_URL);
+    initVoice();
+    // Native parts (vibrancy, menus, dialogs) follow the app's own light / dark choice.
+    nativeTheme.themeSource = store.getSettings().theme.mode;
+    lock.startLockWatchers();
+    startUpdateChecker(emit);
+  }
   schedules.startScheduler(emit);
-  startUpdateChecker(emit);
   // Model capability tags: cached registry, refreshed in the background when older than 7 days.
   startModelTags(emit);
   // Plan limits of every ready agent, without a chat: at start, every 5 minutes and right after each reset time.
   agents.limitsService.start(4000);
-  buildMenu();
+  if (!HEADLESS) buildMenu();
   restoreTerminals();
   initSavedCommands(emit);
   // Leftovers of failed snapshots (e.g. a huge project's first try) are removed a little after start.
   setTimeout(cleanUpCheckpoints, 8000);
-  startHeatWatch(emit);
+  if (!HEADLESS) startHeatWatch(emit);
   startJobWatch();
-  createWindow();
+  if (!HEADLESS) createWindow();
   // Messages and agent wake-up timers still pending when the app last closed resume once ready.
   setTimeout(() => {
     resumeQueues();
     restoreAgentTimers(join(app.getPath('userData'), 'agent-timers.json'), (id) => Boolean(store.findThread(id)));
   }, 1500);
-  app.on('activate', () => {
-    // The main window, even when a detached tool window is still open.
-    if (!win) createWindow();
-  });
+  if (!HEADLESS) {
+    app.on('activate', () => {
+      // The main window, even when a detached tool window is still open.
+      if (!win) createWindow();
+    });
+  }
+  await remoteInitPromise;
 });
 
 app.on('second-instance', () => {
@@ -887,7 +912,7 @@ let quitConfirmed = false;
 /** Agent sessions get `session/close` once before the agents are stopped (at most 1.5 s, then the quit goes on). */
 let sessionsClosed = false;
 app.on('before-quit', (e) => {
-  if (!quitConfirmed) {
+  if (!HEADLESS && !quitConfirmed) {
     const work = [...agents.runningWork(), ...busyTerminals().map((t) => `Terminal: ${t.title}`)];
     if (work.length) {
       e.preventDefault();
@@ -945,4 +970,5 @@ app.on('will-quit', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+await readyPromise;
 }

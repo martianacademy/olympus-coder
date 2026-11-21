@@ -33,6 +33,23 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 Each release includes `SHA256SUMS.txt` (`shasum -a 256 -c SHA256SUMS.txt`). The builds are ad-hoc signed but not notarized yet. On macOS, if the app is reported as damaged or from an unidentified developer, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once after moving it to Applications. On Windows, choose **More info → Run anyway** in SmartScreen.
 
+### Headless VPS / Cloud Server (Control from Phone or Browser — Zero Electron, Zero SSH)
+
+Run the full Olympus Coder workspace (Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, `oly`, CodeMirror editor, Git & Worktrees, live PTY terminals, and shared `~/.olympus` memory) on any Linux VPS or remote Mac in pure Node.js — no GUI/X11 required:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/martianacademy/olympus-coder/main/scripts/install-server.sh | sh
+olympus-server serve --relay --project .   # or: oly serve --relay --project .
+```
+
+Scan the ASCII QR code printed in your terminal to open the full responsive Olympus Coder UI on your phone or laptop over the **AES-256-GCM end-to-end encrypted Cloudflare Relay** (or pass `--lan` / `--no-relay` for local/Tailscale-only use). To keep it running after SSH logout and reboots on Linux:
+
+```sh
+mkdir -p ~/.config/systemd/user
+olympus-server serve --relay --print-systemd > ~/.config/systemd/user/olympus-server.service
+systemctl --user enable --now olympus-server
+```
+
 ---
 
 ## Why Olympus Coder?

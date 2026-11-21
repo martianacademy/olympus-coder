@@ -1,12 +1,87 @@
+import { spawn as spawnChild, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import * as pty from 'node-pty';
+import type * as NodePty from 'node-pty';
 import type { DeskEvents } from '@shared/types';
 
 type Emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) => void;
 
+interface PtyLike {
+  pid: number;
+  process?: string;
+  onData(cb: (data: string) => void): void;
+  onExit(cb: (ev: { exitCode: number; signal?: number }) => void): void;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(): void;
+}
+
+let cachedPtyMod: typeof NodePty | null | undefined;
+function loadNodePty(): typeof NodePty | null {
+  if (cachedPtyMod !== undefined) return cachedPtyMod;
+  try {
+    const req = createRequire(import.meta.url);
+    cachedPtyMod = req('node-pty') as typeof NodePty;
+  } catch {
+    cachedPtyMod = null;
+  }
+  return cachedPtyMod;
+}
+
+/** Portable pipe fallback when native `node-pty` is unavailable (e.g. minimal VPS without build tools). */
+function spawnFallbackPty(
+  command: string,
+  args: string[],
+  opts: { cwd: string; env: Record<string, string> },
+): PtyLike {
+  const child: ChildProcessWithoutNullStreams = spawnChild(command, args, {
+    cwd: opts.cwd,
+    env: opts.env,
+    stdio: 'pipe',
+  });
+  const dataListeners: ((d: string) => void)[] = [];
+  const exitListeners: ((ev: { exitCode: number; signal?: number }) => void)[] = [];
+  let exited = false;
+  const emitExit = (exitCode: number, signal?: number) => {
+    if (exited) return;
+    exited = true;
+    for (const fn of exitListeners) fn({ exitCode, signal });
+  };
+  const push = (chunk: Buffer | string) => {
+    const s = chunk.toString();
+    for (const fn of dataListeners) fn(s);
+  };
+  child.stdout.on('data', push);
+  child.stderr.on('data', push);
+  child.on('exit', (code, sig) => {
+    emitExit(code ?? 0, sig ? 1 : undefined);
+  });
+  child.on('error', (err) => {
+    push(`\r\n[terminal error: ${err.message}]\r\n`);
+    emitExit(1);
+  });
+  return {
+    pid: child.pid ?? 0,
+    process: command.split('/').pop(),
+    onData: (cb) => dataListeners.push(cb),
+    onExit: (cb) => exitListeners.push(cb),
+    write: (data) => {
+      if (child.stdin.writable) child.stdin.write(data.replace(/\r/g, '\n'));
+    },
+    resize: () => {},
+    kill: () => {
+      try {
+        child.kill();
+      } catch {
+        /* already exited */
+      }
+    },
+  };
+}
+
 /** Real terminals for CLI login flows (they need a TTY: browser links, device codes, prompts). */
-const ptys = new Map<string, pty.IPty>();
+const ptys = new Map<string, PtyLike>();
 /** Recent output per terminal, so a terminal view that is re-opened (tab switch, unlock) shows what it missed. */
 const scrollback = new Map<string, string>();
 const MAX_SCROLLBACK = 256 * 1024;
@@ -38,7 +113,17 @@ export function startPty(
   const id = randomUUID();
   const cols = Math.max(20, spec.cols ?? 80);
   const rows = Math.max(5, spec.rows ?? 24);
-  const p = pty.spawn(spec.command, spec.args, { name: 'xterm-256color', cols, rows, cwd: spec.cwd ?? homedir(), env: spec.env });
+  const ptyMod = loadNodePty();
+  let p: PtyLike;
+  if (ptyMod) {
+    try {
+      p = ptyMod.spawn(spec.command, spec.args, { name: 'xterm-256color', cols, rows, cwd: spec.cwd ?? homedir(), env: spec.env });
+    } catch {
+      p = spawnFallbackPty(spec.command, spec.args, { cwd: spec.cwd ?? homedir(), env: spec.env });
+    }
+  } else {
+    p = spawnFallbackPty(spec.command, spec.args, { cwd: spec.cwd ?? homedir(), env: spec.env });
+  }
   ptys.set(id, p);
   scrollback.set(id, '');
   // Output is sent to the window in batches (every ~8 ms) instead of once per read: a program that redraws
