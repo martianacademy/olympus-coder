@@ -34,6 +34,7 @@ import { useSlashMenu } from './SlashMenu';
 import { SwitchAgents } from './SwitchAgents';
 import { estimateTokens } from './TokenStats';
 import { ContextMeter, fmtReset, LimitsFreshness } from './Usage';
+import { enterSends } from '../platform';
 
 const NO_COMMANDS: SessionView['commands'] = [];
 
@@ -447,7 +448,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             {...slash.textareaProps}
             onKeyDown={(e) => {
               if (slash.onKeyDown(e)) return;
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (enterSends(e)) {
                 e.preventDefault();
                 void send();
               }

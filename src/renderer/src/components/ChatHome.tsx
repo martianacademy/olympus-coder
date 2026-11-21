@@ -8,6 +8,7 @@ import { AgentLogo } from '../logos';
 import { AttachButton, AttachmentChips, useAttachments } from './Attachments';
 import { HomeSessionOptions } from './HomeSessionOptions';
 import type { AttachmentView } from '@shared/types';
+import { enterSends } from '../platform';
 
 function greeting(name: string) {
   const h = new Date().getHours();
@@ -83,7 +84,7 @@ export function ChatHome(props: {
               placeholder="Ask anything or describe a task…"
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                if (enterSends(e)) {
                   e.preventDefault();
                   send();
                 }
