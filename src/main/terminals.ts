@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { DeskEvents, TerminalView } from '@shared/types';
+import { execArgs } from '@shared/savedCommands';
 import { agentEnv, userShell } from './env';
 import { forgetPty, ptyBuffer, ptyForeground, restorePty, startPty, writePty } from './pty';
 import { getProject, projectRecord } from './store';
@@ -31,6 +32,12 @@ interface Opened {
   restored?: boolean;
   /** The chat whose agent opened it (run_in_terminal), so its work counts as that chat's. */
   threadId?: string;
+  /** Started from a saved command (src/main/savedCommands.ts). */
+  savedId?: string;
+  /** Runs as `shell -c <command>`: the terminal ends when the command does, with its exit code. */
+  exec?: boolean;
+  /** Folder it runs in, when not the project folder. */
+  cwd?: string;
 }
 const opened = new Map<string, Opened>();
 let counter = 0;
@@ -53,12 +60,29 @@ const changed = (projectId: string) => {
   emit('terminal:changed', { projectId });
 };
 
-export function openTerminal(projectId: string, command?: string, title?: string, threadId?: string): { ptyId: string; title: string } {
+/** Saved commands hear about their tabs: closed by the user, or "Run again" on one. */
+let savedHooks: { closed: (savedId: string, ptyId: string) => void; rerun: (savedId: string) => { ptyId: string; title: string } | undefined } | null = null;
+export const setSavedCommandHooks = (h: typeof savedHooks) => {
+  savedHooks = h;
+};
+
+export interface OpenOptions {
+  /** Run here instead of the project folder. */
+  cwd?: string;
+  savedId?: string;
+  /** Run as `shell -c <command>` instead of typing it into an interactive shell (see execArgs). */
+  exec?: boolean;
+  /** `signal`: killed by a signal (POSIX), see startPty. */
+  onExit?: (code: number, signal?: number) => void;
+}
+
+export function openTerminal(projectId: string, command?: string, title?: string, threadId?: string, opts: OpenOptions = {}): { ptyId: string; title: string } {
   const p = getProject(projectId);
   if (!p) throw new Error('Project not found.');
   const cmd = command?.trim() || undefined;
   const name = shortTitle(title?.trim() || cmd || `Terminal ${++counter}`);
-  let typed = !cmd;
+  const exec = Boolean(opts.exec && cmd);
+  let typed = !cmd || exec;
   const typeCommand = () => {
     if (typed) return;
     typed = true;
@@ -69,17 +93,30 @@ export function openTerminal(projectId: string, command?: string, title?: string
     if (channel === 'pty:data') dirty = true;
     emit(channel, payload);
   };
-  const ptyId = startPty({ ...userShell(), env: agentEnv({ TERM: 'xterm-256color', COLORTERM: 'truecolor', PROMPT_EOL_MARK: '' }), cwd: p.path }, tap, (code) => {
+  const shell = userShell();
+  const spec = exec ? { command: shell.command, args: execArgs(shell.command, cmd!) } : shell;
+  const cwd = opts.cwd || p.path;
+  const ptyId = startPty({ ...spec, env: agentEnv({ TERM: 'xterm-256color', COLORTERM: 'truecolor', PROMPT_EOL_MARK: '' }), cwd }, tap, (code, signal) => {
     const o = opened.get(ptyId);
     if (o) o.exitCode = code;
     changed(projectId);
+    opts.onExit?.(code, signal);
   });
-  opened.set(ptyId, { projectId, title: name, command: cmd, startedAt: Date.now(), ...(threadId ? { threadId } : {}) });
+  opened.set(ptyId, {
+    projectId,
+    title: name,
+    command: cmd,
+    startedAt: Date.now(),
+    ...(threadId ? { threadId } : {}),
+    ...(opts.savedId ? { savedId: opts.savedId } : {}),
+    ...(exec ? { exec: true } : {}),
+    ...(opts.cwd && opts.cwd !== p.path ? { cwd: opts.cwd } : {}),
+  });
   if (threadId) closeOldAgentTerminals(projectId, threadId);
   emit('terminal:opened', { projectId, ptyId, title: name, command: cmd });
   changed(projectId);
   // Type the command once the shell has drawn its first prompt (or after a moment, for a quiet shell).
-  if (cmd) {
+  if (cmd && !exec) {
     const started = Date.now();
     const poll = setInterval(() => {
       if (ptyBuffer(ptyId).end > 0 && Date.now() - started > 250) {
@@ -103,7 +140,7 @@ function closeOldAgentTerminals(projectId: string, threadId: string) {
   let extra = own.length - KEEP_PER_CHAT;
   for (const [id, o] of own) {
     if (extra <= 0) break;
-    if (!o.restored && ptyBuffer(id).alive && busy(id)) continue;
+    if (!o.restored && ptyBuffer(id).alive && (busy(id) || o.exec)) continue;
     forgetPty(id);
     opened.delete(id);
     extra--;
@@ -120,7 +157,20 @@ function busy(ptyId: string): boolean {
 
 function view(ptyId: string, o: Opened): TerminalView {
   const alive = !o.restored && ptyBuffer(ptyId).alive;
-  return { ptyId, projectId: o.projectId, title: o.title, command: o.command, alive, busy: alive && busy(ptyId), exitCode: o.exitCode, restored: o.restored, startedAt: o.startedAt, threadId: o.threadId };
+  // An exec terminal is its command: alive means running.
+  return {
+    ptyId,
+    projectId: o.projectId,
+    title: o.title,
+    command: o.command,
+    alive,
+    busy: alive && (Boolean(o.exec) || busy(ptyId)),
+    exitCode: o.exitCode,
+    restored: o.restored,
+    startedAt: o.startedAt,
+    threadId: o.threadId,
+    ...(o.savedId ? { savedId: o.savedId } : {}),
+  };
 }
 
 /** A project's terminals in the order they were opened. */
@@ -130,6 +180,8 @@ export function listTerminals(projectId: string): TerminalView[] {
 
 export function closeTerminal(ptyId: string) {
   const o = opened.get(ptyId);
+  // Told first, so the exit that follows counts as the user's stop (never restarted).
+  if (o?.savedId && !o.restored) savedHooks?.closed(o.savedId, ptyId);
   forgetPty(ptyId);
   opened.delete(ptyId);
   if (o) changed(o.projectId);
@@ -140,7 +192,10 @@ export function rerunTerminal(ptyId: string): { ptyId: string; title: string } {
   const o = opened.get(ptyId);
   if (!o) throw new Error('That terminal is gone.');
   closeTerminal(ptyId);
-  return openTerminal(o.projectId, o.command, o.command ? o.title : undefined, o.threadId);
+  // A saved command's tab runs the saved record again (its current command, folder and status).
+  const again = o.savedId ? savedHooks?.rerun(o.savedId) : undefined;
+  if (again) return again;
+  return openTerminal(o.projectId, o.command, o.command ? o.title : undefined, o.threadId, { cwd: o.cwd });
 }
 
 /** Terminals whose shell is running (any project). */
@@ -202,7 +257,7 @@ export function restoreTerminals() {
       // A project whose folder is missing (renamed or moved) keeps its tabs: "Locate…" brings the folder back.
       if (!t.ptyId || !(getProject(t.projectId) ?? projectRecord(t.projectId))) continue;
       restorePty(t.ptyId, t.data + (t.wasAlive ? STOPPED_NOTE : ''));
-      opened.set(t.ptyId, { projectId: t.projectId, title: t.title, command: t.command, startedAt: t.startedAt, exitCode: t.exitCode, restored: true, threadId: t.threadId });
+      opened.set(t.ptyId, { projectId: t.projectId, title: t.title, command: t.command, startedAt: t.startedAt, exitCode: t.exitCode, restored: true, threadId: t.threadId, savedId: t.savedId, exec: t.exec, cwd: t.cwd });
       const n = /^Terminal (\d+)$/.exec(t.title);
       if (n) counter = Math.max(counter, Number(n[1]));
     }
@@ -226,3 +281,33 @@ export function readTerminal(ptyId: string, lines = 60): string {
 }
 
 export const terminalProject = (ptyId: string) => opened.get(ptyId)?.projectId;
+
+/** Sends Ctrl+C to a terminal (the Stop button of a saved command's tab goes through savedCommands first). */
+export const interruptTerminal = (ptyId: string) => writePty(ptyId, '\x03');
+
+/** What saved commands need to know about a tab: its command and folder, and whether it is running one now. */
+export function terminalInfo(ptyId: string) {
+  const o = opened.get(ptyId);
+  if (!o) return undefined;
+  const alive = !o.restored && ptyBuffer(ptyId).alive;
+  return { projectId: o.projectId, title: o.title, command: o.command, cwd: o.cwd, threadId: o.threadId, savedId: o.savedId, exec: Boolean(o.exec), alive, busy: alive && (Boolean(o.exec) || busy(ptyId)) };
+}
+
+/** Links an open tab to a saved command (Save on a tab that is already running it). */
+export function linkTerminal(ptyId: string, savedId: string) {
+  const o = opened.get(ptyId);
+  if (o) {
+    o.savedId = savedId;
+    changed(o.projectId);
+  }
+}
+
+/** Closes a saved command's stopped tabs (an earlier run, or one restored after a restart): a new run replaces them. */
+export function closeStoppedTabsOf(savedId: string) {
+  for (const [id, o] of [...opened]) {
+    if (o.savedId !== savedId || (!o.restored && ptyBuffer(id).alive)) continue;
+    forgetPty(id);
+    opened.delete(id);
+    changed(o.projectId);
+  }
+}

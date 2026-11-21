@@ -896,6 +896,8 @@ export interface DeskEvents {
   'heat:alert': { reason: 'cpu' | 'thermal'; thermal: string; task?: RunningTask };
   /** A project's terminal list changed (opened, closed, exited, restarted). */
   'terminal:changed': { projectId: string };
+  /** A project's saved commands changed (saved, edited, deleted, started, stopped). */
+  'savedcmd:changed': { projectId: string };
   'schedules:changed': ScheduledTask[];
   'catalog:progress': { id: string; phase: 'download' | 'verify' | 'extract' | 'done' | 'error'; received?: number; total?: number; error?: string };
   /** An agent was added or removed outside the Settings screen (e.g. by an agent's add_agent tool). */
@@ -1106,6 +1108,8 @@ export interface TerminalView {
   startedAt: number;
   /** The chat whose agent opened it. */
   threadId?: string;
+  /** Started from this saved command (src/shared/savedCommands.ts). */
+  savedId?: string;
 }
 
 export type ProcAction = 'pause' | 'resume' | 'stop';

@@ -32,7 +32,8 @@ export function stripLeadingZshEolMark(data: string): string {
 export function startPty(
   spec: { command: string; args: string[]; env: Record<string, string>; cwd?: string; cols?: number; rows?: number },
   emit: Emit,
-  onExit: (code: number) => void,
+  /** `signal` is set when the process was killed by one (POSIX; node-pty then reports exit code 0). */
+  onExit: (code: number, signal?: number) => void,
 ): string {
   const id = randomUUID();
   const cols = Math.max(20, spec.cols ?? 80);
@@ -67,7 +68,7 @@ export function startPty(
     if (out.length > 64 * 1024) flush();
     else if (!timer) timer = setTimeout(flush, 8);
   });
-  p.onExit(({ exitCode }) => {
+  p.onExit(({ exitCode, signal }) => {
     if (timer) clearTimeout(timer);
     flush();
     ptys.delete(id);
@@ -78,7 +79,7 @@ export function startPty(
     written.set(id, end);
     emit('pty:data', { ptyId: id, data: note, end });
     emit('pty:exit', { ptyId: id, exitCode });
-    onExit(exitCode);
+    onExit(exitCode, signal || undefined);
   });
   return id;
 }

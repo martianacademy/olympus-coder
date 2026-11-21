@@ -44,6 +44,8 @@ import { claudeSubagentSummary, discoverClaudeSubagents } from './claudeSubagent
 import { nativeSubagentSummary } from './nativeSubagents';
 import { createThread, deleteThread, findThread, getProject, getSettings, listThreads, threadMeta } from './store';
 import { openTerminal, readTerminal, terminalProject } from './terminals';
+import { listSaved, runSaved, saveCommand } from './savedCommands';
+import { statusText } from '@shared/savedCommands';
 import { acpMcp, mcpStatus } from './acpConfigService';
 import { lastTaskIndex, resultItem } from './subtaskOutcome';
 import { DisposableTracker } from './disposableSubsessions';
@@ -624,25 +626,40 @@ export function toolsFor(t: Thread) {
     },
     annotations: { readOnlyHint: true },
   };
+  const listSavedTool = {
+    name: 'list_saved_commands',
+    title: 'List saved commands',
+    description: "This project's saved commands (watchers, servers kept across Olympus restarts): id, title, command, folder, status, auto-start.",
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+  };
   const term = t.secondOpinion
-    ? [readTerm]
+    ? [readTerm, listSavedTool]
     : [
         {
           name: 'run_in_terminal',
           title: 'Run in terminal',
           description:
-            "Open a terminal tab in the user's right panel (in this project's folder, in their login shell) and run a command there, so the user watches its output live. Use it when the user wants to see a command run, or for long-running or interactive commands (servers, watchers, log tails, training runs) — instead of telling the user to run it. Returns the terminal id; check its output with read_terminal. The shell stays open after the command finishes.",
+            "Open a terminal tab in the user's right panel (in this project's folder, in their login shell) and run a command there, so the user watches its output live. Use it when the user wants to see a command run, or for long-running or interactive commands (servers, watchers, log tails) instead of telling the user to run it. Returns the terminal id; check its output with read_terminal. The shell stays open after the command finishes.",
           inputSchema: {
             type: 'object',
             properties: {
               command: { type: 'string', description: 'The command line to run.' },
               title: { type: 'string', description: 'Short tab name, e.g. "dev server". Optional.' },
+              persist: { type: 'boolean', description: 'Keep it as a saved command, restartable after Olympus restarts (watchers, servers).' },
             },
             required: ['command'],
             additionalProperties: false,
           },
         },
         readTerm,
+        listSavedTool,
+        {
+          name: 'run_saved_command',
+          title: 'Run saved command',
+          description: 'Start a saved command (id from list_saved_commands) in a fresh terminal tab in its folder. Returns the terminal id for read_terminal; one already running is not started twice.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+        },
       ];
   const learn = canLearnAboutUser(t)
     ? [
@@ -819,8 +836,41 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         if (t.secondOpinion) throw new ToolError('Second-opinion sessions are read-only and cannot run terminal commands.');
         const command = String(args?.command ?? '').trim();
         if (!command) throw new ToolError('"command" is required.');
-        const r = openTerminal(workspaceProjectId(t), command, typeof args?.title === 'string' ? args.title : undefined, t.id);
+        const title = typeof args?.title === 'string' ? args.title : undefined;
+        if (args?.persist === true) {
+          let rec;
+          try {
+            rec = saveCommand({ projectId: workspaceProjectId(t), command, title, createdBy: 'agent', threadId: t.id });
+          } catch (e: any) {
+            throw new ToolError(e?.message ?? String(e));
+          }
+          const r = runSaved(rec.id, { manual: true, threadId: t.id });
+          text = `${r.alreadyRunning ? 'Already running in' : 'Saved as saved command'} "${rec.title}" (saved id ${rec.id}) ${r.alreadyRunning ? '' : 'and started in '}terminal "${r.title}" (id ${r.ptyId}): ${command}\nIt can be restarted after an Olympus restart (run_saved_command, or the user's Saved commands list). Check it with read_terminal {"id": "${r.ptyId}"}.`;
+          break;
+        }
+        const r = openTerminal(workspaceProjectId(t), command, title, t.id);
         text = `Opened terminal "${r.title}" (id ${r.ptyId}) in the user's right panel and typed: ${command}\nThe user sees the output live. Check it with read_terminal {"id": "${r.ptyId}"}.${t.projectId === 'general' ? ' (In Chat mode the user sees terminals only after switching to Code mode.)' : ''}`;
+        break;
+      }
+      case 'list_saved_commands': {
+        const own = [...new Set([t.projectId, workspaceProjectId(t)])].flatMap((p) => listSaved(p));
+        text = own.length
+          ? own.map((c) => `- id ${c.id} · "${c.title}" · ${statusText(c)}${c.ptyId ? ` (terminal ${c.ptyId})` : ''} · auto-start ${c.autoStart ? 'on' : 'off'}${c.keepRunning ? ' · keep running' : ''}\n  command: ${c.command}\n  folder: ${c.cwd ?? '(project folder)'}`).join('\n')
+          : 'No saved commands in this project. run_in_terminal with persist: true saves one.';
+        break;
+      }
+      case 'run_saved_command': {
+        if (t.secondOpinion) throw new ToolError('Second-opinion sessions are read-only and cannot run terminal commands.');
+        const id = String(args?.id ?? '');
+        const c = listSaved().find((x) => x.id === id);
+        if (!c) throw new ToolError(`No saved command with id ${id}. See list_saved_commands.`);
+        if (c.projectId !== t.projectId && c.projectId !== workspaceProjectId(t)) throw new ToolError('That saved command belongs to another project.');
+        try {
+          const r = runSaved(id, { manual: true, threadId: t.id });
+          text = `${r.alreadyRunning ? 'Already running in' : 'Started in'} terminal "${r.title}" (id ${r.ptyId}): ${c.command}\nCheck it with read_terminal {"id": "${r.ptyId}"}.`;
+        } catch (e: any) {
+          throw new ToolError(e?.message ?? String(e));
+        }
         break;
       }
       case 'read_terminal': {
@@ -961,7 +1011,7 @@ async function handleRpc(threadId: string, msg: any, closed: () => boolean): Pro
         protocolVersion: typeof msg.params?.protocolVersion === 'string' ? msg.params.protocolVersion : '2025-06-18',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'olympus', title: 'Olympus Coder', version: app.getVersion() },
-        instructions: 'Olympus Coder session tools: session_info, run_in_terminal / read_terminal (a terminal the user watches in the right panel), and for a main session the sub-session tools (spawn, wait, get, message, cancel, delete).',
+        instructions: 'Olympus Coder session tools: session_info, run_in_terminal / read_terminal (a terminal the user watches in the right panel), list_saved_commands / run_saved_command (commands kept across restarts), and for a main session the sub-session tools (spawn, wait, get, message, cancel, delete).',
       });
     case 'ping':
       return ok({});

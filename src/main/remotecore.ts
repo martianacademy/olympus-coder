@@ -79,6 +79,7 @@ export const EVENTS = new Set([
   'pty:exit',
   'terminal:opened',
   'terminal:changed',
+  'savedcmd:changed',
   'heat:alert',
   'schedules:changed',
   'catalog:progress',

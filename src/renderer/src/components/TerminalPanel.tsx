@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Eraser, FlaskConical, Globe, Play, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
+import { AlertTriangle, Bookmark, BookmarkCheck, Copy, Eraser, FlaskConical, Globe, Play, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
 import type { PortInfo, TerminalView } from '@shared/types';
 import { api, onEvent } from '../api';
 import { portInUse } from '../compose';
@@ -8,6 +8,8 @@ import { WORKBENCH_SHEET_BP } from '../responsive';
 import { parseTestOutput, type TestResult } from '../tests';
 import { Terminal, terminalAction, terminalLineCount, terminalText, terminalTextFrom } from './Terminal';
 import { FindBar, TestBar } from './TerminalBars';
+import { SavedList, SavedStrip } from './SavedCommands';
+import { useSavedCommands, savedApi } from '../savedCommandsApi';
 import { devServerUrl, openWebPreview } from './WebPreview';
 
 /** The tab in front, per project, for the whole app session (the list itself lives in the main process). */
@@ -46,6 +48,8 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
   const [devUrl, setDevUrl] = useState<Record<string, string | null>>({});
   const devSeen = useRef(new Set<string>());
   const [errored, setErrored] = useState<Record<string, boolean>>({});
+  const saved = useSavedCommands(projectId);
+  const [savedOpen, setSavedOpen] = useState(false);
 
   const readResults = (id: string) => {
     clearTimeout(parseTimers.current[id]);
@@ -244,10 +248,30 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
                 {current.command ? <Play size={13} /> : <RotateCw size={13} />}
               </button>
             ) : (
-              <button className="btn ghost icon" title="Stop (Ctrl+C)" onClick={() => active && terminalAction(active, 'interrupt')}>
+              <button
+                className="btn ghost icon"
+                title={current.savedId ? 'Stop (Ctrl+C; a saved command is not restarted)' : 'Stop (Ctrl+C)'}
+                onClick={() => (current.savedId && saved.list.some((c) => c.id === current.savedId) ? void savedApi.stop(current.savedId) : active && terminalAction(active, 'interrupt'))}
+              >
                 <Square size={12} />
               </button>
             )}
+            {current.command &&
+              (current.savedId && saved.list.some((c) => c.id === current.savedId) ? (
+                <button className="btn ghost icon" title="Saved command: see Saved commands below" aria-label="Show saved commands" onClick={() => setSavedOpen(true)} data-testid="term-saved">
+                  <BookmarkCheck size={13} className="ok" />
+                </button>
+              ) : (
+                <button
+                  className="btn ghost icon"
+                  title="Save command (bring it back after a restart)"
+                  aria-label="Save command"
+                  data-testid="term-save"
+                  onClick={() => void savedApi.saveFromTerminal(current.ptyId).then(() => setSavedOpen(true)).catch(() => {})}
+                >
+                  <Bookmark size={13} />
+                </button>
+              ))}
             <button className="btn ghost icon" title={`Find (${navigator.platform.toLowerCase().includes('mac') ? '⌘F' : 'Ctrl+Shift+F'})`} onClick={() => setFinding((f) => !f)}>
               <Search size={13} />
             </button>
@@ -278,6 +302,7 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
           onDismiss={() => setResults((all) => ({ ...all, [current.ptyId]: null }))}
         />
       )}
+      <SavedStrip projectId={projectId} list={saved.list} notice={saved.notice} onShow={(id) => void refresh(id)} />
       <div className="terminal-stack">
         {tabs.map((t) => (
           <div key={t.ptyId} className="term-slot" style={{ display: t.ptyId === active ? 'block' : 'none' }}>
@@ -365,6 +390,7 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
           </div>
         )}
       </div>
+      <SavedList list={saved.list} open={savedOpen} onToggle={() => setSavedOpen((v) => !v)} onShow={(id) => void refresh(id)} />
     </div>
   );
 }

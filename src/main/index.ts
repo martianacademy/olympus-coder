@@ -29,6 +29,7 @@ import { cleanUpCheckpoints, forgetCheckpoints } from './checkpoints';
 import { detectTestCommand } from './testcmd';
 import { isMuted, notifyAgent } from './appmsg';
 import { detectVerifyCommand, effectiveVerifyCommand, evaluateTurnVerifyGate, resetVerifyRetries, runVerifyCommand } from './verifyGate';
+import { initSavedCommands, savedCommandHandlers, savedCommandsQuitting } from './savedCommands';
 import { busyTerminals, closeTerminal, flushTerminals, listTerminals, openTerminal, rerunTerminal, restoreTerminals, setTerminalEmitter } from './terminals';
 import { createMemory, deleteMemoryFile, getMemoryView, globalInstructionsPath, memoryDir, readMemoryFile, writeGlobalInstructions, writeMemoryFile, writeProjectInstructions } from './memory';
 import * as connectors from './connectors';
@@ -348,6 +349,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'procs.control': (id: string, action: ProcAction) => controlTask(id, action),
   'terminal.close': (ptyId: string) => closeTerminal(ptyId),
   'terminal.rerun': (ptyId: string) => rerunTerminal(ptyId),
+  ...savedCommandHandlers,
 
   'files.list': (projectId: string, rel: string) => files.listDir(projectId, rel),
   'files.read': (projectId: string, rel: string) => files.readFile(projectId, rel),
@@ -839,6 +841,7 @@ app.whenReady().then(() => {
   agents.limitsService.start(4000);
   buildMenu();
   restoreTerminals();
+  initSavedCommands(emit);
   // Leftovers of failed snapshots (e.g. a huge project's first try) are removed a little after start.
   setTimeout(cleanUpCheckpoints, 8000);
   startHeatWatch(emit);
@@ -919,6 +922,7 @@ app.on('before-quit', (e) => {
   store.flushThreads();
   projectsWatch?.close();
   flushTerminals();
+  savedCommandsQuitting();
   pauseAgentTimersForQuit();
   stopRemote();
   agents.shutdownAgents();
