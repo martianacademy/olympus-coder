@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Olympus Coder — Open-Source Desktop &amp; VPS Workbench for 18+ AI Coding Agents</title>
+  <meta name="description" content="One open-source native workspace for Claude Code, Codex, Antigravity, Gemini CLI, Qwen Code, OpenCode, Ollama and 18+ ACP coding agents — with shared ~/.olympus memory, built-in IDE workbench, and E2EE phone &amp; VPS access." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Olympus Coder — One Workspace for Every ACP Coding Agent" />
+  <meta property="og:description" content="Switch agents mid-chat with shared ~/.olympus memory, parallel sub-sessions, CodeMirror 6 workbench, and E2EE phone &amp; Linux VPS access. Apache-2.0." />
+  <meta property="og:url" content="https://martianacademy.github.io/olympus-coder/" />
+  <meta property="og:image" content="https://martianacademy.github.io/olympus-coder/screenshots/hero-code-mode.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="icon.png" />
+  <link rel="stylesheet" href="site.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">
+        <img src="icon.png" alt="Olympus Coder logo" />
+        <span>Olympus Coder</span>
+        <span class="ver">v0.3.2</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#agents">18+ Agents</a>
+        <a href="#vps">VPS &amp; Phone</a>
+        <a href="https://github.com/martianacademy/olympus-coder/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
+        <a href="https://github.com/martianacademy/olympus-coder" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle color theme">☾</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div class="eyebrow">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Apache-2.0 Open Source · Local-First · Zero Login Wall</span>
+        </div>
+        <h1>One workspace for every ACP coding agent.</h1>
+        <p class="lead">
+          Switch mid-chat between Claude Code, Codex, Antigravity, Gemini CLI, Qwen Code, OpenCode, Ollama &amp; 18+ coding CLIs — sharing one <code>~/.olympus</code> memory, a built-in code workbench, and end-to-end encrypted phone &amp; VPS access.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn primary" href="https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.2-arm64.dmg">
+            Download for macOS (v0.3.2)
+          </a>
+          <a class="btn" href="https://github.com/martianacademy/olympus-coder" target="_blank" rel="noopener noreferrer">
+            Star on GitHub
+          </a>
+          <a class="ph-badge" href="https://www.producthunt.com/products/olympus-coder?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-olympus-coder" target="_blank" rel="noopener noreferrer">
+            <img id="ph-badge-img" alt="Olympus Coder - Open-source desktop &amp; VPS workbench for 18+ AI coding agents | Product Hunt" width="250" height="54" data-base-src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;t=1795331946472" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;theme=light&amp;t=1795331946472" />
+          </a>
+        </div>
+
+        <div class="install-card" id="install">
+          <div class="install-tabs" role="tablist" aria-label="Install methods">
+            <button class="install-tab active" type="button" data-install="brew">Homebrew (macOS)</button>
+            <button class="install-tab" type="button" data-install="vps">Linux / VPS Server</button>
+            <button class="install-tab" type="button" data-install="dmg">Direct DMG</button>
+          </div>
+          <div class="install-body">
+            <pre id="install-code">brew trust martianacademy/tap
+brew install --cask martianacademy/tap/olympus-coder</pre>
+            <button id="copy-install" class="copy-btn" type="button">Copy</button>
+          </div>
+          <p id="install-note" class="install-note">macOS Apple Silicon · Official Homebrew tap (martianacademy/homebrew-tap).</p>
+        </div>
+
+        <div class="showcase">
+          <div class="gallery-tabs" role="tablist" aria-label="Workspace screenshots">
+            <button class="gallery-tab active" type="button" data-src="screenshots/hero-code-mode.png" data-alt="Olympus Coder Code Mode workspace with inline diffs and CodeMirror 6" data-caption="Code Mode — collapsible step timeline, inline diffs, and CodeMirror 6 side by side.">Code Workbench</button>
+            <button class="gallery-tab" type="button" data-src="screenshots/unified-panels-dark.png" data-alt="Unified dark panels across sidebar, chat, and workbench" data-caption="Unified Dark Mode — matching sidebar and workbench surfaces with clean hierarchy.">Unified Dark</button>
+            <button class="gallery-tab" type="button" data-src="screenshots/live-console.png" data-alt="Built-in multi-tab terminal and live preview workbench" data-caption="Built-in WebGL terminals, saved commands, Git panel, and 1-click error fixing.">Live Terminals</button>
+            <button class="gallery-tab" type="button" data-src="screenshots/annotate-editor.png" data-alt="Built-in image and video markup annotator" data-caption="Mark up screenshots &amp; video frames with arrows, pins, and coordinates before sending.">Mark Up</button>
+            <button class="gallery-tab" type="button" data-src="screenshots/voice-settings-whisper.png" data-alt="Local whisper.cpp voice transcription settings" data-caption="Local offline whisper.cpp dictation, system voice, or OpenRouter transcription.">Local Voice</button>
+            <button class="gallery-tab" type="button" data-src="screenshots/light-mode.png" data-alt="Olympus Coder in Light Mode" data-caption="Full light &amp; dark theme customization with density, font size, and syntax color controls.">Light Mode</button>
+          </div>
+          <div class="shot-frame">
+            <img id="showcase-img" src="screenshots/hero-code-mode.png" alt="Olympus Coder Code Mode workspace with inline diffs and CodeMirror 6" />
+            <p id="showcase-caption" class="shot-caption">Code Mode — collapsible step timeline, inline diffs, and CodeMirror 6 side by side.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="features">
+      <div class="wrap">
+        <div class="sec-head">
+          <h2>Built for real multi-agent engineering</h2>
+          <p>Stop scattering context across disconnected CLI tabs and vendor-locked memory folders.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card">
+            <h3>Switch agents mid-conversation</h3>
+            <p>Investigate in Antigravity, implement in Claude Code, and ask Codex for a read-only second opinion in the same thread — or use 1-click Fresh Context Carryover when context fills up.</p>
+          </article>
+          <article class="card">
+            <h3>One shared <code>~/.olympus</code> brain</h3>
+            <p>Every ACP agent reads and updates the same <code>MEMORY.md</code>, <code>BUGS.md</code>, and cross-agent session transcripts instead of writing into isolated vendor silos.</p>
+          </article>
+          <article class="card">
+            <h3>Full IDE workbench built in</h3>
+            <p>Inspect edits in CodeMirror 6, stage and commit in Git, run isolated git worktree chats, keep persistent saved commands, and roll back any prompt with shadow-git checkpoints.</p>
+          </article>
+          <article class="card">
+            <h3>Visible parallel sub-agents</h3>
+            <p>Main sessions delegate independent work to parallel sub-sessions watched live in the Tasks panel, with automatic quota-aware fallback and per-hunk Turn Review.</p>
+          </article>
+          <article class="card">
+            <h3>E2EE phone &amp; headless VPS</h3>
+            <p>Control active desktop sessions or a pure-Node Linux VPS server from your phone over local Wi-Fi or an AES-256-GCM end-to-end encrypted Cloudflare Relay.</p>
+          </article>
+          <article class="card">
+            <h3>Local-first, zero telemetry</h3>
+            <p>Zero analytics, zero mandatory login wall. Keys stay encrypted in your OS Keychain, local <code>whisper.cpp</code> runs offline, and all code is open under Apache-2.0.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="agents">
+      <div class="wrap">
+        <div class="sec-head">
+          <h2>18 free-tier coding CLIs built in — plus Claude Code &amp; local Ollama</h2>
+          <p>Install, detect on <code>PATH</code>, and sign in directly from Settings → Agents &amp; login. Rotate seamlessly when a provider's quota resets.</p>
+        </div>
+        <div class="agent-grid">
+          <div class="agent-pill"><strong>Claude Code</strong><span>Native ACP + worktrees &amp; sub-agents</span></div>
+          <div class="agent-pill"><strong>Google Antigravity</strong><span>Free personal Google quota + MCP</span></div>
+          <div class="agent-pill"><strong>OpenAI Codex</strong><span>ChatGPT Free / Plus CLI allowance</span></div>
+          <div class="agent-pill"><strong>Olympus CLI (oly)</strong><span>OpenRouter :free, BYO keys &amp; local Ollama</span></div>
+          <div class="agent-pill"><strong>Qwen Code</strong><span>2,000 free requests / day</span></div>
+          <div class="agent-pill"><strong>Gemini CLI</strong><span>~1,000 free requests / day + AI Studio</span></div>
+          <div class="agent-pill"><strong>iFlow CLI</strong><span>Uncapped free Kimi K2, Qwen3 &amp; DeepSeek</span></div>
+          <div class="agent-pill"><strong>OpenCode</strong><span>12 zero-key $0 built-in coding models</span></div>
+          <div class="agent-pill"><strong>GitHub Copilot</strong><span>Copilot Free monthly requests</span></div>
+          <div class="agent-pill"><strong>Kiro CLI</strong><span>AWS Builder ID Free Tier</span></div>
+          <div class="agent-pill"><strong>Kilo</strong><span>Starter credits + $0 community models</span></div>
+          <div class="agent-pill"><strong>Cline · Cursor · ZCode</strong><span>Free tiers + BYO key support</span></div>
+          <div class="agent-pill"><strong>Codebuddy · Qoder</strong><span>Free community &amp; auto-routing tiers</span></div>
+          <div class="agent-pill"><strong>Mistral Vibe</strong><span>La Plateforme free Experiment tier</span></div>
+          <div class="agent-pill"><strong>Goose · OpenHands</strong><span>Open-source agents + Ollama / BYO</span></div>
+        </div>
+        <p class="fine-print">Free-tier allowances are provided and governed by each upstream CLI vendor and may change over time.</p>
+      </div>
+    </section>
+
+    <section class="block" id="vps">
+      <div class="wrap split">
+        <div>
+          <div class="sec-head">
+            <h2>Run headless on any Linux VPS. Code from your phone.</h2>
+            <p>The exact same responsive Olympus Coder UI runs without Electron or X11 in pure Node.js — verified on bare Ubuntu 24.04 with systemd support.</p>
+          </div>
+          <ul class="bullet-list">
+            <li><strong>Zero-knowledge E2EE relay:</strong> AES-256-GCM key lives in the QR fragment (<code>#</code>) — never sent to the Cloudflare Worker.</li>
+            <li><strong>Full workbench on mobile:</strong> Chat, approve tool calls, edit files, inspect Git diffs, and use live PTY terminals from Safari or Chrome.</li>
+            <li><strong>Systemd ready:</strong> Generate a persistent Linux user service with <code>olympus-server serve --relay --print-systemd</code>.</li>
+          </ul>
+          <a class="btn" href="https://github.com/martianacademy/olympus-coder#headless-vps--cloud-server-control-from-phone-or-browser--zero-electron-zero-ssh" target="_blank" rel="noopener noreferrer">
+            Read VPS setup guide →
+          </a>
+        </div>
+        <div class="phone-shot">
+          <img src="screenshots/phone-chat.png" alt="Olympus Coder mobile responsive UI over E2EE relay" />
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot-inner">
+      <div>© 2026 Martian Academy · Apache-2.0 License · Listed on <a href="https://agentclientprotocol.com" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">ACP Clients</a> &amp; <a href="https://m8ven.ai/mcp/martianacademy/olympus-coder" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;">M8ven Trust Index</a></div>
+      <div class="foot-links">
+        <a href="https://github.com/martianacademy/olympus-coder" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/martianacademy/olympus-coder/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
+        <a href="https://github.com/martianacademy/homebrew-tap" target="_blank" rel="noopener noreferrer">Homebrew Tap</a>
+        <a href="https://github.com/martianacademy/olympus-coder/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a>
+        <a href="https://github.com/martianacademy/olympus-coder/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="site.js"></script>
+</body>
+</html>
