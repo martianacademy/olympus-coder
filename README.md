@@ -22,6 +22,15 @@
 
 ## Download
 
+### macOS (Homebrew)
+
+```sh
+brew trust martianacademy/tap
+brew install --cask martianacademy/tap/olympus-coder
+```
+
+### Direct Installers
+
 Get the latest installer from **[Releases](https://github.com/martianacademy/olympus-coder/releases/latest)**:
 
 | Platform | File |

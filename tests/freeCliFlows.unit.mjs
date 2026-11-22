@@ -226,8 +226,8 @@ await test('iflow, codebuddy-code, qoder, openhands, zcode, and qwen-code resolv
   assert.deepEqual(zcode.map((m) => `${m.id}:${m.flow}`), ['__olympus_env_vars:env-vars']);
 });
 
-async function probeLocalAcp(bin, args) {
-  const proc = spawn(bin, args, { env: ENV.agentEnv(), cwd: APP, stdio: ['pipe', 'pipe', 'pipe'] });
+async function probeLocalAcp(bin, args, extraEnv = {}) {
+  const proc = spawn(bin, args, { env: { ...ENV.agentEnv(), ...extraEnv }, cwd: APP, stdio: ['pipe', 'pipe', 'pipe'] });
   const incoming = AI.preserveUnknownSessionUpdates(Readable.toWeb(proc.stdout));
   const stream = SDK.ndJsonStream(Writable.toWeb(proc.stdin), incoming);
   const conn = SDK.client({ name: 'free-cli-probe' }).connect(stream);
@@ -267,7 +267,23 @@ for (const probe of [
         assert.equal(methods.filter((m) => m.flow === 'terminal').length, 1, `${probe.id} should expose exactly 1 terminal login method`);
         assert.ok(methods.some((m) => m.flow === 'api-key' || m.flow === 'env-vars'), `${probe.id} should expose API-key/env-var login`);
       } else {
-        assert.ok(methods.some((m) => m.id === 'olympus-cloud-oauth'), 'oly acp must advertise 1-click Olympus Cloud GitHub sign-in');
+        assert.ok(
+          !methods.some((m) => m.id === 'olympus-cloud-oauth'),
+          'oly acp should keep Olympus Cloud hidden by default unless OLYMPUS_CLOUD_ENABLED=1',
+        );
+        assert.ok(
+          methods.some((m) => m.flow === 'api-key' || m.flow === 'env-vars' || m.flow === 'terminal'),
+          'oly acp must advertise BYO API key / local Ollama / terminal auth by default',
+        );
+        const cloudInit = await probeLocalAcp(binPath, probe.args, { OLYMPUS_CLOUD_ENABLED: '1' });
+        const cloudMethods = AUTH.effectiveAuthMethods(probe.id, cloudInit.authMethods, {
+          builtin: true,
+          command: binPath,
+        });
+        assert.ok(
+          cloudMethods.some((m) => m.id === 'olympus-cloud-oauth'),
+          'oly acp must advertise 1-click Olympus Cloud sign-in when OLYMPUS_CLOUD_ENABLED=1',
+        );
       }
     });
   }
