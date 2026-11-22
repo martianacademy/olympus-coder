@@ -39,6 +39,7 @@ export function projectToolDefs() {
         required: ['path'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
   ];
 }

@@ -34,7 +34,7 @@ export function agentToolDefs() {
       title: 'Search agent registry',
       description: 'Search the ACP registry for CLI coding agents that can be added, with install methods for this computer.',
       inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Words to match; omit for all.' } }, additionalProperties: false },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     {
       name: 'add_agent',
@@ -46,7 +46,7 @@ export function agentToolDefs() {
         required: ['registry_id'],
         additionalProperties: false,
       },
-      annotations: { destructiveHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     {
       name: 'add_custom_agent',
@@ -58,14 +58,14 @@ export function agentToolDefs() {
         required: ['name', 'command'],
         additionalProperties: false,
       },
-      annotations: { destructiveHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     {
       name: 'remove_agent',
       title: 'Remove agent',
       description: 'Remove an added (not built-in) agent. The user approves first.',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
-      annotations: { destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
   ];
 }

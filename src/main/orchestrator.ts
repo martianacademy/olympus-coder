@@ -612,7 +612,7 @@ export function toolsFor(t: Thread) {
     title: 'Session info',
     description: 'This Olympus Coder session: id, title, role, project, transcript path, parent session, and every sub-session with its live status.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   };
   const readTerm = {
     name: 'read_terminal',
@@ -624,14 +624,14 @@ export function toolsFor(t: Thread) {
       required: ['id'],
       additionalProperties: false,
     },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   };
   const listSavedTool = {
     name: 'list_saved_commands',
     title: 'List saved commands',
     description: "This project's saved commands (watchers, servers kept across Olympus restarts): id, title, command, folder, status, auto-start.",
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   };
   const term = t.secondOpinion
     ? [readTerm, listSavedTool]
@@ -640,17 +640,18 @@ export function toolsFor(t: Thread) {
           name: 'run_in_terminal',
           title: 'Run in terminal',
           description:
-            "Open a terminal tab in the user's right panel (in this project's folder, in their login shell) and run a command there, so the user watches its output live. Use it when the user wants to see a command run, or for long-running or interactive commands (servers, watchers, log tails) instead of telling the user to run it. Returns the terminal id; check its output with read_terminal. The shell stays open after the command finishes.",
+            "Open a terminal tab in the right panel (project folder, login shell) and run a command live. Use for servers, watchers, log tails, or commands the user wants to watch. Returns terminal id for read_terminal.",
           inputSchema: {
             type: 'object',
             properties: {
-              command: { type: 'string', description: 'The command line to run.' },
-              title: { type: 'string', description: 'Short tab name, e.g. "dev server". Optional.' },
-              persist: { type: 'boolean', description: 'Keep it as a saved command, restartable after Olympus restarts (watchers, servers).' },
+              command: { type: 'string', description: 'Command line to run.' },
+              title: { type: 'string', description: 'Short tab name (optional).' },
+              persist: { type: 'boolean', description: 'Save across restarts (watchers, servers).' },
             },
             required: ['command'],
             additionalProperties: false,
           },
+          annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
         },
         readTerm,
         listSavedTool,
@@ -659,6 +660,7 @@ export function toolsFor(t: Thread) {
           title: 'Run saved command',
           description: 'Start a saved command (id from list_saved_commands) in a fresh terminal tab in its folder. Returns the terminal id for read_terminal; one already running is not started twice.',
           inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+          annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
         },
       ];
   const learn = canLearnAboutUser(t)
@@ -667,16 +669,17 @@ export function toolsFor(t: Thread) {
           name: 'remember_about_user',
           title: 'Remember about the user',
           description:
-            "Save one short, durable note about the user so every future session can adapt to them: how they communicate (language, tone, length they like), how they think, how they approach problems, their interests, their context (place, work, setup), or preferences. Only from what the user said or did — never guesses. Never health, religion, politics, sexuality, finances, family, secrets or credentials, or other people. Only new things; the user sees every note and can delete it.",
+            "Save one short, durable note about the user's style, workflow, interests, or setup so future sessions adapt. Only from what they said or did — never guesses, health, religion, politics, finances, family, secrets, or other people.",
           inputSchema: {
             type: 'object',
             properties: {
               section: { type: 'string', enum: Object.keys(NOTE_SECTIONS) },
-              note: { type: 'string', description: 'One sentence, under 240 characters, e.g. "Writes in Hinglish; wants short answers with the next step at the end."' },
+              note: { type: 'string', description: 'One sentence (<240 chars), e.g. "Writes in Hinglish; prefers short answers."' },
             },
             required: ['section', 'note'],
             additionalProperties: false,
           },
+          annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
         },
       ]
     : [];
@@ -703,7 +706,7 @@ export function toolsFor(t: Thread) {
       description:
         'List all CLI agents in Olympus Coder with their installation/login status, live usage quota & reset windows, and configurable parameters (models, modes, effort levels). Call before choosing a fallback agent or higher-capability model.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     ...term,
     ...learn,
@@ -730,75 +733,80 @@ export function toolsFor(t: Thread) {
         required: ['title', 'task'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     {
       name: 'configure_subsession',
       title: 'Configure or switch sub-session',
       description:
-        'Switch an idle or stopped sub-session to another agent and/or change its model, mode, effort or config, keeping its history. Optional `prompt` resumes it right away.',
+        'Switch an idle or stopped sub-session to another agent/model/mode/effort, keeping history. Optional `prompt` resumes it.',
       inputSchema: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Sub-session id.' },
           agent: agent('New CLI agent'),
           ...configProps,
-          prompt: { type: 'string', description: 'Optional follow-up to send after switching.' },
+          prompt: { type: 'string', description: 'Optional follow-up after switching.' },
         },
         required: ['id'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     {
       name: 'wait_for_subsessions',
       title: 'Wait for sub-sessions',
       description:
-        'Wait until the given sub-sessions (default: all running ones) finish, then return their status and final reports. Returns early if a sub-session hits "quota-exceeded" or "needs-login" so you can switch its agent right away. Waits up to timeout_seconds (default 50, max 55) while any target is still running or awaiting user permission.',
+        'Wait for sub-sessions (default: all running) to finish and return reports. Returns early on quota-exceeded/needs-login. Max timeout_seconds 55 (default 50).',
       inputSchema: {
         type: 'object',
         properties: {
-          ids: { type: 'array', items: { type: 'string' }, description: 'Sub-session ids. Omit for all running ones.' },
+          ids: { type: 'array', items: { type: 'string' }, description: 'Sub-session ids; omit for all running.' },
           timeout_seconds: { type: 'number', minimum: 1, maximum: 55, description: 'Default 50.' },
         },
         additionalProperties: false,
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
       name: 'get_subsession',
       title: 'Get sub-session',
       description: 'Status, task, recent steps and latest report of one sub-session this session spawned.',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
       name: 'message_subsession',
       title: 'Message sub-session',
       description:
-        'Send a follow-up (a correction, the next step, or "continue") to a finished or quota-stopped sub-session; optionally switch its agent or model in the same step.',
+        'Send a follow-up to a finished or quota-stopped sub-session; optionally switch its agent or model in the same step.',
       inputSchema: {
         type: 'object',
         properties: {
           id: { type: 'string' },
           text: { type: 'string' },
-          agent: agent('Optional CLI agent to switch to'),
+          agent: agent('Optional CLI agent'),
           ...configProps,
         },
         required: ['id', 'text'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     {
       name: 'cancel_subsession',
       title: 'Cancel sub-session',
       description: 'Stop a running sub-session this session spawned.',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     {
       name: 'delete_subsession',
       title: 'Delete sub-session',
       description:
-        'Delete a finished sub-session this session spawned: its chat leaves the sidebar and Tasks panel, its agent session is closed (the agent keeps its own saved copy) and it frees a slot of the per-session limit. Disposable sub-sessions go by themselves after you read their report; use this for kept ones (keep: true) you no longer need. Refuses a running one.',
+        'Delete a finished sub-session this session spawned (removes chat from sidebar/Tasks and frees a slot; refuses a running one).',
       inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
   ];
 }

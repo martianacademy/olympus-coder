@@ -113,18 +113,18 @@ const TUNNEL = /^(utun|ipsec|ppp|gif|stf)/;
  * The network name (`networksetup -getairportnetwork`) is not used: recent macOS hides it without Location access.
  * Undefined when it cannot tell (not macOS, or the commands failed). A phone hotspot over Wi-Fi counts as Wi-Fi.
  */
-export async function onWifi(platform: NodeJS.Platform, exec: Run = run): Promise<boolean | undefined> {
+export async function onWifi(platform: NodeJS.Platform, runFile: Run = run): Promise<boolean | undefined> {
   if (platform !== 'darwin') return undefined;
   try {
-    const ports = await exec('/usr/sbin/networksetup', ['-listallhardwareports']);
+    const ports = await runFile('/usr/sbin/networksetup', ['-listallhardwareports']);
     const wifi = /Hardware Port:\s*(?:Wi-Fi|AirPort)\s*\n\s*Device:\s*(\S+)/i.exec(ports)?.[1];
     if (!wifi) return false; // no Wi-Fi hardware at all
-    const route = await exec('/sbin/route', ['-n', 'get', 'default']).catch(() => '');
+    const route = await runFile('/sbin/route', ['-n', 'get', 'default']).catch(() => '');
     const iface = /interface:\s*(\S+)/.exec(route)?.[1];
     if (!iface) return false; // offline
     if (iface === wifi) return true;
     if (!TUNNEL.test(iface)) return false;
-    const ip = await exec('/usr/sbin/ipconfig', ['getifaddr', wifi]).catch(() => '');
+    const ip = await runFile('/usr/sbin/ipconfig', ['getifaddr', wifi]).catch(() => '');
     return /\d+\.\d+\.\d+\.\d+/.test(ip);
   } catch {
     return undefined;
@@ -142,11 +142,11 @@ export function bundleOf(execPath: string): string | undefined {
 const firstApp = (dir: string) => readdirSync(dir).find((n) => n.endsWith('.app'));
 
 /** The app's version from `Contents/Resources/app/package.json`, or `Info.plist` when the app is in an asar. */
-export async function bundleVersion(app: string, exec: Run = run): Promise<string | undefined> {
+export async function bundleVersion(app: string, runFile: Run = run): Promise<string | undefined> {
   try {
     return JSON.parse(readFileSync(join(app, 'Contents/Resources/app/package.json'), 'utf8')).version;
   } catch {
-    const v = await exec('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', join(app, 'Contents/Info.plist')]).catch(() => '');
+    const v = await runFile('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', join(app, 'Contents/Info.plist')]).catch(() => '');
     return v.trim() || undefined;
   }
 }
@@ -156,36 +156,36 @@ export async function bundleVersion(app: string, exec: Run = run): Promise<strin
  * and check it: `codesign --verify --deep --strict`, the version in its package.json, no quarantine flag.
  * Returns the new `.app` path; throws with a plain reason when something is wrong (and removes `stageDir`).
  */
-export async function stageMacApp(file: string, stageDir: string, expected: string, exec: Run = run): Promise<string> {
+export async function stageMacApp(file: string, stageDir: string, expected: string, runFile: Run = run): Promise<string> {
   rmSync(stageDir, { recursive: true, force: true });
   mkdirSync(stageDir, { recursive: true });
   try {
     if (file.toLowerCase().endsWith('.zip')) {
-      await exec('/usr/bin/ditto', ['-x', '-k', file, stageDir]);
+      await runFile('/usr/bin/ditto', ['-x', '-k', file, stageDir]);
     } else {
       const mount = `${stageDir}.mnt`;
       mkdirSync(mount, { recursive: true });
-      await exec('/usr/bin/hdiutil', ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount, file]);
+      await runFile('/usr/bin/hdiutil', ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount, file]);
       try {
         const name = firstApp(mount);
         if (!name) throw new Error('The disk image has no app in it.');
-        await exec('/usr/bin/ditto', [join(mount, name), join(stageDir, name)]);
+        await runFile('/usr/bin/ditto', [join(mount, name), join(stageDir, name)]);
       } finally {
-        await exec('/usr/bin/hdiutil', ['detach', mount, '-force']).catch(() => '');
+        await runFile('/usr/bin/hdiutil', ['detach', mount, '-force']).catch(() => '');
         rmSync(mount, { recursive: true, force: true });
       }
     }
     const name = firstApp(stageDir);
     if (!name) throw new Error('The download has no app in it.');
     const app = join(stageDir, name);
-    await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]).catch((e) => {
+    await runFile('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]).catch((e) => {
       throw new Error(`The new app's signature does not check out (${e.message}).`);
     });
-    const version = await bundleVersion(app, exec);
+    const version = await bundleVersion(app, runFile);
     if (version !== expected) throw new Error(`The new app says it is version ${version ?? 'unknown'}, not ${expected}.`);
     // Files Node writes carry no quarantine flag, but an archive can bring one along: remove it if present.
-    const attrs = await exec('/usr/bin/xattr', ['-l', app]).catch(() => '');
-    if (attrs.includes('com.apple.quarantine')) await exec('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', app]);
+    const attrs = await runFile('/usr/bin/xattr', ['-l', app]).catch(() => '');
+    if (attrs.includes('com.apple.quarantine')) await runFile('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', app]);
     return app;
   } catch (e) {
     rmSync(stageDir, { recursive: true, force: true });

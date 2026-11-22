@@ -85,7 +85,7 @@ export function scheduleToolDefs(currentAgentId: string) {
         },
         additionalProperties: false,
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
       name: 'save_schedule',
@@ -109,6 +109,7 @@ export function scheduleToolDefs(currentAgentId: string) {
         },
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     {
       name: 'delete_schedule',
@@ -120,6 +121,7 @@ export function scheduleToolDefs(currentAgentId: string) {
         required: ['id'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     {
       name: 'run_schedule',
@@ -131,6 +133,7 @@ export function scheduleToolDefs(currentAgentId: string) {
         required: ['id'],
         additionalProperties: false,
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
   ];
 }

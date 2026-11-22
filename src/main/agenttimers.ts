@@ -172,6 +172,7 @@ export const setTimerToolDef = {
     required: ['minutes', 'note'],
     additionalProperties: false,
   },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 };
 
 /** Checked arguments of set_timer; throws a message for the agent. */

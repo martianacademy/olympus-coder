@@ -135,7 +135,12 @@ await test('declarations are small, annotated and closed to extra arguments', ()
   }
   assert.equal(defs.find((d) => d.name === 'search_agent_registry').annotations.readOnlyHint, true);
   assert.equal(defs.find((d) => d.name === 'remove_agent').annotations.destructiveHint, true);
-  assert.deepEqual(defs.find((d) => d.name === 'add_agent').annotations, { destructiveHint: false, openWorldHint: true });
+  assert.deepEqual(defs.find((d) => d.name === 'add_agent').annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  });
 });
 
 await test('search lists registry agents with usable methods, never built-ins', async () => {
