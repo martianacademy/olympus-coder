@@ -5,8 +5,9 @@ name: Build installers
 
 on:
   workflow_dispatch:
-  push:
-    tags: ['v*']
+  # Re-enable tag auto-builds once GitHub Actions billing lock is cleared:
+  # push:
+  #   tags: ['v*']
 
 # Least privilege: the build jobs (which run third-party npm install scripts) can only read the repo;
 # only the release job below can write (to publish the GitHub Release).
