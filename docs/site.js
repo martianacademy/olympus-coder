@@ -1,4 +1,4 @@
-/* Interactive controls for Olympus Coder GitHub Pages site */
+/* Interactive controls, live GitHub stars, scroll reveals & spotlight for Olympus Coder */
 (() => {
   const root = document.documentElement;
   const saved = localStorage.getItem('olympus-site-theme');
@@ -32,6 +32,39 @@
     });
   }
 
+  // Live GitHub star count (cached 10 minutes in sessionStorage to avoid rate limits)
+  function renderStars(count) {
+    const label = count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
+    document.querySelectorAll('[data-gh-stars]').forEach((el) => {
+      el.textContent = label;
+    });
+  }
+
+  async function loadGitHubStars() {
+    const CACHE_KEY = 'olympus-gh-stars-v1';
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && typeof cached.stars === 'number' && Date.now() - cached.ts < 600_000) {
+        renderStars(cached.stars);
+        return;
+      }
+    } catch {}
+    try {
+      const res = await fetch('https://api.github.com/repos/martianacademy/olympus-coder', {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.stargazers_count === 'number') {
+        renderStars(data.stargazers_count);
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ stars: data.stargazers_count, ts: Date.now() }));
+        } catch {}
+      }
+    } catch {}
+  }
+  void loadGitHubStars();
+
   // Install command switcher
   const installCommands = {
     brew: {
@@ -62,9 +95,7 @@
     if (copyBtn) copyBtn.textContent = 'Copy';
   }
 
-  installTabs.forEach((btn) => {
-    btn.addEventListener('click', () => selectInstall(btn.dataset.install));
-  });
+  installTabs.forEach((btn) => btn.addEventListener('click', () => selectInstall(btn.dataset.install)));
 
   if (copyBtn && installPre) {
     copyBtn.addEventListener('click', async () => {
@@ -90,9 +121,64 @@
     });
   });
 
-  // Match initial hero screenshot to system theme if user lands in light mode
   if (initialTheme === 'light' && shotImg && shotCaption) {
     const lightBtn = galleryTabs.find((b) => b.dataset.src === 'screenshots/light-mode.png');
     if (lightBtn) lightBtn.click();
+  }
+
+  // Agent category filter pills
+  const filterBtns = [...document.querySelectorAll('[data-filter]')];
+  const agentCards = [...document.querySelectorAll('.agent-card')];
+  filterBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.filter || 'all';
+      filterBtns.forEach((b) => b.classList.toggle('active', b === btn));
+      agentCards.forEach((card) => {
+        const cats = (card.dataset.cats || '').split(' ');
+        card.classList.toggle('hidden', cat !== 'all' && !cats.includes(cat));
+      });
+    });
+  });
+
+  // Phone view switcher
+  const phoneImg = document.getElementById('phone-shot-img');
+  const phoneBtns = [...document.querySelectorAll('[data-phone-src]')];
+  phoneBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!phoneImg) return;
+      phoneImg.src = btn.dataset.phoneSrc || '';
+      phoneBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  // Subtle cursor spotlight on Bento cards
+  document.querySelectorAll('.bento-card').forEach((card) => {
+    card.addEventListener('pointermove', (e) => {
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      card.style.setProperty('--my', `${e.clientY - rect.top}px`);
+    });
+  });
+
+  // Scroll-reveal observer (staggered)
+  const reveals = [...document.querySelectorAll('.reveal')];
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -30px 0px' },
+    );
+    reveals.forEach((el, idx) => {
+      el.style.transitionDelay = `${Math.min((idx % 4) * 70, 210)}ms`;
+      io.observe(el);
+    });
+  } else {
+    reveals.forEach((el) => el.classList.add('in'));
   }
 })();
