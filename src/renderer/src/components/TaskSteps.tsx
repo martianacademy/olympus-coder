@@ -285,38 +285,68 @@ function CopyBtn({ text, label }: { text: string; label: string }) {
   );
 }
 
-export function DoneList({ thread, items, rel, limit }: { thread: Thread; items: ToolItem[]; rel: (p: string) => string; limit: number }) {
+/** A finished step that went wrong: it failed, or its command exited non-zero (as StepCard marks it). */
+function stepFailed(t: ToolItem): boolean {
+  const code = parseToolStep(t).exitCode;
+  return t.status === 'failed' || (code !== undefined && code !== 0);
+}
+
+/**
+ * Finished steps grouped under the message that asked for them, newest first. Each message is one folded line
+ * (its text, how many steps, how many failed, when), so the list reads as the conversation; a click opens the
+ * steps. `limit` is how many messages show before "Show more" (whole messages, so a count is never cut short).
+ */
+export function DoneList({ thread, items, rel, limit = 12 }: { thread: Thread; items: ToolItem[]; rel: (p: string) => string; limit?: number }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
+  const [all, setAll] = useState(false);
   const owner = new Map<string, { id: string; text: string; ts: number }>();
   let cur: { id: string; text: string; ts: number } | undefined;
   for (const it of thread.items) {
     if (it.kind === 'user') cur = { id: it.id, text: it.text, ts: it.ts };
     else if (it.kind === 'tool' && cur) owner.set(it.id, cur);
   }
-  const shown = items.slice(0, limit);
   const groups: { key: string; head?: { text: string; ts: number }; items: ToolItem[] }[] = [];
-  for (const t of shown) {
+  for (const t of items) {
     const o = owner.get(t.id);
     const key = o?.id ?? 'none';
     const last = groups[groups.length - 1];
     if (last && last.key === key) last.items.push(t);
     else groups.push({ key, head: o, items: [t] });
   }
+  const shown = all ? groups : groups.slice(0, limit);
+  const toggle = (key: string) =>
+    setUnfolded((s) => {
+      const next = new Set(s);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   return (
     <div className="done-list">
-      {groups.map((g) => (
-        <div key={g.key + g.items[0].id} className="done-group">
-          {g.head && (
-            <div className="done-group-head" title={g.head.text}>
-              <span className="ellipsis grow">{g.head.text.replace(/\s+/g, ' ').slice(0, 120) || 'Message'}</span>
-              <span className="done-when">{ago(g.head.ts)}</span>
-            </div>
-          )}
-          {g.items.map((t) => (
-            <StepCard key={t.id} t={t} rel={rel} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)} />
-          ))}
-        </div>
-      ))}
+      {shown.map((g, i) => {
+        const isOpen = unfolded.has(g.key);
+        const failed = g.items.filter(stepFailed).length;
+        const n = g.items.length;
+        return (
+          <div key={`${g.key}:${i}`} className={`done-group${isOpen ? ' open' : ''}`} data-testid="done-group">
+            <button className="done-group-head" aria-expanded={isOpen} title={g.head?.text} onClick={() => toggle(g.key)}>
+              {isOpen ? <ChevronDown size={12} className="done-chevron" /> : <ChevronRight size={12} className="done-chevron" />}
+              <span className="ellipsis grow done-group-text">{g.head ? g.head.text.replace(/\s+/g, ' ').slice(0, 120) || 'Message' : 'Earlier steps'}</span>
+              {failed > 0 && <span className="done-group-failed">{failed} failed</span>}
+              <span className="done-group-count">
+                {n} {n === 1 ? 'step' : 'steps'}
+              </span>
+              {g.head && <span className="done-when">{ago(g.head.ts)}</span>}
+            </button>
+            {isOpen && g.items.map((t) => <StepCard key={t.id} t={t} rel={rel} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)} />)}
+          </div>
+        );
+      })}
+      {groups.length > shown.length && (
+        <button className="btn ghost small muted done-more" onClick={() => setAll(true)}>
+          Show {groups.length - shown.length} more {groups.length - shown.length === 1 ? 'message' : 'messages'}
+        </button>
+      )}
     </div>
   );
 }

@@ -3,7 +3,8 @@ import type { AgentStatus, AppState, DeskEvents, Project, SessionView, Thread, T
 import { withItem } from '@shared/itemOrder';
 import { onEvent, terminalAskedRecently } from './api';
 import { clearDraft } from './drafts';
-import { addTerminal, type WorkbenchTab } from './components/Workbench';
+import { addTerminal } from './terminalBus';
+import type { WorkbenchTab } from './components/Workbench';
 import type { SettingsTab } from './components/Settings';
 import { isRemoteBrowser, WORKBENCH_SHEET_BP } from './responsive';
 import { applyTheme, onSystemThemeChange } from './theme';

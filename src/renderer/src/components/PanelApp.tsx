@@ -6,7 +6,8 @@ import type { AgentDef, AgentStatus, AppState, DeskEvents, Project, SessionView,
 import { api, onEvent } from '../api';
 import { parseWorktreeProjectId, workspaceProjectId } from '@shared/worktree';
 import { applyTheme, onSystemThemeChange } from '../theme';
-import { addTerminal, Workbench, type WorkbenchHandle } from './Workbench';
+import { addTerminal } from '../terminalBus';
+import { Workbench, type WorkbenchHandle } from './Workbench';
 
 /**
  * A detached Workbench tool (`?panel=<tool>`, opened by src/main/panels.ts): only that tool, full window, bound to

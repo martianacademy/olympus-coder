@@ -29,7 +29,7 @@ import { CodeEditor, WrapToggle } from './Editor';
 import { Markdown } from './Chat';
 import { buildDocSrcDoc, downloadFileRef } from './InlineFilePreviews';
 import { parseTurnRef, TurnChangesView } from './TurnChanges';
-import { openViewer } from './MediaViewer';
+import { openViewer } from '../mediaViewerApi';
 import { copyText } from '../clipboard';
 
 export interface PreviewTarget {

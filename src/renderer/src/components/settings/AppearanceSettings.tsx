@@ -1,9 +1,10 @@
-import { type ReactNode, useState } from 'react';
-import { Brain, ChevronDown, Code2, FileText, MessageSquareText, Palette, RotateCcw, Smartphone, SquareTerminal } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Code2, MessageSquareText, Palette, RotateCcw, Smartphone, SquareTerminal } from 'lucide-react';
 import { THEME_TOKENS, type EditorSyntaxTheme, type ThemeSettings, type ThemeToken } from '@shared/types';
 import { CHAT_WIDTHS, CODE_FONTS, DEFAULT_THEME, EDITOR_SYNTAX_THEMES, resolvePalette, STEPS_SIZES, THEME_PRESETS, UI_FONTS, withPhoneTheme } from '@shared/themes';
 import { setExpandSteps, setWrapLines, useExpandSteps } from '../../prefs';
 import { isRemoteBrowser } from '../../responsive';
+import { ReadingPreview } from './AppearancePreview';
 import { EditorSettingsSection, TerminalSettingsSection } from './EditorSettingsPanel';
 import { PhoneAppearance } from './PhoneAppearance';
 
@@ -417,6 +418,18 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
               ))}
             </div>
           </div>
+          <div className="field">
+            <label>Running step right fade: {(t.liveStepFade ?? 40) > 0 ? `${t.liveStepFade ?? 40}px` : 'Off'}</label>
+            <input
+              type="range"
+              min={0}
+              max={120}
+              step={4}
+              value={t.liveStepFade ?? 40}
+              data-testid="live-step-fade"
+              onChange={(e) => set({ liveStepFade: Number(e.target.value) })}
+            />
+          </div>
           <ReadingPreview />
         </>
       )}
@@ -438,56 +451,5 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
         </div>
       )}
     </>
-  );
-}
-
-/** Live sample of chat text, thinking and steps, drawn with the sizes this screen is using right now. */
-function ReadingPreview() {
-  return (
-    <div className="appearance-preview" data-testid="reading-preview">
-      <div className="small muted" style={{ marginBottom: 6 }}>
-        Preview
-      </div>
-      <div className="msg-agent">
-        <p>
-          A reply reads like this, with <b>bold words</b> and <code>inline code</code>.
-        </p>
-      </div>
-      <div className="thought msg-agent">Thinking looks like this — quieter, so the answer stands out.</div>
-      <StepsPreview />
-    </div>
-  );
-}
-
-/** A static, non-interactive copy of a settled WorkGroup (same classes), so Steps size changes show live. */
-function StepsPreview() {
-  const rows: { icon: ReactNode; verb: string; target: string; mono?: boolean }[] = [
-    { icon: <Brain size={14} />, verb: 'Thought', target: 'Read the entry file first' },
-    { icon: <FileText size={14} />, verb: 'Read', target: 'src/app.ts' },
-    { icon: <SquareTerminal size={14} />, verb: 'Ran', target: 'npm test', mono: true },
-  ];
-  return (
-    <div className="tool-group work-group appearance-steps-preview" aria-hidden="true" data-testid="steps-preview">
-      <div className="tool-group-head work-group-head">
-        <span className="grow wg-settled-title">
-          <span className="wg-headline">Worked for 28s</span>
-          <span className="wg-detail wg-part"> · 1 command, 1 file read</span>
-        </span>
-        <ChevronDown size={14} className="wg-chev" />
-      </div>
-      <div className="tool-group-body work-group-body">
-        {rows.map((r) => (
-          <div key={r.verb} className="wg-step wg-step-done">
-            <span className="wg-step-icon">{r.icon}</span>
-            <div className="tool-row">
-              <div className="tool-row-head">
-                <span className="tool-badge wg-verb">{r.verb}</span>
-                <span className={`grow ellipsis tool-row-title ${r.mono ? 'mono cmd-term-title' : 'human'}`}>{r.target}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

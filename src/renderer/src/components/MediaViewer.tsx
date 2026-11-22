@@ -9,8 +9,12 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { PreviewBody, usePdfUrl } from './FilePreview';
 import { downloadFileRef } from './InlineFilePreviews';
 import { addToMessage, useCanAddToMessage } from './AddToMessage';
-import { openAnnotator } from './Annotator';
+import { openAnnotator } from '../annotateApi';
+import { isViewerTarget, viewerAttrs, viewerKindOf, type OpenViewerOptions, type ViewerItem, type ViewerKind } from '../mediaViewerApi';
 import '../mediaViewer.css';
+import { Sheet } from './Sheet';
+
+export { isViewerTarget, viewerAttrs, viewerKindOf, type OpenViewerOptions, type ViewerItem, type ViewerKind };
 
 /**
  * In-chat viewer: images, videos and documents from the chat open in an overlay over the chat instead of the side
@@ -21,42 +25,6 @@ import '../mediaViewer.css';
  * Clickable media in the chat carry `data-viewer-ref` / `data-viewer-kind` / `data-viewer-name`; the gallery for
  * ←/→ is collected from those inside the chat scroller.
  */
-
-export type ViewerKind = 'image' | 'video' | 'audio' | 'file';
-export interface ViewerItem {
-  ref: string;
-  kind: ViewerKind;
-  name?: string;
-}
-
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|heic|heif|tiff?)$/i;
-const VIDEO_EXT = /\.(mp4|mov|m4v|webm|ogv|mkv)$/i;
-const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|flac|opus)$/i;
-const DOC_VIEWER_EXT = /\.(pdf|docx?|rtf|odt|xlsx|pptx|pages|numbers|key)$/i;
-
-export function viewerKindOf(ref: string, mime?: string): ViewerKind {
-  if (mime?.startsWith('image/')) return 'image';
-  if (mime?.startsWith('video/')) return 'video';
-  if (mime?.startsWith('audio/')) return 'audio';
-  const p = ref.replace(/[?#].*$/, '');
-  if (IMAGE_EXT.test(p)) return 'image';
-  if (VIDEO_EXT.test(p)) return 'video';
-  if (AUDIO_EXT.test(p)) return 'audio';
-  return 'file';
-}
-
-/** True when a file reference has no `:line` / `#Lline` anchor and points to media or a rich document suited to `MediaViewer`. */
-export function isViewerTarget(ref: string): boolean {
-  const trimmed = ref.trim().replace(/^file:\/\//i, '');
-  if (!trimmed || /(?::\d+(?::\d+)?|#L?\d+(?:-L?\d+)?)$/i.test(trimmed)) return false;
-  const clean = trimmed.replace(/[?#].*$/, '');
-  return IMAGE_EXT.test(clean) || VIDEO_EXT.test(clean) || AUDIO_EXT.test(clean) || DOC_VIEWER_EXT.test(clean);
-}
-
-/** Attributes that make an element part of the chat's gallery. */
-export function viewerAttrs(ref: string, kind: ViewerKind, name?: string) {
-  return { 'data-viewer-ref': ref, 'data-viewer-kind': kind, 'data-viewer-name': name };
-}
 
 const isMedia = (k: ViewerKind) => k === 'image' || k === 'video';
 const baseName = (p: string) => p.replace(/[?#].*$/, '').split(/[\\/]/).pop() || p;
@@ -83,6 +51,8 @@ interface ViewerState {
   index: number;
   projectId?: string;
   openInPanel: (ref: string) => void;
+  /** Opened from a composer draft card: the file is in that draft already, and Mark up adds the copy there. */
+  draftKey?: string;
 }
 
 let root: Root | null = null;
@@ -110,6 +80,26 @@ export function closeViewer(opts: { restoreFocus?: boolean } = {}) {
   render(null);
 }
 
+/** Merges extra items (e.g. images behind a WorkGroup's `+N` overflow badge) into the page gallery without repeats. */
+function mergeGalleryExtras(gallery: ViewerItem[], extras: ViewerItem[]): ViewerItem[] {
+  const seen = new Set(gallery.map((g) => g.ref));
+  const missing: ViewerItem[] = [];
+  for (const ex of extras) {
+    if (!isMedia(ex.kind) || seen.has(ex.ref)) continue;
+    seen.add(ex.ref);
+    missing.push(ex);
+  }
+  if (!missing.length) return gallery.length ? gallery : extras.filter((e) => isMedia(e.kind));
+  if (!gallery.length) return missing;
+  const extraRefs = new Set(extras.map((e) => e.ref));
+  let insertAt = -1;
+  for (let i = 0; i < gallery.length; i++) {
+    if (extraRefs.has(gallery[i].ref)) insertAt = i;
+  }
+  if (insertAt < 0) return [...gallery, ...missing];
+  return [...gallery.slice(0, insertAt + 1), ...missing, ...gallery.slice(insertAt + 1)];
+}
+
 /**
  * Opens `ref` in the in-chat viewer. Images and videos get the gallery of the chat around `from`; other files open
  * alone. `openInPanel` is the side panel opener (`useOpenFile()`), offered as a secondary action.
@@ -121,15 +111,23 @@ export function openViewer(opts: {
   mime?: string;
   projectId?: string;
   openInPanel: (ref: string) => void;
+  draftKey?: string;
+  /** Additional gallery items (e.g. images behind a collapsed `+N` badge) to splice into the chat gallery in order. */
+  extraItems?: ViewerItem[];
 }) {
   const kind = viewerKindOf(opts.ref, opts.mime);
   const self: ViewerItem = { ref: opts.ref, kind, name: opts.name };
   let items = [self];
   if (isMedia(kind)) {
     const gallery = collectGallery(opts.from);
-    if (gallery.some((g) => g.ref === opts.ref)) items = gallery;
+    if (opts.extraItems?.length) {
+      const merged = mergeGalleryExtras(gallery, opts.extraItems);
+      if (merged.some((g) => g.ref === opts.ref)) items = merged;
+    } else if (gallery.some((g) => g.ref === opts.ref)) {
+      items = gallery;
+    }
   }
-  render({ items, index: Math.max(0, items.findIndex((i) => i.ref === opts.ref)), projectId: opts.projectId, openInPanel: opts.openInPanel });
+  render({ items, index: Math.max(0, items.findIndex((i) => i.ref === opts.ref)), projectId: opts.projectId, openInPanel: opts.openInPanel, draftKey: opts.draftKey });
 }
 
 /** A few loaded previews, so stepping back and forth does not load files again (phones load them over the relay). */
@@ -146,7 +144,7 @@ function loadPreview(ref: string, projectId?: string): Promise<FilePreview> {
 
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, iframe, video[controls], audio[controls], [tabindex]:not([tabindex="-1"])';
 
-function Viewer({ items: initialItems, index: initialIndex, projectId, openInPanel }: ViewerState) {
+function Viewer({ items: initialItems, index: initialIndex, projectId, openInPanel, draftKey }: ViewerState) {
   const [items, setItems] = useState(initialItems);
   const [index, setIndex] = useState(initialIndex);
   const [data, setData] = useState<FilePreview | null>(null);
@@ -246,7 +244,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
     }
   };
 
-  const name = data?.name ?? item.name ?? baseName(item.ref);
+  const name = item.name ?? data?.name ?? baseName(item.ref);
   const kind = data?.kind;
   const media = kind === 'image' || kind === 'video' || kind === 'audio';
   const hasFile = Boolean(data && data.kind !== 'missing' && data.kind !== 'dir');
@@ -258,9 +256,11 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
   }, []);
 
   return (
-    <div
+    <Sheet
       ref={dialog}
       className={`mv-root ${media ? 'is-media' : 'is-doc'}`}
+      sheetClassName="mv-sheet"
+      onOutside={() => closeViewer()}
       role="dialog"
       aria-modal="true"
       aria-label={`Viewer: ${name}`}
@@ -271,7 +271,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
       data-count={items.length}
       onKeyDown={onKeyDown}
     >
-      <div className="mv-bar">
+      <div className="sheet-bar mv-bar">
         <div className="mv-title">
           <span className="mv-name ellipsis" data-testid="viewer-name">
             {name}
@@ -302,7 +302,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
             {saved ? <Check size={16} /> : <Download size={16} />}
           </button>
         )}
-        {hasFile && canAdd && (
+        {hasFile && canAdd && !draftKey && (
           <button
             type="button"
             className="mv-btn"
@@ -328,7 +328,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
             data-testid="viewer-annotate"
             onClick={() => {
               closeViewer({ restoreFocus: false });
-              openAnnotator({ path: data.path, name, mime: kind === 'video' ? data.mime || 'video/mp4' : data.mime || 'image/png' }, { composer: true });
+              openAnnotator({ path: data.path, name, mime: kind === 'video' ? data.mime || 'video/mp4' : data.mime || 'image/png' }, draftKey ? { draftKey } : { composer: true });
             }}
           >
             <PenLine size={16} />
@@ -407,7 +407,7 @@ function Viewer({ items: initialItems, index: initialIndex, projectId, openInPan
           </>
         )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 

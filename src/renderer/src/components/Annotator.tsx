@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { Sheet } from './Sheet';
 import {
   ArrowUpRight,
   Circle,
@@ -585,9 +586,10 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   const textPos = text && box ? toScreenPoint(text.at, { width: box.w, height: box.h }, w, h) : null;
 
   return (
-    <div
+    <Sheet
       ref={rootRef}
       className="an-root"
+      sheetClassName="an-sheet"
       role="dialog"
       aria-modal="true"
       aria-label={`Mark up ${title}`}
@@ -597,8 +599,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       data-marks={marks.length}
       onKeyDown={onKeyDown}
     >
-      <div className="an-sheet">
-      <div className="an-bar">
+      <div className="sheet-bar an-bar">
         <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={onCancel}>
           <X size={17} />
         </button>
@@ -749,8 +750,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
           {error && <span className="error-text small ellipsis">{error}</span>}
         </div>
       )}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -805,8 +805,9 @@ function useSource(src: AnnotateSource) {
 
 function Shell({ title, children, onClose }: { title: string; children?: React.ReactNode; onClose: () => void }) {
   return (
-    <div
+    <Sheet
       className="an-root"
+      sheetClassName="an-sheet"
       role="dialog"
       aria-modal="true"
       aria-label={`Mark up ${title}`}
@@ -819,8 +820,7 @@ function Shell({ title, children, onClose }: { title: string; children?: React.R
         }
       }}
     >
-      <div className="an-sheet">
-      <div className="an-bar">
+      <div className="sheet-bar an-bar">
         <button type="button" className="an-icon" title="Close (Esc)" aria-label="Close" data-testid="an-cancel" onClick={onClose}>
           <X size={17} />
         </button>
@@ -829,8 +829,7 @@ function Shell({ title, children, onClose }: { title: string; children?: React.R
         </div>
       </div>
       <div className="an-stage an-center">{children ?? <Loader2 size={20} className="spin muted" />}</div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -973,9 +972,10 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
 
   return (
     <>
-      <div
+      <Sheet
         ref={rootRef}
         className="an-root an-video"
+        sheetClassName="an-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={`Mark up ${src.name}`}
@@ -999,8 +999,7 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
           }
         }}
       >
-        <div className="an-sheet">
-        <div className="an-bar">
+        <div className="sheet-bar an-bar">
           <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={closeAnnotator}>
             <X size={17} />
           </button>
@@ -1107,8 +1106,7 @@ function VideoAnnotator({ src, target }: { src: AnnotateSource; target: Annotate
           )}
           {note && <span className="error-text small ellipsis">{note}</span>}
         </div>
-        </div>
-      </div>
+      </Sheet>
       {mode.kind === 'frame' && (
         <MarkEditor
           base={mode.frame}

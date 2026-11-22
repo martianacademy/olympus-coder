@@ -1,32 +1,7 @@
-/* In-chat viewer (`components/MediaViewer.tsx`): a calm overlay over the app for images, videos and documents. */
+/* In-chat viewer (`components/MediaViewer.tsx`) for images, videos and documents. It opens in the shared media
+   sheet (`components/Sheet.tsx`, `sheet.css`) like mark-up does: a centered sheet with the app visible around it. */
 
-.mv-root {
-  position: fixed;
-  inset: 0;
-  z-index: 9000;
-  display: flex;
-  flex-direction: column;
-  background: rgba(10, 10, 12, 0.9);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  color: #ececf1;
-  outline: none;
-  animation: mv-in 0.14s ease-out;
-  overscroll-behavior: contain;
-}
-@keyframes mv-in {
-  from { opacity: 0; }
-}
-
-.mv-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 48px;
-  padding: env(safe-area-inset-top, 0px) 8px 0 16px;
-  box-sizing: content-box;
-}
+.sheet-bar.mv-bar { padding-left: 14px; }
 .mv-title {
   flex: 1;
   min-width: 0;
@@ -37,13 +12,13 @@
 .mv-name {
   font-size: 13px;
   font-weight: 500;
-  color: #ececf1;
+  color: var(--text);
   min-width: 0;
 }
 .mv-count {
   flex: none;
   font-size: 11.5px;
-  color: rgba(236, 236, 241, 0.55);
+  color: var(--muted);
 }
 .mv-btn {
   flex: none;
@@ -56,11 +31,11 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: rgba(236, 236, 241, 0.78);
+  color: var(--muted);
   cursor: pointer;
 }
-.mv-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.mv-btn:focus-visible, .mv-nav:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
+.mv-btn:hover { background: var(--hover); color: var(--text); }
+.mv-btn:focus-visible, .mv-nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mv-zoom { padding: 0 8px; font-size: 11.5px; }
 
 .mv-stage-wrap {
@@ -74,6 +49,7 @@
   min-width: 0;
   min-height: 0;
   position: relative;
+  background: color-mix(in srgb, var(--text) 3.5%, var(--bg));
 }
 .mv-center {
   display: flex;
@@ -134,16 +110,16 @@
   width: min(460px, 100%);
   padding: 22px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 .mv-audio audio { width: 100%; display: block; }
-.mv-spinner { color: rgba(236, 236, 241, 0.6); }
+.mv-spinner { color: var(--muted); }
 .mv-error {
   max-width: 520px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #f2b8b5;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
@@ -177,18 +153,18 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(236, 236, 241, 0.85);
+  background: color-mix(in srgb, var(--text) 8%, var(--bg));
+  color: var(--text);
   cursor: pointer;
   z-index: 1;
 }
-.mv-nav:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.mv-nav:hover { background: color-mix(in srgb, var(--text) 16%, var(--bg)); }
 .mv-nav.prev { left: 10px; }
 .mv-nav.next { right: 10px; }
 .mv-root.is-media .mv-center { padding-left: 60px; padding-right: 60px; }
 
 @media (max-width: 600px) {
-  .mv-bar { padding-left: 12px; padding-right: 4px; }
+  .sheet-bar.mv-bar { padding-left: 10px; padding-right: 4px; }
   /* Room for the file name: − only once something is zoomed (pinch and double tap work anyway). */
   .mv-zoom-out:disabled { display: none; }
   .mv-root.is-media .mv-center { padding: 0 0 env(safe-area-inset-bottom, 0px); }
@@ -199,7 +175,6 @@
   .mv-nav { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mv-root { animation: none; }
 }
 
 /* Players inside sent attachment cards. */

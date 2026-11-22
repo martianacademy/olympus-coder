@@ -1,31 +1,171 @@
-/* Detached Workbench tools (src/main/panels.ts, components/PanelApp.tsx) and the tab bar's detach icon. */
+/* Detached Workbench tools (src/main/panels.ts, components/PanelApp.tsx) and the tab bar's pop-out / drag-reorder UX. */
 
-/* The small "open in a new window" icon: shown next to the active tab, or the tab under the pointer. It touches the
-   tab (negative margin over the bar's gap) so moving the pointer onto it never hides it. */
-.workbench-tabs > button.wb-detach:not(.btn) {
-  display: none;
+/* Far-right pop-out button (`Maximize2` next to Close `X`): hidden on phone/web where separate windows don't exist. */
+html[data-platform='web'] .wb-popout { display: none !important; }
+
+/* Tab drag states: smooth cursor-bound chip, vertical accent drop line + empty placeholder slot, and pull-out ghost. */
+body.wb-tab-is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+.workbench-tabs > button:not(.btn) {
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.12s ease, opacity 0.12s ease;
+}
+.workbench-tabs > button.is-dragging.is-detach {
+  opacity: 0.32;
+}
+
+/* Empty landing slot + vertical accent insertion line showing exactly where the dragged tab will drop. */
+.wb-drop-slot {
+  position: relative;
+  flex: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 22px;
-  padding: 0;
-  margin-left: -2px;
-  border-radius: 6px;
-  color: var(--muted);
-  background: transparent;
+  pointer-events: none;
+  animation: wb-slot-in 0.14s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
-.workbench-tabs > button.active + button.wb-detach:not(.btn),
-.workbench-tabs > button:hover + button.wb-detach:not(.btn),
-.workbench-tabs > button.wb-detach:not(.btn):hover,
-.workbench-tabs > button.wb-detach:not(.btn):focus-visible {
+.wb-drop-box {
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--radius, 10px) * 0.8);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.wb-drop-line {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.wb-drop-slot.is-right .wb-drop-line {
+  left: auto;
+  right: -3px;
+}
+@keyframes wb-slot-in {
+  from { opacity: 0; transform: scaleX(0.75); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+/* Floating tab chip tracking the cursor at 60/120fps during horizontal reorder. */
+.wb-drag-chip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9500;
+  pointer-events: none;
   display: inline-flex;
-}
-.workbench-tabs > button.wb-detach:not(.btn):hover {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: calc(var(--radius, 10px) * 0.8);
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: var(--surface, var(--panel));
   color: var(--text);
-  background: var(--hover);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow-md, 0 10px 26px rgba(0, 0, 0, 0.32));
+  will-change: transform;
 }
-/* Phones and touch: no separate windows. */
-html[data-platform='web'] .wb-detach { display: none !important; }
+
+/* Floating pop-out pill while pulling a tab away from the bar. */
+.wb-detach-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9500;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: calc(var(--radius, 10px) * 0.8);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: var(--surface, var(--panel));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md, 0 10px 28px rgba(0, 0, 0, 0.34));
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* Cursor-to-window expanding silhouette that bridges Electron's ~300ms BrowserWindow startup seamlessly. */
+.wb-launch-window {
+  position: fixed;
+  z-index: 9600;
+  pointer-events: none;
+  width: 360px;
+  height: 230px;
+  border-radius: calc(var(--radius, 10px) * 1.2);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, var(--border));
+  background: color-mix(in srgb, var(--panel, var(--bg)) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.36);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.28);
+  opacity: 0.92;
+  transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  will-change: transform, opacity;
+}
+.wb-launch-window.is-expand {
+  transform: scale(1);
+  opacity: 0.96;
+}
+.wb-launch-window.is-fade {
+  transform: scale(1.06);
+  opacity: 0;
+  transition: transform 0.18s ease-out, opacity 0.18s ease-out;
+}
+.wb-launch-head {
+  height: 30px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--hairline, var(--border));
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.wb-launch-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.wb-launch-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  display: block;
+}
+.wb-launch-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.wb-launch-body {
+  flex: 1;
+  background: linear-gradient(120deg, transparent 25%, color-mix(in srgb, var(--text) 4%, transparent) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: wb-launch-shimmer 0.8s linear infinite;
+}
+@keyframes wb-launch-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
 
 /* ---------- a detached tool window ---------- */
 .panel-window {
@@ -35,7 +175,21 @@ html[data-platform='web'] .wb-detach { display: none !important; }
   flex-direction: column;
   background: var(--panel, var(--bg));
   color: var(--text);
+  animation: panel-window-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+@keyframes panel-window-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-drop-slot, .panel-window, .wb-launch-body { animation: none; }
+  .wb-launch-window { transition: opacity 0.12s ease; transform: scale(0.95); }
+}
+html[data-motion='reduce'] .wb-drop-slot,
+html[data-motion='reduce'] .panel-window,
+html[data-motion='reduce'] .wb-launch-body { animation: none; }
+html[data-motion='reduce'] .wb-launch-window { transition: opacity 0.12s ease; transform: scale(0.95); }
 .panel-window-head {
   height: 38px;
   flex: none;

@@ -433,7 +433,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           data-testid="composer-resize"
         />
         {slash.menu}
-        <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a) => openFile(a.path)} />
+        <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a, el) => att.open(a, el, openFile)} />
         <div className="growable-textarea" data-replicated-value={text}>
           <textarea
             ref={ta}

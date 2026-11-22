@@ -174,7 +174,7 @@ async function onClientMessage(s: Sess, blob: string) {
   try {
     if (f.part) {
       const { id, i, n } = f.part;
-      if (!s.parts || s.parts.id !== id) s.parts = { id, n: Math.min(Number(n) || 0, 128), got: [] };
+      if (!s.parts || s.parts.id !== id) s.parts = { id, n: Math.min(Number(n) || 0, 512), got: [] };
       s.parts.got[i] = String(f.m);
       if (s.parts.got.filter((x) => x !== undefined).length < s.parts.n) return;
       m = JSON.parse(s.parts.got.join(''));

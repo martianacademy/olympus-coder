@@ -91,7 +91,38 @@ interface Totals {
   byAgent: Record<string, { prompt: number; output: number; cost: number; turns: number }>;
 }
 
+const totalsCache = new Map<string, { items: Thread['items']; totals: Totals }>();
+
+const itemUsage = (it: Thread['items'][number] | undefined) => (it && (it.kind === 'user' || it.kind === 'agent') ? it.usage : undefined);
+
+/** True when `next` only streamed/appended an item at the tail without changing any `.usage` record (O(1) fast path). */
+function canReuseTotals(prev: Thread['items'], next: Thread['items']): boolean {
+  if (prev === next) return true;
+  const pn = prev.length;
+  const nn = next.length;
+  if (pn === 0) return false;
+  if (nn === pn) {
+    const last = pn - 1;
+    // Check that prefix is unchanged (first + penultimate) and only the last item mutated with identical usage.
+    return (
+      prev[0] === next[0] &&
+      (last === 0 || prev[last - 1] === next[last - 1]) &&
+      prev[last].id === next[last].id &&
+      itemUsage(prev[last]) === itemUsage(next[last])
+    );
+  }
+  if (nn === pn + 1) {
+    return prev[0] === next[0] && prev[pn - 1] === next[pn - 1] && !itemUsage(next[pn]);
+  }
+  return false;
+}
+
 export function sessionTotals(thread: Thread): Totals {
+  const hit = totalsCache.get(thread.id);
+  if (hit && canReuseTotals(hit.items, thread.items)) {
+    hit.items = thread.items;
+    return hit.totals;
+  }
   const t: Totals = { turns: 0, input: 0, cacheRead: 0, cacheWrite: 0, prompt: 0, output: 0, thought: 0, cost: 0, hasCost: false, durationMs: 0, perTurn: [], byAgent: {} };
   let pending: { prompt: number; agentId: string } | null = null;
   for (const it of thread.items) {
@@ -121,6 +152,8 @@ export function sessionTotals(thread: Thread): Totals {
       pending = null;
     }
   }
+  totalsCache.set(thread.id, { items: thread.items, totals: t });
+  if (totalsCache.size > 40) totalsCache.delete(totalsCache.keys().next().value!);
   return t;
 }
 

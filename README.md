@@ -3,13 +3,13 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — with shared project memory, multi-agent orchestration, a built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.3.2</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
+    <code>v0.3.3</code> · <code>Apache-2.0</code> · <code>macOS · Windows · Linux</code> · <code>ACP 2.6 + MCP</code> · <code>Electron · React 19 · TypeScript</code>
   </p>
   <p>
     <a href="https://www.producthunt.com/products/olympus-coder?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-olympus-coder" target="_blank" rel="noopener noreferrer"><img alt="Olympus Coder - Open-source desktop &amp; VPS workbench for 18+ AI coding agents | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;theme=light&amp;t=1795331946472" /></a>
   </p>
   <p>
-    <a href="https://olympus.marsnext.in/"><strong>Website</strong></a> · <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.2</strong></a> · <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> · <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
+    <a href="https://olympus.marsnext.in/"><strong>Website</strong></a> · <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.3</strong></a> · <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> · <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
   </p>
   <h3>⚡ 2.5B+ Free Coding Tokens / Month — 18 Free-Tier Coding CLIs Built In</h3>
   <p>
@@ -24,7 +24,7 @@
   <img src="docs/screenshots/hero-code-mode.png" alt="Olympus Coder — Code Mode workspace with Antigravity, collapsible step timeline, inline diff, and CodeMirror 6 editor" width="100%" />
 </picture>
 
-> **Status:** v0.3.2, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
+> **Status:** v0.3.3, under active development. macOS is the primary platform for day-to-day use and testing; the Windows and Linux installers build in CI, but have had less live testing.
 
 ## Download
 
@@ -41,7 +41,7 @@ Get the latest installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | File |
 | --- | --- |
-| macOS, Apple silicon | [`Olympus.Coder-0.3.2-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.2-arm64.dmg) |
+| macOS, Apple silicon | [`Olympus.Coder-0.3.3-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.3-arm64.dmg) |
 | macOS, Intel | `Olympus.Coder-<version>.dmg` (coming soon) |
 | Windows (x64) | `Olympus.Coder.Setup.<version>.exe` (coming soon) |
 | Linux (x64) | `Olympus.Coder-<version>.AppImage` or `olympus-coder_<version>_amd64.deb` (coming soon) |

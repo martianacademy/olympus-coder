@@ -1,16 +1,22 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { ExternalLink, Eye, FileCode, GitBranch, Globe, Info, SquareTerminal, Workflow, X } from 'lucide-react';
-import { isPanelTool, PANEL_TITLES, type PanelTool } from '@shared/panels';
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Eye, FileCode, GitBranch, Globe, Info, SquareTerminal, Workflow } from 'lucide-react';
+import type { PanelTool } from '@shared/panels';
 import type { AgentDef, AgentStatus, GitStatus, Project, SessionView, Thread } from '@shared/types';
 import { api } from '../api';
 import { usageLevel } from '../contextLevel';
-import { FilePreviewPane, type PreviewTarget } from './FilePreview';
-import { FilesPanel, type FilesPanelHandle } from './FilesPanel';
-import { GitPanel } from './GitPanel';
+import { pickNextVisibleTab, useWorkbenchTabOrder, type CoreWbTab } from '../workbenchTabs';
+import { addTerminal } from '../terminalBus';
+import type { PreviewTarget } from './FilePreview';
+import type { FilesPanelHandle } from './FilesPanel';
 import { liveNow, TasksPanel, useTasks } from './TasksPanel';
-import { addTerminal, TerminalPanel } from './TerminalPanel';
 import { isLocalUrl, WebPreview } from './WebPreview';
 import { InfoPanel } from './WorkbenchInfo';
+import { WorkbenchTabBar, type WorkbenchTabDef } from './WorkbenchTabBar';
+
+const FilePreviewPane = lazy(() => import('./FilePreview').then((m) => ({ default: m.FilePreviewPane })));
+const FilesPanel = lazy(() => import('./FilesPanel').then((m) => ({ default: m.FilesPanel })));
+const GitPanel = lazy(() => import('./GitPanel').then((m) => ({ default: m.GitPanel })));
+const TerminalPanel = lazy(() => import('./TerminalPanel').then((m) => ({ default: m.TerminalPanel })));
 
 export { addTerminal };
 
@@ -42,6 +48,8 @@ export const Workbench = forwardRef<
     refreshKey: number;
     /** Main window: open this tool in a window of its own (src/main/panels.ts). Absent on the phone. */
     onDetach?: (tool: PanelTool, url?: string) => void;
+    /** Tools currently open in their own detached windows (hidden from the main tab bar until closed). */
+    detachedTools?: PanelTool[];
     /**
      * A detached tool window: show only this tool, no tab bar (the window has its own header). Links to other tabs
      * (a file from Git, a terminal from Tasks) go to the main window.
@@ -85,9 +93,15 @@ export const Workbench = forwardRef<
     void api.git.status(props.project.id).then(setGit).catch(() => setGit(null));
   }, [props.project.id, key, gitPanelMounted]);
 
+  const tabOrder = useWorkbenchTabOrder();
+  const detachedSet = new Set<string>(only ? [] : (props.detachedTools ?? []));
+
   /** Switch tab; in a detached window, another tool is shown by the main window instead. */
   const goTab = (t: WorkbenchTab) => {
-    if (!only) return props.onTab(t);
+    if (!only) {
+      if (detachedSet.has(t) && props.onDetach) return props.onDetach(t as PanelTool);
+      return props.onTab(t);
+    }
     if (t !== only) void api.panels.showInMain({ tab: t });
   };
   const openFile = (p: string, line?: number) => {
@@ -122,16 +136,16 @@ export const Workbench = forwardRef<
   const gitMarks: Record<string, string> = {};
   for (const f of git?.files ?? []) gitMarks[f.path] = f.untracked ? '?' : f.worktree !== '.' ? f.worktree : f.index;
 
-  const tabs: { id: WorkbenchTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'files', label: 'Files', icon: <FileCode size={14} /> },
-    { id: 'git', label: git?.files.length ? `Git (${git.files.length})` : 'Git', icon: <GitBranch size={14} /> },
-    { id: 'terminal', label: 'Terminal', icon: <SquareTerminal size={14} /> },
-    {
+  const coreTabMap: Record<CoreWbTab, WorkbenchTabDef> = {
+    files: { id: 'files', label: 'Files', icon: <FileCode size={14} /> },
+    git: { id: 'git', label: git?.files.length ? `Git (${git.files.length})` : 'Git', icon: <GitBranch size={14} /> },
+    terminal: { id: 'terminal', label: 'Terminal', icon: <SquareTerminal size={14} /> },
+    tasks: {
       id: 'tasks',
       label: runningTasks ? `Tasks (${runningTasks})` : tasks.children.length ? `Tasks · ${tasks.children.length}` : 'Tasks',
       icon: <Workflow size={14} className={needsYou ? 'warn-text' : runningTasks ? 'pulse' : ''} />,
     },
-    {
+    info: {
       id: 'info',
       label: 'Info',
       // A small red dot while this chat's context is past the red threshold (the Info panel offers Compact).
@@ -141,111 +155,104 @@ export const Workbench = forwardRef<
         </span>
       ),
     },
-  ];
+  };
+
+  const allTabs: WorkbenchTabDef[] = tabOrder.map((id) => coreTabMap[id]);
   if (props.preview) {
     const name = props.preview.ref.startsWith('olympus-turn:')
       ? 'Turn changes'
       : props.preview.ref.replace(/[#?].*$/, '').replace(/:\d+(:\d+)?$/, '').split('/').pop() || 'Preview';
-    tabs.push({ id: 'preview', label: name, icon: <Eye size={14} /> });
+    allTabs.push({ id: 'preview', label: name, icon: <Eye size={14} /> });
   }
-  if (webUrl) tabs.push({ id: 'web', label: webUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''), icon: <Globe size={14} /> });
+  if (webUrl) allTabs.push({ id: 'web', label: webUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''), icon: <Globe size={14} /> });
+
+  const visibleTabs = allTabs.filter((t) => !detachedSet.has(t.id));
+
+  // If the active tab was just popped out into its own window, move to a neighbour (or close if none remain).
+  useEffect(() => {
+    if (only || !detachedSet.has(props.tab)) return;
+    const next = pickNextVisibleTab(
+      allTabs.map((t) => t.id),
+      visibleTabs.map((t) => t.id),
+      props.tab,
+    );
+    if (next) props.onTab(next);
+    else props.onClose();
+  });
 
   return (
     <div className={`workbench ${only ? 'is-detached' : ''}`}>
       {!only && (
-        <div className="workbench-tabs">
-          {tabs.map((t) => [
-            <button key={t.id} className={props.tab === t.id ? 'active' : ''} onClick={() => props.onTab(t.id)} data-testid={`wb-${t.id}`} title={t.label}>
-              {t.icon} <span className="wb-label">{t.label}</span>
-            </button>,
-            // Next to the active (or hovered) tab: open this tool in its own window. The tab keeps working here too.
-            props.onDetach && isPanelTool(t.id) && (t.id !== 'tasks' || props.thread) && (
-              <button
-                key={`${t.id}-detach`}
-                className="wb-detach"
-                title={`Open ${PANEL_TITLES[t.id]} in a new window`}
-                aria-label={`Open ${PANEL_TITLES[t.id]} in a new window`}
-                data-testid={`wb-detach-${t.id}`}
-                onClick={() => props.onDetach?.(t.id as PanelTool, t.id === 'web' ? webUrl ?? undefined : undefined)}
-              >
-                <ExternalLink size={12} />
-              </button>
-            ),
-          ])}
-          <div className="spacer" />
-          {props.onFork && props.thread && (
-            <button
-              className="btn ghost icon wb-sheet-action"
-              title="Fork: start a new sub-session from this whole chat"
-              aria-label="Fork session"
-              data-testid="wb-fork"
-              onClick={() => props.onFork?.()}
-            >
-              <GitBranch size={16} />
-            </button>
-          )}
-          <button className="btn ghost icon" title="Close panel" aria-label="Close panel" data-testid="wb-close" onClick={props.onClose}>
-            <X size={18} />
-          </button>
-        </div>
+        <WorkbenchTabBar
+          tabs={visibleTabs}
+          activeTab={props.tab}
+          hasThread={Boolean(props.thread)}
+          webUrl={webUrl}
+          onTab={props.onTab}
+          onDetach={props.onDetach}
+          onFork={props.onFork}
+          onClose={props.onClose}
+        />
       )}
       <div className="workbench-body">
-        {visited.has('files') && (
-          <div className="wb-pane" style={{ display: props.tab === 'files' ? 'flex' : 'none' }}>
-            <FilesPanel key={props.project.id} ref={files} projectId={props.project.id} dark={props.dark} gitMarks={gitMarks} refreshKey={props.refreshKey} onSaved={touch} />
-          </div>
-        )}
-        {visited.has('git') && (
-          <div className="wb-pane" style={{ display: props.tab === 'git' ? 'flex' : 'none' }}>
-            <GitPanel key={props.project.id} projectId={props.project.id} refreshKey={key} onStatus={setGit} onOpenFile={openFile} />
-          </div>
-        )}
-        {visited.has('terminal') && (
-          <div className="wb-pane" style={{ display: props.tab === 'terminal' ? 'flex' : 'none' }}>
-            <TerminalPanel projectId={props.project.id} visible={props.tab === 'terminal'} canCompose={Boolean(props.thread)} onClose={only ? () => {} : props.onClose} />
-          </div>
-        )}
-        {props.tab === 'tasks' && props.thread && (
-          <div className="wb-pane" style={{ display: 'flex' }}>
-            <TasksPanel
-              thread={props.thread}
-              data={tasks}
-              agentDefs={props.agentDefs}
-              projectPath={props.project.path}
-              running={props.session?.status === 'running'}
-              onOpenThread={props.onOpenThread}
-              onShowTerminal={(ptyId) => {
-                if (only) return void api.panels.showInMain({ tab: 'terminal', ptyId });
-                addTerminal(props.project.id, ptyId);
-                props.onTab('terminal');
-              }}
-            />
-          </div>
-        )}
-        {webUrl && (
-          <div className="wb-pane" style={{ display: props.tab === 'web' ? 'flex' : 'none' }}>
-            <WebPreview
-              key={webUrl}
-              url={webUrl}
-              projectId={props.project.id}
-              onClose={() => {
-                if (only) return props.onClose();
-                setWebUrl(null);
-                if (props.tab === 'web') props.onTab('terminal');
-              }}
-            />
-          </div>
-        )}
-        {props.tab === 'preview' && props.preview && (
-          <div className="wb-pane" style={{ display: 'flex' }}>
-            <FilePreviewPane target={props.preview} dark={props.dark} onClose={props.onClosePreview} editProjectId={props.project.id} onEdit={openFile} />
-          </div>
-        )}
-        {props.tab === 'info' && (
-          <div className="wb-pane" style={{ display: 'flex' }}>
-            <InfoPanel {...props} refreshKey={key} git={git} onOpenFile={openFile} onTab={goTab} />
-          </div>
-        )}
+        <Suspense fallback={<div className="muted small" style={{ padding: 16 }}>Loading…</div>}>
+          {visited.has('files') && (
+            <div className="wb-pane" style={{ display: props.tab === 'files' ? 'flex' : 'none' }}>
+              <FilesPanel key={props.project.id} ref={files} projectId={props.project.id} dark={props.dark} gitMarks={gitMarks} refreshKey={props.refreshKey} onSaved={touch} />
+            </div>
+          )}
+          {visited.has('git') && (
+            <div className="wb-pane" style={{ display: props.tab === 'git' ? 'flex' : 'none' }}>
+              <GitPanel key={props.project.id} projectId={props.project.id} refreshKey={key} onStatus={setGit} onOpenFile={openFile} />
+            </div>
+          )}
+          {visited.has('terminal') && (
+            <div className="wb-pane" style={{ display: props.tab === 'terminal' ? 'flex' : 'none' }}>
+              <TerminalPanel projectId={props.project.id} visible={props.tab === 'terminal'} canCompose={Boolean(props.thread)} onClose={only ? () => {} : props.onClose} />
+            </div>
+          )}
+          {props.tab === 'tasks' && props.thread && (
+            <div className="wb-pane" style={{ display: 'flex' }}>
+              <TasksPanel
+                thread={props.thread}
+                data={tasks}
+                agentDefs={props.agentDefs}
+                projectPath={props.project.path}
+                running={props.session?.status === 'running'}
+                onOpenThread={props.onOpenThread}
+                onShowTerminal={(ptyId) => {
+                  if (only) return void api.panels.showInMain({ tab: 'terminal', ptyId });
+                  addTerminal(props.project.id, ptyId);
+                  props.onTab('terminal');
+                }}
+              />
+            </div>
+          )}
+          {webUrl && (
+            <div className="wb-pane" style={{ display: props.tab === 'web' ? 'flex' : 'none' }}>
+              <WebPreview
+                key={webUrl}
+                url={webUrl}
+                projectId={props.project.id}
+                onClose={() => {
+                  if (only) return props.onClose();
+                  setWebUrl(null);
+                  if (props.tab === 'web') props.onTab('terminal');
+                }}
+              />
+            </div>
+          )}
+          {props.tab === 'preview' && props.preview && (
+            <div className="wb-pane" style={{ display: 'flex' }}>
+              <FilePreviewPane target={props.preview} dark={props.dark} onClose={props.onClosePreview} editProjectId={props.project.id} onEdit={openFile} />
+            </div>
+          )}
+          {props.tab === 'info' && (
+            <div className="wb-pane" style={{ display: 'flex' }}>
+              <InfoPanel {...props} refreshKey={key} git={git} onOpenFile={openFile} onTab={goTab} />
+            </div>
+          )}
+        </Suspense>
       </div>
     </div>
   );

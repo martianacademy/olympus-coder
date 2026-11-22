@@ -1,7 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Circle, CircleCheck, CircleDot } from 'lucide-react';
 import type { ThreadItem } from '@shared/types';
+import { RefBaseContext } from '../fileLinks';
 import { useAnyStepOpen, useExpandSteps, useStepChoice } from '../prefs';
+import { extractGroupImages } from '../stepImages';
 import { fmtStepDuration, parseToolStep, type ToolItem } from '../toolStep';
 import {
   describeToolAction,
@@ -14,6 +16,7 @@ import {
 import { Markdown } from './ChatMarkdown';
 import { OrchestrationGroup, orchKind, withOlympus } from './Orchestration';
 import { StepBox } from './StepBox';
+import { StepImageStrip } from './StepImageThumbs';
 import { StepIcon, toolStepKind, type StepKind } from './stepIcons';
 import { ToolRow } from './ToolRow';
 import { BrandWorkingMark } from './Working';
@@ -233,7 +236,9 @@ export const WorkGroup = memo(
       return () => clearInterval(t);
     }, [live]);
 
+    const base = useContext(RefBaseContext);
     const summary = useMemo(() => summarizeWorkGroup(items), [items]);
+    const groupImages = useMemo(() => extractGroupImages(items, base), [items, base]);
     const innerEntries = useMemo(() => (isOpen ? buildInnerEntries(items) : []), [items, isOpen]);
 
     // What is happening right now, for the live header.
@@ -302,7 +307,7 @@ export const WorkGroup = memo(
               <span className="wg-verb shimmer" data-testid="wg-live-phase" data-step-kind={liveKind}>
                 {liveVerb}
               </span>
-              <span className={`grow ellipsis wg-target wg-live-detail ${liveMono ? 'mono' : ''}`}>{liveTarget}</span>
+              <span className={`grow wg-target wg-live-detail ${liveMono ? 'mono' : ''}`}>{liveTarget}</span>
               {liveElapsed && (
                 <span className="wg-time">
                   {liveElapsed}
@@ -330,6 +335,7 @@ export const WorkGroup = memo(
           {!live && summary.stoppedCount > 0 && (
             <span className="wg-flag">{summary.stoppedCount} stopped</span>
           )}
+          {!isOpen && groupImages.length > 0 && <StepImageStrip images={groupImages} max={4} scope="group" />}
           {isOpen ? <ChevronDown size={14} className="wg-chev" /> : <ChevronRight size={14} className="wg-chev" />}
         </div>
 

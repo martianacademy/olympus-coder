@@ -1,9 +1,7 @@
-import { memo, useContext, useEffect, useRef, useState } from 'react';
+import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import { Check, Copy, Play } from 'lucide-react';
 import { api } from '../api';
 import { isExternalUrl, LinkedText, looksLikePath, RefBaseContext, RunCommandContext, useOpenFile, withBase } from '../fileLinks';
@@ -11,7 +9,7 @@ import { copyText } from '../clipboard';
 import { HighlightedCode } from '../codeHighlight';
 import { langFromFence } from '../codeLang';
 import { normalizeMath } from '@shared/markdownMath';
-import { isViewerTarget, openViewer, viewerAttrs, viewerKindOf } from './MediaViewer';
+import { isViewerTarget, openViewer, viewerAttrs, viewerKindOf } from '../mediaViewerApi';
 
 function openRefSmart(ref: string, from: Element | null, openInPanel: (r: string) => void) {
   if (isViewerTarget(ref)) openViewer({ ref, from, openInPanel });
@@ -157,8 +155,49 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   );
 }
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks];
-const REHYPE_PLUGINS: any[] = [[rehypeKatex, { throwOnError: false, strict: false, output: 'html' }]];
+const REMARK_PLAIN: any[] = [remarkGfm, remarkBreaks];
+const EMPTY_REHYPE: any[] = [];
+
+type MathBundle = { remark: any[]; rehype: any[] };
+let mathBundle: MathBundle | null = null;
+let mathLoading: Promise<MathBundle | null> | null = null;
+const mathListeners = new Set<() => void>();
+
+/** Lazily loads remark-math, rehype-katex and KaTeX CSS on the first message that actually contains math. */
+function loadMathBundle(): void {
+  if (mathBundle || mathLoading) return;
+  mathLoading = Promise.all([import('remark-math'), import('rehype-katex'), import('katex/dist/katex.min.css')])
+    .then(([rm, rk]) => {
+      mathBundle = {
+        remark: [remarkGfm, rm.default, remarkBreaks],
+        rehype: [[rk.default, { throwOnError: false, strict: false, output: 'html' }]],
+      };
+      mathListeners.forEach((fn) => fn());
+      return mathBundle;
+    })
+    .catch((err: unknown) => {
+      console.warn('[ChatMarkdown] could not load KaTeX math plugins', err);
+      mathLoading = null;
+      return null;
+    });
+}
+
+/** True when normalized markdown contains a `$$` block or at least two unescaped `$` on a line. */
+function hasMathSyntax(md: string): boolean {
+  if (!md.includes('$')) return false;
+  for (const line of md.split('\n')) {
+    let count = 0;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '\\') {
+        i++;
+        continue;
+      }
+      if (line[i] === '$' && ++count >= 2) return true;
+    }
+  }
+  return false;
+}
+
 const MD_COMPONENTS = {
   pre: ({ children }: { children?: React.ReactNode }) => <CodeBlock>{children}</CodeBlock>,
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => <MdLink href={href}>{children}</MdLink>,
@@ -167,16 +206,31 @@ const MD_COMPONENTS = {
 };
 const URL_TRANSFORM = (url: string) => (/^\s*(javascript|vbscript):/i.test(url) ? '' : url);
 
-/** Memoized GFM + KaTeX Markdown renderer with stable plugin/component references. */
+/** Memoized GFM + lazy KaTeX Markdown renderer with stable plugin/component references. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
+  const normalized = useMemo(() => normalizeMath(text), [text]);
+  const needsMath = useMemo(() => hasMathSyntax(normalized), [normalized]);
+  const [, bump] = useState(0);
+
+  useEffect(() => {
+    if (!needsMath || mathBundle) return;
+    const onLoaded = () => bump((n) => n + 1);
+    mathListeners.add(onLoaded);
+    loadMathBundle();
+    return () => {
+      mathListeners.delete(onLoaded);
+    };
+  }, [needsMath]);
+
+  const plugins = needsMath && mathBundle ? mathBundle : null;
   return (
     <ReactMarkdown
-      remarkPlugins={REMARK_PLUGINS}
-      rehypePlugins={REHYPE_PLUGINS}
+      remarkPlugins={plugins ? plugins.remark : REMARK_PLAIN}
+      rehypePlugins={plugins ? plugins.rehype : EMPTY_REHYPE}
       urlTransform={URL_TRANSFORM}
       components={MD_COMPONENTS}
     >
-      {normalizeMath(text)}
+      {normalized}
     </ReactMarkdown>
   );
 });

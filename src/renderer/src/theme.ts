@@ -52,6 +52,9 @@ export function applyTheme(theme: ThemeSettings) {
   const stepsFactor = STEPS_SIZES.find((s) => s.id === t.stepsSize)?.scale ?? 1;
   root.style.setProperty('--steps-scale', String(Math.round((chatSize / 14) * stepsFactor * 1000) / 1000));
   root.style.setProperty('--steps-factor', String(stepsFactor));
+  const liveFade = Math.max(0, Math.min(160, Math.round(t.liveStepFade ?? 40)));
+  root.style.setProperty('--wg-live-fade', `${liveFade}px`);
+  root.dataset.liveFade = liveFade > 0 ? 'on' : 'off';
   const cw = CHAT_WIDTHS.find((w) => w.id === t.chatWidth)?.px;
   root.style.setProperty('--chat-width', cw === 0 ? '100%' : `${cw ?? 780}px`);
   // Sidebar spacing and text (defaults reproduce the original look: 2px under each project, rows touching, app font size).

@@ -1,12 +1,13 @@
 import { StatusCounts, StatusDot } from './StatusDot';
-import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Clock, Folder, FolderOpen, FolderSearch, GitBranch, History, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react';
-import { ProjectDashboard } from './ProjectSettings';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight, Clock, Folder, FolderOpen, FolderSearch, GitBranch, History, Pencil, Plus, Settings2, Split, Trash2, X } from 'lucide-react';
 import type { AgentDef, Project, ThreadMeta } from '@shared/types';
 import { AgentLogo } from '../logos';
 import { createFoldPruner, isProjectFolded, isThreadFolded, revealFreshThreadOnce, setProjectOpen, setThreadOpen, useSidebarFolds, type SidebarFolds } from '../sidebarState';
 import { SidebarRowMenu } from './SidebarRowMenu';
 import '../worktree.css';
+
+const ProjectDashboard = lazy(() => import('./ProjectSettings').then((m) => ({ default: m.ProjectDashboard })));
 
 interface Props {
   projects: Project[];
@@ -169,14 +170,16 @@ export function Sidebar(props: Props) {
         );
       })}
       {dash && (
-        <ProjectDashboard
-          key={dash.id}
-          project={dash}
-          agentDefs={props.agentDefs}
-          threadIds={(props.threads[dash.id] ?? []).map((t) => t.id)}
-          onOpenThread={props.onOpen}
-          onClose={() => setDash(null)}
-        />
+        <Suspense fallback={null}>
+          <ProjectDashboard
+            key={dash.id}
+            project={dash}
+            agentDefs={props.agentDefs}
+            threadIds={(props.threads[dash.id] ?? []).map((t) => t.id)}
+            onOpenThread={props.onOpen}
+            onClose={() => setDash(null)}
+          />
+        </Suspense>
       )}
     </>
   );
@@ -256,7 +259,7 @@ function ThreadNode(
                 title="Session actions"
                 testId="sidebar-thread-more"
                 actions={[
-                  { label: 'New sub-session (fork)', icon: <GitBranch size={14} />, onSelect: () => props.onFork(t) },
+                  { label: 'New sub-session (fork)', icon: <Split size={14} className="fork-icon" />, onSelect: () => props.onFork(t) },
                   { label: 'Rename', icon: <Pencil size={13} />, onSelect: () => setEditing(true) },
                   { label: 'Delete', icon: <Trash2 size={14} />, onSelect: () => props.onDelete(t), danger: true },
                 ]}
@@ -264,7 +267,7 @@ function ThreadNode(
             ) : (
               <>
                 <button className="btn ghost icon" title="New sub-session (fork)" onClick={(e) => (e.stopPropagation(), props.onFork(t))}>
-                  <GitBranch size={13} />
+                  <Split size={13} className="fork-icon" />
                 </button>
                 <button className="btn ghost icon" title="Rename" onClick={(e) => (e.stopPropagation(), setEditing(true))}>
                   <Pencil size={12} />

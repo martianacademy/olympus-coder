@@ -12,17 +12,12 @@ import { FindBar, TestBar } from './TerminalBars';
 import { SavedList, SavedStrip } from './SavedCommands';
 import { useSavedCommands, savedApi } from '../savedCommandsApi';
 import { devServerUrl, openWebPreview } from './WebPreview';
+import { activeTerminal, addTerminal } from '../terminalBus';
 
-/** The tab in front, per project, for the whole app session (the list itself lives in the main process). */
-const activeTerminal = new Map<string, string>();
+export { addTerminal };
+
 /** Projects whose Terminal tab already opened its first shell by itself this app session. */
 const autoOpened = new Set<string>();
-
-/** A terminal the main process opened (Run button, an agent's run_in_terminal): bring its tab forward. */
-export function addTerminal(projectId: string, ptyId: string) {
-  activeTerminal.set(projectId, ptyId);
-  window.dispatchEvent(new CustomEvent('olympus:terminal-added', { detail: { projectId, ptyId } }));
-}
 
 const dotClass = (t: TerminalView) => (t.alive ? 'live' : t.restored ? 'stopped' : t.exitCode && t.exitCode !== 0 ? 'fail' : 'done');
 const stateText = (t: TerminalView) =>

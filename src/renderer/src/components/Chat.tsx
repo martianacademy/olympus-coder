@@ -9,10 +9,10 @@ import {
   ChevronRight,
   CornerLeftUp,
   Folder,
-  GitBranch,
   History,
   Radio,
   ShieldAlert,
+  Split,
 } from 'lucide-react';
 import { lastTurnTimestamp, threadHasConversation } from '@shared/freshCarryover';
 import type { AgentDef, AgentStatus, Project, SessionView, Thread, ThreadItem } from '@shared/types';
@@ -29,7 +29,7 @@ import { isCompacting } from './CompactButton';
 import { ContextResetRow } from './FreshContextButton';
 import { Markdown, normalizeMath } from './ChatMarkdown';
 import { MessageParts } from './RichContent';
-import { openViewer } from './MediaViewer';
+import { openViewer } from '../mediaViewerApi';
 import { MsgActions } from './MsgActions';
 import { PromptChip, ReplyChip, SessionStatsButton } from './TokenStats';
 import { TurnBar } from './TurnChanges';
@@ -37,6 +37,7 @@ import { WorkGroup } from './WorkGroup';
 import { BackgroundBar, WorkingIndicator } from './Working';
 import { ElicitationCard } from './ElicitationCard';
 import { CompactionRow, NoticeRow, PlanDocBlock } from './SessionUpdateRows';
+import { isRemoteBrowser } from '../responsive';
 import { useStickToBottom } from '../useStickToBottom';
 import { doneOpening, useOpeningThread } from '../openingThread';
 import { ChatSkeleton } from './Skeleton';
@@ -45,8 +46,13 @@ import { WorktreeChip, WorktreeToggle } from './WorktreeChatBits';
 
 export { Markdown, normalizeMath };
 
-const INITIAL_GROUP_WINDOW = 80;
-const WINDOW_STEP = 120;
+const INITIAL_GROUP_WINDOW_DESKTOP = 80;
+const INITIAL_GROUP_WINDOW_PHONE = 24;
+const WINDOW_STEP_DESKTOP = 120;
+const WINDOW_STEP_PHONE = 60;
+const isPhoneWindow = () => typeof window !== 'undefined' && (isRemoteBrowser() || window.innerWidth <= 600);
+const initialGroupWindow = () => (isPhoneWindow() ? INITIAL_GROUP_WINDOW_PHONE : INITIAL_GROUP_WINDOW_DESKTOP);
+const windowStep = () => (isPhoneWindow() ? WINDOW_STEP_PHONE : WINDOW_STEP_DESKTOP);
 
 export function Chat(props: {
   thread: Thread;
@@ -93,9 +99,9 @@ export function Chat(props: {
   const compacting = useMemo(() => isCompacting(thread.items, running), [thread.items, running]);
   // First group rendered. Fixed when the chat opens and lowered by "Show earlier messages"; new groups are added
   // at the end without dropping old ones from the top, so what the user is reading never shifts under them.
-  const [firstShown, setFirstShown] = useState(() => Math.max(0, groups.length - INITIAL_GROUP_WINDOW));
+  const [firstShown, setFirstShown] = useState(() => Math.max(0, groups.length - initialGroupWindow()));
   useEffect(() => {
-    setFirstShown(Math.max(0, groupItems(thread.items).length - INITIAL_GROUP_WINDOW));
+    setFirstShown(Math.max(0, groupItems(thread.items).length - initialGroupWindow()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
   const startIdx = Math.min(firstShown, Math.max(0, groups.length - 1));
@@ -106,7 +112,7 @@ export function Chat(props: {
     const el = scroller.current;
     pause();
     prevBottomRef.current = el ? el.scrollHeight - el.scrollTop : 0;
-    setFirstShown((f) => Math.max(0, f - WINDOW_STEP));
+    setFirstShown((f) => Math.max(0, f - windowStep()));
   }, [pause]);
 
   useLayoutEffect(() => {
@@ -181,7 +187,7 @@ export function Chat(props: {
         </div>
         <SessionStatsButton thread={thread} usage={session?.usage} agentDefs={props.agentDefs} />
         <button className="btn ghost icon head-fork-btn" title="Fork: start a new sub-session from this whole chat" onClick={() => props.onFork()}>
-          <GitBranch size={16} />
+          <Split size={16} className="fork-icon" />
         </button>
         {props.headerRight}
       </div>
@@ -318,7 +324,8 @@ const NOOP_FORK = () => {};
 /** A chat's messages, read-only: the Tasks panel uses it to show a sub-session's work live. */
 export function Transcript({ thread, agentDefs, running }: { thread: Thread; agentDefs: Record<string, AgentDef>; running: boolean }) {
   const groups = useMemo(() => groupItems(thread.items), [thread.items]);
-  const shown = groups.length > INITIAL_GROUP_WINDOW ? groups.slice(groups.length - INITIAL_GROUP_WINDOW) : groups;
+  const win = initialGroupWindow();
+  const shown = groups.length > win ? groups.slice(groups.length - win) : groups;
   return (
     <div className="transcript compact">
       {shown.map((g, i, all) => {

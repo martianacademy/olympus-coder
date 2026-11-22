@@ -4,16 +4,25 @@ import type { UpdateInfo } from '@shared/types';
 import { api, onEvent } from '../api';
 import { isRemoteBrowser } from '../responsive';
 
+/** This window's own entry script as built (`index-D2gIn503.js`); undefined in dev, where Vite serves sources. */
+function ownEntry(): string | undefined {
+  const src = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src ?? '';
+  return /\/assets\/([^/?#]+\.js)(?:[?#]|$)/.exec(src)?.[1];
+}
+
 /**
  * Tells the user when this window and the app behind it are different versions, which happens when a new
  * version is installed while Olympus keeps running (e.g. after "Keep running" on quit, only the window is
- * reopened): new parts of the window then don't work. Offers a restart into the installed version.
+ * reopened): new parts of the window then don't work. When the main process code changed it offers a restart
+ * into the installed version; when only the window's code changed, a reload is enough and agents and terminals
+ * keep running (src/main/buildInfo.ts).
  * Otherwise, when GitHub has a newer release (src/main/updates.ts): a notice with links, or in auto mode the download
  * progress and "ready — restart to update". A phone shows the notice only.
  */
 export function UpdateBanner() {
-  const [state, setState] = useState<'ok' | 'updated' | 'mismatch'>('ok');
-  const [hidden, setHidden] = useState(false);
+  const [state, setState] = useState<'ok' | 'updated' | 'reload' | 'mismatch'>('ok');
+  /** The notice dismissed with "Later": hidden until a different one is due. */
+  const [hiddenFor, setHiddenFor] = useState<string>();
   const [release, setRelease] = useState<UpdateInfo | null>(null);
   /** "Later" on "ready": hidden for this window session. */
   const [laterFor, setLaterFor] = useState<string>();
@@ -21,33 +30,49 @@ export function UpdateBanner() {
     const check = () =>
       void window.desk
         .invoke('app.buildInfo')
-        .then((b: { updated: boolean }) => setState(b.updated ? 'updated' : 'ok'))
+        .then((b: { updated: boolean; entries?: Record<string, string> }) => {
+          const own = ownEntry();
+          const onDisk = b.entries?.[isRemoteBrowser() ? 'remote.html' : 'index.html'];
+          setState(b.updated ? 'updated' : own && onDisk && own !== onDisk ? 'reload' : 'ok');
+        })
         // An app too old to know this method is behind this window.
         .catch((e: any) => /Unknown method/.test(String(e?.message ?? e)) && setState('mismatch'));
     check();
     const t = setInterval(check, 60_000);
-    return () => clearInterval(t);
+    // Coming back to the window (e.g. after an install) checks at once.
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', check);
+    };
   }, []);
   useEffect(() => {
     void api.currentUpdate().then(setRelease, () => {});
     return onEvent((channel, payload) => channel === 'update:available' && setRelease(payload));
   }, []);
 
-  if (state !== 'ok' && !hidden)
+  if (state !== 'ok' && hiddenFor !== state)
     return (
-      <div className="update-banner" role="status">
+      <div className="update-banner" role="status" data-testid={`update-${state}`}>
         <RefreshCw size={14} />
         <span className="grow">
           {state === 'updated'
             ? 'A new version of Olympus is installed. Restart to use it — running agents and terminals stop.'
-            : 'Olympus kept running from an older version, so some parts of this window may not work. Quit Olympus fully (⌘Q → "Quit and stop them") and open it again.'}
+            : state === 'reload'
+              ? 'A new version of this window is installed. Reload to use it — agents and terminals keep running.'
+              : 'Olympus kept running from an older version, so some parts of this window may not work. Quit Olympus fully (⌘Q → "Quit and stop them") and open it again.'}
         </span>
         {state === 'updated' && (
           <button className="btn small primary" onClick={() => void window.desk.invoke('app.restart')}>
             Restart
           </button>
         )}
-        <button className="btn ghost icon" title="Later" onClick={() => setHidden(true)}>
+        {state === 'reload' && (
+          <button className="btn small primary" onClick={() => location.reload()}>
+            Reload
+          </button>
+        )}
+        <button className="btn ghost icon" title="Later" onClick={() => setHiddenFor(state)}>
           <X size={13} />
         </button>
       </div>

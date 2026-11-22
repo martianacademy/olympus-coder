@@ -27,6 +27,7 @@ import { clearNotes, deleteNote, listNotes } from './usernotes';
 import { relayLink } from './relay';
 import { cleanUpCheckpoints, forgetCheckpoints } from './checkpoints';
 import { detectTestCommand } from './testcmd';
+import { createBuildInfo } from './buildInfo';
 import { isMuted, notifyAgent } from './appmsg';
 import { detectVerifyCommand, effectiveVerifyCommand, evaluateTurnVerifyGate, resetVerifyRetries, runVerifyCommand } from './verifyGate';
 import { initSavedCommands, savedCommandHandlers, savedCommandsQuitting } from './savedCommands';
@@ -67,14 +68,8 @@ const TEST_HIDDEN = process.env.OLYMPUS_TEST_HIDDEN === '1';
 const HEADLESS = process.env.OLYMPUS_HEADLESS === '1';
 
 const APP_NAME = 'Olympus Coder';
-/** When this app's main code was built (mtime of this file at start), to notice a newer install on disk. */
-const RUNNING_BUILD = (() => {
-  try {
-    return statSync(fileURLToPath(import.meta.url)).mtimeMs;
-  } catch {
-    return 0;
-  }
-})();
+/** The running code vs. what is installed on disk now: restart (main/preload changed) or just reload the window. */
+const buildInfo = createBuildInfo(dirname(fileURLToPath(import.meta.url)));
 app.setName(APP_NAME);
 // Keep data in "Olympus Coder" (tests pass their own --user-data-dir), and carry over settings, app password
 // and keys from the app's first name, AgentDesk.
@@ -571,16 +566,8 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'acpSessions.setHomeOption': (agentId: string, configId: string, value: string) => acpSessions.setHomeOption(agentId, configId, value),
 
   'chat.ensure': (threadId: string) => agents.ensureSession(threadId),
-  /** The app's code as loaded now vs. on disk: they differ after a new version was installed under a running app. */
-  'app.buildInfo': () => {
-    let onDisk = RUNNING_BUILD;
-    try {
-      onDisk = statSync(fileURLToPath(import.meta.url)).mtimeMs;
-    } catch {
-      /* keep running build */
-    }
-    return { running: RUNNING_BUILD, onDisk, updated: Math.abs(onDisk - RUNNING_BUILD) > 1000 };
-  },
+  /** The app's code as loaded now vs. on disk, after a new version was installed under a running app (buildInfo.ts). */
+  'app.buildInfo': () => buildInfo(),
   /** Restart into the installed version (the quit warning still asks if work is running). */
   'app.restart': () => {
     app.relaunch();

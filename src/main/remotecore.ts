@@ -2,7 +2,8 @@ import { app } from 'electron';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AppState, RemoteDevice, Settings } from '@shared/types';
+import type { AppState, RemoteDevice, Settings, Thread } from '@shared/types';
+import { slimThreadForRemote } from '@shared/slimThread';
 import { getSettings } from './store';
 
 /**
@@ -134,6 +135,13 @@ export async function remoteCall(method: string, args: unknown): Promise<{ ok: b
       return { ok: true, value: value ?? null };
     }
     const value = await handlers[method](...list);
+    if (method === 'threads.get' && value && typeof value === 'object' && (value as { thread?: Thread }).thread) {
+      const res = value as { thread: Thread; [k: string]: unknown };
+      return { ok: true, value: { ...res, thread: slimThreadForRemote(res.thread) } };
+    }
+    if (method === 'tasks.thread' && value && typeof value === 'object' && Array.isArray((value as Thread).items)) {
+      return { ok: true, value: slimThreadForRemote(value as Thread) };
+    }
     return { ok: true, value: value ?? null };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? String(e) };

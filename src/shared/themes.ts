@@ -70,6 +70,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   thinkingOpacity: 70,
   thinkingSize: 95,
   stepsSize: 'default',
+  liveStepFade: 40,
   chatWidth: 'default',
   sidebarProjectGap: 2,
   sidebarRowGap: 0,

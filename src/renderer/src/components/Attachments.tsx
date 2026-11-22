@@ -22,9 +22,9 @@ import { api } from '../api';
 import { readCopiedMessage, readSystemMessage, type CopiedMessage } from '../clipboard';
 import { addDraftFiles, removeDraftFile, setDraftText, updateDraftFilePreview, useDraft } from '../drafts';
 import { downloadFileRef } from './InlineFilePreviews';
-import { viewerAttrs, viewerKindOf } from './MediaViewer';
+import { openViewer, viewerAttrs, viewerKindOf } from '../mediaViewerApi';
 import { AddToMessageButton, useComposerTarget } from './AddToMessage';
-import { canAnnotate, openAnnotator } from './Annotator';
+import { canAnnotate, openAnnotator } from '../annotateApi';
 
 const fmtSize = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -186,6 +186,10 @@ export function useAttachments(draftKey: string) {
     remove: (path: string) => removeDraftFile(draftKey, path),
     /** "Mark up" on an image / video card: the marked copy joins this draft next to the original. */
     annotate: (a: AttachmentView) => openAnnotator({ path: a.path, name: a.name, mime: a.mime }, { draftKey }),
+    /** A click on a draft card: images and videos open in the media sheet like sent ones (its Mark up adds the copy to
+     *  this draft); other files open in the side panel. */
+    open: (a: AttachmentView, el: HTMLElement, openInPanel: (ref: string) => void) =>
+      canAnnotate(a.mime) ? openViewer({ ref: a.path, from: el, name: a.name, mime: a.mime, draftKey, openInPanel }) : openInPanel(a.path),
     addRawFiles: (list: File[]) => void addFiles(draftKey, list),
     pick: async () => {
       const targetKey = draftKey;

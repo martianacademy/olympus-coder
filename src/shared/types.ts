@@ -541,6 +541,8 @@ export interface ThemeSettings {
   thinkingSize?: number;
   /** Text size of the steps between replies (WorkGroup rows, BASH / RESULT and file boxes), relative to chat text. */
   stepsSize?: StepsSize;
+  /** Right-edge fade width in px for overflowing text in running tool steps (`0` = off, falls back to ellipsis; default `40`). */
+  liveStepFade?: number;
   /** Width of the chat column, composer and banners. */
   chatWidth?: ChatWidth;
 

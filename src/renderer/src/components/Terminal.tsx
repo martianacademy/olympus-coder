@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { api, onEvent, remoteWatch } from '../api';

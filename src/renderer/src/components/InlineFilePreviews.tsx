@@ -15,7 +15,7 @@ import {
 import type { FilePreview } from '@shared/types';
 import { api } from '../api';
 import { isRemoteBrowser } from '../responsive';
-import { openViewer, viewerAttrs, viewerKindOf, type ViewerKind } from './MediaViewer';
+import { openViewer, viewerAttrs, viewerKindOf, type ViewerKind } from '../mediaViewerApi';
 import { AddToMessageButton } from './AddToMessage';
 
 const RICH_EXT = new Set([

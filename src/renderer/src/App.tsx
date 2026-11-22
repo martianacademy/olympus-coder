@@ -1,23 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
 import type { AgentDef, AgentStatus, AppState, AttachmentView, DeskEvents, Project, RunningTask, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import { api, onEvent, remoteWatch } from './api';
 import { collectSubsessions } from '@shared/acpSessions';
 import { acpSessionsApi } from './acpSessionsApi';
-import { DeleteChatDialog } from './components/DeleteChatDialog';
-import { ImportSessionsDialog } from './components/ImportSessionsDialog';
 import { keys } from './platform';
 import { AgentPicker } from './components/AgentPicker';
 import { AppMain } from './components/AppMain';
 import { AppOverlays } from './components/AppOverlays';
 import { AppSidebar, type AppPage } from './components/AppSidebar';
 import { type PreviewTarget } from './components/FilePreview';
-import { LockScreen } from './components/LockScreen';
-import { Onboarding } from './components/Onboarding';
 import { type SettingsTab } from './components/Settings';
 import { ChatTasksWorkbench } from './components/TasksPanel';
-import { addTerminal, Workbench, type WorkbenchHandle, type WorkbenchTab } from './components/Workbench';
+import { addTerminal } from './terminalBus';
+import type { WorkbenchHandle, WorkbenchTab } from './components/Workbench';
 import type { PanelTool } from '@shared/panels';
+
+const DeleteChatDialog = lazy(() => import('./components/DeleteChatDialog').then((m) => ({ default: m.DeleteChatDialog })));
+const ImportSessionsDialog = lazy(() => import('./components/ImportSessionsDialog').then((m) => ({ default: m.ImportSessionsDialog })));
+const LockScreen = lazy(() => import('./components/LockScreen').then((m) => ({ default: m.LockScreen })));
+const Onboarding = lazy(() => import('./components/Onboarding').then((m) => ({ default: m.Onboarding })));
+const Workbench = lazy(() => import('./components/Workbench').then((m) => ({ default: m.Workbench })));
 import { OpenFileContext, RunCommandContext } from './fileLinks';
 import { isRemoteBrowser, useResponsiveShell } from './responsive';
 import { setActiveThread } from './threadStatus';
@@ -410,19 +413,31 @@ export default function App() {
       setWbTab(d.tab as WorkbenchTab);
     });
   };
+  const [detachedPanels, setDetachedPanels] = useState<PanelTool[]>([]);
+  useEffect(() => {
+    if (!api.panels.available()) return;
+    api.panels.list().then(setDetachedPanels).catch(() => {});
+  }, []);
   useEffect(
     () =>
       onEvent((channel, payload) => {
-        if (channel === 'panel:closed' && (payload as DeskEvents['panel:closed']).reattach) {
-          setWbTab((payload as DeskEvents['panel:closed']).tool);
-          setWbOpen(true);
+        if (channel === 'panel:closed') {
+          const closed = payload as DeskEvents['panel:closed'];
+          setDetachedPanels((prev) => prev.filter((t) => t !== closed.tool));
+          if (closed.reattach) {
+            setWbTab(closed.tool);
+            setWbOpen(true);
+          }
         }
         if (channel === 'panel:show') panelShow.current(payload as DeskEvents['panel:show']);
       }),
     [],
   );
   const detachTool = useCallback((tool: PanelTool, url?: string) => {
-    api.panels.detach(tool, url).catch((e) => alert(e?.message ?? String(e)));
+    api.panels
+      .detach(tool, url)
+      .then((list) => setDetachedPanels(list))
+      .catch((e) => alert(e?.message ?? String(e)));
   }, []);
 
   const agentDefs = useMemo(() => Object.fromEntries(agents.defs.map((d) => [d.id, d])), [agents.defs]);
@@ -455,9 +470,19 @@ export default function App() {
   }, []);
 
   if (!state) return null;
-  if (locked) return <LockScreen lock={state.lock} onUnlocked={() => void loadAll()} />;
+  if (locked) {
+    return (
+      <Suspense fallback={null}>
+        <LockScreen lock={state.lock} onUnlocked={() => void loadAll()} />
+      </Suspense>
+    );
+  }
   if (!state.settings.onboarded) {
-    return <Onboarding state={state} onState={setState} onDone={async () => { await updateSettings({ onboarded: true }); await loadAll(); }} />;
+    return (
+      <Suspense fallback={null}>
+        <Onboarding state={state} onState={setState} onDone={async () => { await updateSettings({ onboarded: true }); await loadAll(); }} />
+      </Suspense>
+    );
   }
 
   const baseProject = active ? (active.projectId === 'general' ? general ?? undefined : projects.find((p) => p.id === active.projectId)) : undefined;
@@ -552,6 +577,7 @@ export default function App() {
             picker={picker}
             wbOpen={wbOpen}
             wbTab={wbTab}
+            detachedTools={detachedPanels}
             isSheetWorkbench={isSheetWorkbench}
             showThread={showThread}
             codeWorkbench={codeWorkbench}
@@ -581,26 +607,29 @@ export default function App() {
               {!isSheetWorkbench && <div className="resizer wb-resizer" onMouseDown={startWorkbenchResize} title="Drag to resize" />}
               <div className={`workbench-col ${isSheetWorkbench ? 'is-sheet' : ''}`} style={isSheetWorkbench ? undefined : { width: panelWidth }}>
                 {codeWorkbench ? (
-                  <Workbench
-                    ref={workbench}
-                    project={project}
-                    thread={active}
-                    agentDef={active ? agentDefs[active.agentId] : undefined}
-                    agentDefs={agentDefs}
-                    agentStatus={active ? agents.statuses[active.agentId] : undefined}
-                    session={session}
-                    onOpenThread={openThreadById}
-                    onFork={() => forkActive()}
-                    preview={preview}
-                    onClosePreview={closePreview}
-                    tab={wbTab}
-                    onTab={setWbTab}
-                    onClose={() => setWbOpen(false)}
-                    dark={dark}
-                    refreshKey={refreshKey}
-                    onDetach={api.panels.available() ? detachTool : undefined}
-                    onThreadChanged={() => active && void openThread(active.id)}
-                  />
+                  <Suspense fallback={<div className="workbench"><div className="muted small" style={{ padding: 16 }}>Loading…</div></div>}>
+                    <Workbench
+                      ref={workbench}
+                      project={project}
+                      thread={active}
+                      agentDef={active ? agentDefs[active.agentId] : undefined}
+                      agentDefs={agentDefs}
+                      agentStatus={active ? agents.statuses[active.agentId] : undefined}
+                      session={session}
+                      onOpenThread={openThreadById}
+                      onFork={() => forkActive()}
+                      preview={preview}
+                      onClosePreview={closePreview}
+                      tab={wbTab}
+                      onTab={setWbTab}
+                      onClose={() => setWbOpen(false)}
+                      dark={dark}
+                      refreshKey={refreshKey}
+                      onDetach={api.panels.available() ? detachTool : undefined}
+                      detachedTools={detachedPanels}
+                      onThreadChanged={() => active && void openThread(active.id)}
+                    />
+                  </Suspense>
                 ) : (
                   active && (
                     <ChatTasksWorkbench
@@ -662,28 +691,30 @@ export default function App() {
             totalChats={Object.values(threads).reduce((n, l) => n + l.length, 0)}
             onUpdateSettings={(patch) => void updateSettings(patch)}
           />
-          {deleting && (
-            <DeleteChatDialog
-              thread={deleting}
-              initialSubsessions={collectSubsessions(threads[deleting.projectId] ?? [], deleting.id).map((s) => ({ id: s.id, title: s.title }))}
-              agents={agents}
-              onCancel={() => setDeleting(null)}
-              onDeleted={() => void afterDelete(deleting)}
-            />
-          )}
-          {importFor && (
-            <ImportSessionsDialog
-              projectId={importFor.id}
-              projectName={importFor.name}
-              agents={agents}
-              agentId={currentAgent}
-              onClose={() => setImportFor(null)}
-              onOpen={(meta) => {
-                setImportFor(null);
-                void loadThreads(meta.projectId).then(() => openThread(meta.id));
-              }}
-            />
-          )}
+          <Suspense fallback={null}>
+            {deleting && (
+              <DeleteChatDialog
+                thread={deleting}
+                initialSubsessions={collectSubsessions(threads[deleting.projectId] ?? [], deleting.id).map((s) => ({ id: s.id, title: s.title }))}
+                agents={agents}
+                onCancel={() => setDeleting(null)}
+                onDeleted={() => void afterDelete(deleting)}
+              />
+            )}
+            {importFor && (
+              <ImportSessionsDialog
+                projectId={importFor.id}
+                projectName={importFor.name}
+                agents={agents}
+                agentId={currentAgent}
+                onClose={() => setImportFor(null)}
+                onOpen={(meta) => {
+                  setImportFor(null);
+                  void loadThreads(meta.projectId).then(() => openThread(meta.id));
+                }}
+              />
+            )}
+          </Suspense>
         </div>
       </RunCommandContext.Provider>
     </OpenFileContext.Provider>

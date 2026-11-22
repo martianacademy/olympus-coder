@@ -48,8 +48,30 @@ const watched = { thread: new Map<string, number>(), pty: new Map<string, number
 let resync = new Set<string>();
 /** ...and until that full copy comes, their patches are skipped (they belong to a copy we don't have). */
 const awaitingFull = new Set<string>();
+/** Deduplicates fallback `tasks.thread` fetches per thread so concurrent patch misses never download the chat N times. */
+const resyncInFlight = new Set<string>();
 let viewTimer: number | undefined;
 let sendViewNow: (v: Record<string, unknown>) => void = () => {};
+
+/**
+ * Seeds the local patch-base cache from `threads.get` / `tasks.thread` responses so incoming `thread:patch`
+ * events on a freshly opened running chat apply directly instead of triggering a redundant full-chat download.
+ */
+function seedThreadItems(method: string, value: any) {
+  const thread = method === 'threads.get' ? value?.thread : method === 'tasks.thread' ? value : null;
+  if (!thread?.id || !Array.isArray(thread.items)) return;
+  const list = thread.items;
+  const start = Math.max(0, list.length - 400);
+  for (let i = start; i < list.length; i++) {
+    const it = list[i];
+    if (!it?.id) continue;
+    const k = `${thread.id}\n${it.id}`;
+    awaitingFull.delete(k);
+    items.delete(k);
+    items.set(k, it);
+  }
+  while (items.size > MAX_ITEMS) items.delete(items.keys().next().value as string);
+}
 
 function viewBody() {
   // In the background (another app, screen off) terminals get no output; their scrollback is sent when the page is
@@ -91,17 +113,27 @@ function deliver(ch: string, p: any) {
     if (awaitingFull.has(k)) return;
     const base = items.get(k);
     if (!base) {
-      // No copy to patch: ask the Mac for the full item, and show the saved one meanwhile (not as a patch base).
+      // No copy to patch: ask the Mac for the full item, and deduplicate the fallback fetch per thread.
       awaitingFull.add(k);
       resync.add(k);
       pushView();
-      void (window as any).desk
-        .invoke('tasks.thread', p.threadId)
-        .then((t: any) => {
-          const it = t?.items?.find((x: any) => x.id === p.id);
-          if (it && awaitingFull.has(k)) emitLocal('thread:item', { threadId: p.threadId, item: it });
-        })
-        .catch(() => {});
+      if (!resyncInFlight.has(p.threadId)) {
+        resyncInFlight.add(p.threadId);
+        void (window as any).desk
+          .invoke('tasks.thread', p.threadId)
+          .then((t: any) => {
+            const list = t?.items;
+            if (!Array.isArray(list)) return;
+            for (const it of list) {
+              const ik = `${p.threadId}\n${it?.id ?? ''}`;
+              if (it?.id && awaitingFull.has(ik)) emitLocal('thread:item', { threadId: p.threadId, item: it });
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            resyncInFlight.delete(p.threadId);
+          });
+      }
       return;
     }
     return deliver('thread:item', { threadId: p.threadId, item: applyItemPatch(base, p.p as ItemPatch) });
@@ -268,7 +300,12 @@ const b64u = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
-const unb64u = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+const unb64u = (s: string) => {
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
 
 async function aesKey(raw: Uint8Array) {
   return crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, ['encrypt', 'decrypt']);
@@ -316,7 +353,7 @@ let retryTimer: number | undefined;
 let pingTimer: number | undefined;
 /** Session: the secret we picked (handshake) and then the derived key. */
 let hs: { sk: Uint8Array } | null = null;
-let sess: { key: CryptoKey; inQ: number; outQ: number; parts?: { id: string; n: number; got: string[] } } | null = null;
+let sess: { key: CryptoKey; inQ: number; outQ: number; parts?: { id: string; n: number; got: string[]; count: number } } | null = null;
 let chain: Promise<void> = Promise.resolve();
 let reason: 'new' | 'locked' = 'new';
 let macName = '';
@@ -394,9 +431,10 @@ async function onBlob(blob: string) {
   let m: any;
   if (f.part) {
     const { id, i, n } = f.part;
-    if (!sess.parts || sess.parts.id !== id) sess.parts = { id, n, got: [] };
+    if (!sess.parts || sess.parts.id !== id) sess.parts = { id, n, got: new Array(n), count: 0 };
+    if (sess.parts.got[i] === undefined) sess.parts.count++;
     sess.parts.got[i] = f.m;
-    if (sess.parts.got.filter((x) => x !== undefined).length < sess.parts.n) return;
+    if (sess.parts.count < sess.parts.n) return;
     m = JSON.parse(sess.parts.got.join(''));
     sess.parts = undefined;
   } else m = JSON.parse(f.m);
@@ -555,8 +593,15 @@ sendViewNow = isRelay
     }
   : sendViewLocal;
 
+const rawInvoke = isRelay ? (method: string, ...args: unknown[]) => request({ t: 'call', method, args }) : invokeLocal;
+const invoke = async (method: string, ...args: unknown[]) => {
+  const value = await rawInvoke(method, ...args);
+  if (method === 'threads.get' || method === 'tasks.thread') seedThreadItems(method, value);
+  return value;
+};
+
 (window as any).desk = {
-  invoke: isRelay ? (method: string, ...args: unknown[]) => request({ t: 'call', method, args }) : invokeLocal,
+  invoke,
   on: (fn: Listener) => {
     listeners.add(fn);
     return () => listeners.delete(fn);

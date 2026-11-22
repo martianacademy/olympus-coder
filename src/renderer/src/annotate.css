@@ -1,51 +1,9 @@
-/* Mark up images and video frames (`components/Annotator.tsx`): a centered sheet (90% of the window) floating
-   over a translucent blurred backdrop, instead of the old full-window takeover. */
+/* Mark up images and video frames (`components/Annotator.tsx`). The frame — a centered sheet over a blurred
+   backdrop — is the shared media sheet (`components/Sheet.tsx`, `sheet.css`); this file styles what is inside it. */
 
-.an-root {
-  position: fixed;
-  inset: 0;
-  z-index: 9100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 10, 12, 0.45);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  outline: none;
-  animation: an-in 0.14s ease-out;
-  overscroll-behavior: contain;
-}
-.an-root[hidden] { display: none; }
-@keyframes an-in {
-  from { opacity: 0; }
-}
+/* Above the viewer, which can open mark-up from its own bar. */
+.sheet-root.an-root { z-index: 9100; }
 
-.an-sheet {
-  width: 90%;
-  height: 90%;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 8px);
-  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
-}
-@media (max-width: 600px) {
-  .an-sheet { width: 94%; height: 92%; }
-}
-
-.an-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 48px;
-  padding: env(safe-area-inset-top, 0px) 10px 0 8px;
-  box-sizing: content-box;
-  border-bottom: 1px solid var(--hairline);
-}
 .an-title {
   flex: 1;
   min-width: 0;

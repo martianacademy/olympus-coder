@@ -114,7 +114,7 @@ export function AcpTerminalBox({
       {shownCommand && (
         <div className={`step-box cmd-box cmd-bash-box ${errCls} ${cmdCap.expanded ? 'is-expanded' : ''}`} data-box-kind="command">
           <div className="step-box-head">
-            <span className="cmd-box-label">BASH</span>
+            <span className="cmd-box-label">COMMAND</span>
             {term?.cwd && (
               <span className="step-box-meta acp-term-cwd" title={term.cwd}>
                 {term.cwd.split(/[\\/]/).filter(Boolean).pop()}
@@ -149,7 +149,7 @@ export function AcpTerminalBox({
 
       <div className={`step-box cmd-box cmd-result-box ${errCls} ${outCap.expanded ? 'is-expanded' : ''}`} data-box-kind="command">
         <div className="step-box-head">
-          <span className="cmd-box-label">RESULT</span>
+          <span className="cmd-box-label">RESPONSE</span>
           <span className="grow" />
           {status}
           <span className="step-box-actions">

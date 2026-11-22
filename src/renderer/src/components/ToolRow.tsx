@@ -137,7 +137,7 @@ function CommandTerminalBox({
         data-box-kind="command"
       >
         <div className="step-box-head">
-          <span className="cmd-box-label">BASH</span>
+          <span className="cmd-box-label">COMMAND</span>
           <span className="grow" />
           <span className="step-box-actions">
             {runInTerminal && <RunAction command={parsed.command} onRun={runInTerminal} />}
@@ -162,7 +162,7 @@ function CommandTerminalBox({
         data-box-kind="command"
       >
         <div className="step-box-head">
-          <span className="cmd-box-label">RESULT</span>
+          <span className="cmd-box-label">RESPONSE</span>
           <span className="grow" />
           {failed && (
             <span className="step-box-meta cmd-box-err-meta">
@@ -198,7 +198,7 @@ function CommandTerminalBox({
               />
             )}
             {formattedOutput && (
-              <CopyBoxButton text={formattedOutput} label="Copy" tip="Copy result output" testId="cmd-box-copy-out" />
+              <CopyBoxButton text={formattedOutput} label="Copy" tip="Copy the response" testId="cmd-box-copy-out" />
             )}
             {(outCap.overflows || outCap.expanded) && (
               <ExpandBoxButton expanded={outCap.expanded} onToggle={outCap.toggle} testId="cmd-result-expand" />

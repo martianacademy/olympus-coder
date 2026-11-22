@@ -80,6 +80,7 @@ code, pre, kbd { font-family: var(--code-font); }
 .thread-row .row-actions { display: none; }
 .thread-row:hover .row-actions { display: flex; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fork-icon { transform: rotate(180deg); }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
 .main-head {
@@ -938,6 +939,15 @@ html:not([data-platform='darwin']) .app.sb-collapsed .main-head { padding-left: 
 .done-list { display: flex; flex-direction: column; gap: 10px; }
 .done-group { display: flex; flex-direction: column; }
 .done-group-head { display: flex; align-items: baseline; gap: 8px; font-size: .78em; color: var(--muted); padding: 0 4px 4px; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); margin-bottom: 2px; min-width: 0; }
+/* Folded by default: one line per message (text · steps · failed · when); a click opens its steps. */
+button.done-group-head { width: 100%; align-items: center; background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 6px 6px 0 0; padding: 6px 4px; margin: 0; font: inherit; font-size: .8em; text-align: left; cursor: pointer; color: var(--muted); }
+button.done-group-head:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+button.done-group-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.done-group-text { color: color-mix(in srgb, var(--text) 82%, var(--muted)); }
+.done-chevron { flex: none; color: var(--muted); }
+.done-group-count { flex: none; font-size: .92em; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--text) 7%, transparent); font-variant-numeric: tabular-nums; }
+.done-group-failed { flex: none; font-size: .92em; color: var(--danger); }
+.done-group:not(.open) + .done-group { margin-top: -4px; }
 .done-when { flex: none; font-variant-numeric: tabular-nums; font-size: .95em; }
 .done-row { border-radius: 6px; }
 .done-row.open { background: color-mix(in srgb, var(--text) 3.5%, transparent); }

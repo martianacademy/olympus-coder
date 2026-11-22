@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Code2, CornerLeftUp, GitBranch, Loader2, ShieldAlert, Workflow, X } from 'lucide-react';
+import { Code2, CornerLeftUp, Loader2, ShieldAlert, Split, Workflow, X } from 'lucide-react';
 import type { AgentDef, ContextUsage, ProcAction, RunningTask, SubTaskView, Thread } from '@shared/types';
 import { api, onEvent } from '../api';
 import { everyWhileVisible, useVisibleInterval } from '../visibility';
@@ -116,7 +116,6 @@ export function TasksPanel(props: {
   const [openId, setOpenId] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const [allProcs, setProcs, procsLoaded] = useProcs();
-  const [showAllDone, setShowAllDone] = useState(false);
   const now = liveNow(thread);
   const childIdSet = new Set(data.children.map((c) => c.meta.id));
   const parentProcs = allProcs.filter((p) => (p.source === 'agent' ? p.threadId === thread.id : p.projectId === thread.projectId || p.projectId === workspaceProjectId(thread)));
@@ -269,19 +268,14 @@ export function TasksPanel(props: {
             <span className="count">{done.length + doneChildren.length}</span>
           </div>
           {doneChildren.map(card)}
-          <DoneList thread={thread} items={done} rel={rel} limit={showAllDone ? Infinity : 12} />
-          {done.length > 12 && !showAllDone && (
-            <button className="btn ghost small muted done-more" onClick={() => setShowAllDone(true)}>
-              Show {done.length - 12} more
-            </button>
-          )}
+          <DoneList thread={thread} items={done} rel={rel} />
         </div>
       )}
 
       {!data.children.length && !thread.parentId && (
         <p className="tasks-hint small muted">
           <Workflow size={13} /> Sub-sessions and native CLI sub-agents run in parallel and show up here live. You can also fork this chat yourself (
-          <GitBranch size={11} />
+          <Split size={11} className="fork-icon" />
           ).
         </p>
       )}
@@ -330,7 +324,7 @@ export function ChatTasksWorkbench(props: {
             aria-label="Fork chat"
             onClick={props.onFork}
           >
-            <GitBranch size={16} />
+            <Split size={16} className="fork-icon" />
           </button>
         )}
         <button className="btn ghost icon" title="Close panel" aria-label="Close panel" data-testid="wb-close" onClick={props.onClose}>

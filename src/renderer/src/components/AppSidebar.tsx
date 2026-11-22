@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { Clock, FolderOpen, FolderPlus, PanelLeftClose, Search, Settings as SettingsIcon, SquarePen } from 'lucide-react';
 import type { AgentDef, AgentStatus, Project, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import { keys } from '../platform';
@@ -56,7 +56,7 @@ export interface AppSidebarProps {
  * Following WCAG / modern navigation-drawer semantics, `role="dialog"` and `aria-modal="true"` apply only while
  * acting as an open overlay drawer on narrow viewports.
  */
-export function AppSidebar(props: AppSidebarProps) {
+export const AppSidebar = memo(function AppSidebar(props: AppSidebarProps) {
   const {
     mode,
     page,
@@ -280,4 +280,19 @@ export function AppSidebar(props: AppSidebarProps) {
       </aside>
     </>
   );
-}
+}, (a, b) =>
+  a.mode === b.mode &&
+  a.page === b.page &&
+  a.activeId === b.activeId &&
+  a.sbCollapsed === b.sbCollapsed &&
+  a.isDrawer === b.isDrawer &&
+  a.sidebarW === b.sidebarW &&
+  a.projects === b.projects &&
+  a.threads === b.threads &&
+  a.allThreads === b.allThreads &&
+  a.agentDefs === b.agentDefs &&
+  a.currentAgentStatus === b.currentAgentStatus &&
+  a.profile === b.profile &&
+  a.lockEnabled === b.lockEnabled &&
+  Boolean(a.onLocateProject) === Boolean(b.onLocateProject),
+);

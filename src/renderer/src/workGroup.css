@@ -93,6 +93,21 @@
   font-size: calc(12px * var(--steps-scale, 1));
 }
 
+/* Running group header: fade overflowing commands/text cleanly on the right edge (Settings → Appearance → Chat & Reading). */
+.wg-live-detail {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 max(0%, calc(100% - var(--wg-live-fade, 40px))), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 max(0%, calc(100% - var(--wg-live-fade, 40px))), transparent 100%);
+}
+
+html[data-live-fade='off'] .wg-live-detail {
+  text-overflow: ellipsis;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .work-group-head:hover .wg-headline,
 .work-group-head:hover .wg-part,
 .work-group-head:hover .wg-chev {
@@ -263,6 +278,21 @@
   color: var(--wg-faint);
 }
 
+/* Running group inner rows: same right-edge fade so long commands/thoughts never end in a hard cut. */
+.work-group.is-live .work-group-body .tool-row-title[class],
+.work-group.is-live .work-group-body .wg-thought-snippet {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 max(0%, calc(100% - var(--wg-live-fade, 40px))), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 max(0%, calc(100% - var(--wg-live-fade, 40px))), transparent 100%);
+}
+
+html[data-live-fade='off'] .work-group.is-live .work-group-body .tool-row-title[class],
+html[data-live-fade='off'] .work-group.is-live .work-group-body .wg-thought-snippet {
+  text-overflow: ellipsis;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .work-group-body .tool-row-head:hover .tool-badge[class],
 .work-group-body .tool-row-head:hover .wg-verb {
   color: var(--text);
@@ -373,11 +403,108 @@
   padding: 4px 0 4px 10px;
 }
 
+/* ---------- Step / group right-side image thumbnail strip ---------- */
+
+.wg-img-strip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.wg-img-thumb {
+  position: relative;
+  flex: none;
+  width: calc(26px * var(--steps-scale, 1));
+  height: calc(19px * var(--steps-scale, 1));
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 6%, var(--bg));
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.wg-img-thumb:hover {
+  border-color: color-mix(in srgb, var(--text) 38%, transparent);
+  transform: scale(1.06);
+  z-index: 1;
+}
+
+.wg-img-thumb:focus-visible,
+.wg-img-more:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.wg-img-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.wg-img-thumb.is-loading {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.wg-img-more {
+  flex: none;
+  height: calc(19px * var(--steps-scale, 1));
+  min-width: calc(22px * var(--steps-scale, 1));
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--wg-quiet);
+  font-family: var(--ui-font);
+  font-size: calc(10.5px * var(--steps-scale, 1));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.wg-img-more:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 32%, transparent);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-img-thumb {
+    transition: border-color 0.12s ease;
+  }
+  .wg-img-thumb:hover {
+    transform: none;
+  }
+}
+
 /* ---------- Touch / narrow ---------- */
 
 @media (hover: none), (pointer: coarse) {
   .tool-group.work-group {
     --wg-row-h: max(34px, calc(34px * var(--steps-scale, 1)));
+  }
+
+  .wg-img-thumb {
+    width: max(28px, calc(28px * var(--steps-scale, 1)));
+    height: max(22px, calc(22px * var(--steps-scale, 1)));
+  }
+
+  .wg-img-more {
+    height: max(22px, calc(22px * var(--steps-scale, 1)));
+    min-width: 24px;
   }
 
   .work-group-body .tool-row-head > svg:last-child {
@@ -397,5 +524,14 @@
 @media (max-width: 600px) {
   .tool-group.work-group {
     --wg-row-h: max(34px, calc(34px * var(--steps-scale, 1)));
+  }
+
+  .wg-img-thumb {
+    width: max(26px, calc(26px * var(--steps-scale, 1)));
+    height: max(20px, calc(20px * var(--steps-scale, 1)));
+  }
+
+  .wg-img-more {
+    height: max(20px, calc(20px * var(--steps-scale, 1)));
   }
 }

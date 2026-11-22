@@ -1,16 +1,19 @@
-import type { ReactNode, RefObject } from 'react';
+import { lazy, Suspense, type ReactNode, type RefObject } from 'react';
 import { Code2, FileCode, FolderPlus, GitBranch, Info, MessageSquarePlus, PanelRightOpen, SquareTerminal, Workflow } from 'lucide-react';
+import type { PanelTool } from '@shared/panels';
 import type { AgentDef, AttachmentView, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import type { AgentsInfo } from '../App';
+import { useWorkbenchTabOrder, type CoreWbTab } from '../workbenchTabs';
 import type { AppPage } from './AppSidebar';
 import type { WorkbenchTab } from './Workbench';
 import { AppMark } from './AppMark';
 import { Chat } from './Chat';
 import { ChatHome } from './ChatHome';
 import { ProjectsPage } from './ChatNav';
-import { ScheduledView } from './ScheduledView';
 import { liveNow, useTasks } from './TasksPanel';
 import { UsagePage } from './Usage';
+
+const ScheduledView = lazy(() => import('./ScheduledView').then((m) => ({ default: m.ScheduledView })));
 
 const modeOf = (t: { mode?: UiMode }): UiMode => t.mode ?? 'code';
 
@@ -33,6 +36,7 @@ export interface AppMainProps {
   picker: ReactNode;
   wbOpen: boolean;
   wbTab: WorkbenchTab;
+  detachedTools?: PanelTool[];
   isSheetWorkbench: boolean;
   showThread: boolean;
   codeWorkbench: boolean;
@@ -111,24 +115,37 @@ export function AppMain(props: AppMainProps) {
     </button>
   );
 
+  const tabOrder = useWorkbenchTabOrder();
+  const detachedSet = new Set<string>(props.detachedTools ?? []);
+  const headToolMap: Record<CoreWbTab, [ReactNode, string]> = {
+    files: [<FileCode size={16} key="f" />, 'Files'],
+    git: [<GitBranch size={16} key="g" />, 'Git'],
+    terminal: [<SquareTerminal size={16} key="t" />, 'Terminal (Ctrl+`)'],
+    tasks: [<Workflow size={16} key="k" className={needsYou ? 'warn-text' : runningTasks ? 'pulse' : ''} />, tasksTitle],
+    info: [<Info size={16} key="i" />, 'Info'],
+  };
+  const visibleHeadTools = tabOrder.filter((tab) => !detachedSet.has(tab));
+
   const wbButtons = isSheetWorkbench ? (
     sheetDrawerButton
-  ) : codeWorkbench && !wbOpen ? (
+  ) : codeWorkbench && !wbOpen && visibleHeadTools.length > 0 ? (
     <div className="head-tools">
-      {(
-        [
-          ['files', <FileCode size={16} key="f" />, 'Files'],
-          ['git', <GitBranch size={16} key="g" />, 'Git'],
-          ['terminal', <SquareTerminal size={16} key="t" />, 'Terminal (Ctrl+`)'],
-          ['tasks', <Workflow size={16} key="k" className={needsYou ? 'warn-text' : runningTasks ? 'pulse' : ''} />, tasksTitle],
-          ['info', <Info size={16} key="i" />, 'Info'],
-        ] as const
-      ).map(([tab, icon, title]) => (
-        <button key={tab} className={`btn ghost ${tab === 'tasks' && runningTasks > 0 ? 'small' : 'icon'} ${wbOpen && wbTab === tab ? 'on' : ''}`} title={title} aria-label={title} onClick={() => props.onToggleWorkbench(tab)} data-testid={`head-wb-${tab}`}>
-          {icon}
-          {tab === 'tasks' && runningTasks > 0 && <span>{runningTasks}</span>}
-        </button>
-      ))}
+      {visibleHeadTools.map((tab) => {
+        const [icon, title] = headToolMap[tab];
+        return (
+          <button
+            key={tab}
+            className={`btn ghost ${tab === 'tasks' && runningTasks > 0 ? 'small' : 'icon'} ${wbOpen && wbTab === tab ? 'on' : ''}`}
+            title={title}
+            aria-label={title}
+            onClick={() => props.onToggleWorkbench(tab)}
+            data-testid={`head-wb-${tab}`}
+          >
+            {icon}
+            {tab === 'tasks' && runningTasks > 0 && <span>{runningTasks}</span>}
+          </button>
+        );
+      })}
     </div>
   ) : null;
 
@@ -142,13 +159,15 @@ export function AppMain(props: AppMainProps) {
           onClose={() => props.onSetPage(active ? 'thread' : mode === 'chat' ? 'home' : 'thread')}
         />
       ) : page === 'scheduled' ? (
-        <ScheduledView
-          projects={projects}
-          agentDefs={agentDefs}
-          defaultProjectId={currentProjectId}
-          defaultAgent={currentAgent}
-          onOpenThread={props.onOpenThread}
-        />
+        <Suspense fallback={<div className="muted small" style={{ padding: 24 }}>Loading…</div>}>
+          <ScheduledView
+            projects={projects}
+            agentDefs={agentDefs}
+            defaultProjectId={currentProjectId}
+            defaultAgent={currentAgent}
+            onOpenThread={props.onOpenThread}
+          />
+        </Suspense>
       ) : page === 'projects' && mode === 'chat' ? (
         <ProjectsPage
           projects={projects}

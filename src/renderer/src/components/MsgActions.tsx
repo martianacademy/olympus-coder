@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Copy, GitBranch, Loader2, Users, X } from 'lucide-react';
+import { Check, Copy, Loader2, Split, Users, X } from 'lucide-react';
 import type { AgentDef, AttachmentView } from '@shared/types';
 import { api } from '../api';
 import { copyMessage } from '../clipboard';
@@ -54,7 +54,7 @@ export function MsgActions({
         {copied === 'ok' ? <Check size={14} /> : copied === 'fail' ? <X size={14} /> : <Copy size={14} />}
       </button>
       <button className="btn ghost icon" title="Fork from here (new sub-session)" onClick={onFork}>
-        <GitBranch size={14} />
+        <Split size={14} className="fork-icon" />
       </button>
     </div>
   );

@@ -20,7 +20,7 @@ import { useOpenFile } from '../fileLinks';
 import { isRemoteBrowser } from '../responsive';
 import { Markdown } from './ChatMarkdown';
 import { downloadFileRef } from './InlineFilePreviews';
-import { isViewerTarget, openViewer, viewerAttrs } from './MediaViewer';
+import { isViewerTarget, openViewer, viewerAttrs } from '../mediaViewerApi';
 import { AddToMessageButton } from './AddToMessage';
 import { StepBox } from './StepBox';
 import '../richContent.css';

@@ -54,7 +54,10 @@ async function preview(path: string, mime: string): Promise<string | undefined> 
   if (mime.startsWith('image/')) {
     try {
       const img = nativeImage.createFromPath(path);
-      if (!img.isEmpty()) return img.resize({ width: 360 }).toDataURL();
+      if (!img.isEmpty()) {
+        // JPEG q=80 is ~10x smaller than uncompressed PNG toDataURL(), keeping phone/relay thumbnail loads snappy.
+        return `data:image/jpeg;base64,${img.resize({ width: 360 }).toJPEG(80).toString('base64')}`;
+      }
     } catch {
       /* fall through to OS thumbnailer (e.g. .heic / .svg) */
     }

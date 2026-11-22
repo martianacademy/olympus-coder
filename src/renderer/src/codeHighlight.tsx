@@ -1,8 +1,6 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Parser } from '@lezer/common';
 import { highlightCode, tagHighlighter, tags as t } from '@lezer/highlight';
-import { LanguageDescription } from '@codemirror/language';
-import { languages } from '@codemirror/language-data';
 import { MAX_HIGHLIGHT_CHARS, splitGutters, type GutterStyle } from './codeLang';
 import './codeHighlight.css';
 
@@ -40,21 +38,31 @@ const parsers = new Map<string, Parser | null>();
 const loading = new Map<string, Promise<Parser | null>>();
 const loadListeners = new Set<() => void>();
 
-function describe(lang: string): LanguageDescription | null {
-  return LanguageDescription.matchLanguageName(languages, lang, false);
+type LangRegistry = {
+  match: (lang: string) => { load: () => Promise<{ language: { parser: Parser } }> } | null;
+};
+let registryPromise: Promise<LangRegistry> | null = null;
+
+/** Lazily loads `@codemirror/language` + `@codemirror/language-data` on the first highlighted code block. */
+function getRegistry(): Promise<LangRegistry> {
+  if (!registryPromise) {
+    registryPromise = Promise.all([import('@codemirror/language'), import('@codemirror/language-data')]).then(
+      ([{ LanguageDescription }, { languages }]) => ({
+        match: (lang: string) => LanguageDescription.matchLanguageName(languages, lang, false),
+      }),
+    );
+  }
+  return registryPromise;
 }
 
 /** Starts loading the grammar for `lang` (a language-data name/alias); listeners re-render when it arrives. */
 function loadParser(lang: string): void {
   if (parsers.has(lang) || loading.has(lang)) return;
-  const desc = describe(lang);
-  if (!desc) {
-    parsers.set(lang, null);
-    return;
-  }
-  const p = desc
-    .load()
-    .then((support) => support.language.parser)
+  const p = getRegistry()
+    .then((reg) => {
+      const desc = reg.match(lang);
+      return desc ? desc.load().then((support) => support.language.parser) : null;
+    })
     .catch((err: unknown) => {
       console.warn(`[codeHighlight] could not load the ${lang} grammar`, err);
       return null;
