@@ -301,8 +301,27 @@ section.block {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
+.agent-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.logo-tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.agent-ico { width: 17px; height: 17px; object-fit: contain; flex-shrink: 0; }
+:root[data-theme="dark"] .agent-ico.mono { filter: invert(1); }
 .agent-top strong { font-size: 14px; }
 .agent-tag {
   font-family: var(--mono);

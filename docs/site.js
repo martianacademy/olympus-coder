@@ -126,20 +126,6 @@
     if (lightBtn) lightBtn.click();
   }
 
-  // Agent category filter pills
-  const filterBtns = [...document.querySelectorAll('[data-filter]')];
-  const agentCards = [...document.querySelectorAll('.agent-card')];
-  filterBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const cat = btn.dataset.filter || 'all';
-      filterBtns.forEach((b) => b.classList.toggle('active', b === btn));
-      agentCards.forEach((card) => {
-        const cats = (card.dataset.cats || '').split(' ');
-        card.classList.toggle('hidden', cat !== 'all' && !cats.includes(cat));
-      });
-    });
-  });
-
   // Phone view switcher
   const phoneImg = document.getElementById('phone-shot-img');
   const phoneBtns = [...document.querySelectorAll('[data-phone-src]')];

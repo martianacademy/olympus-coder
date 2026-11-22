@@ -113,11 +113,11 @@ brew install --cask martianacademy/tap/olympus-coder</pre>
             </div>
             <div class="handoff-stage" aria-hidden="true">
               <div class="handoff-chain">
-                <span class="node-chip"><span class="pulse-dot"></span>Antigravity <small>Investigate</small></span>
+                <span class="node-chip"><img class="agent-ico" src="logos/antigravity.svg" alt="" width="16" height="16" />Antigravity <small>Investigate</small></span>
                 <span class="flow-line"></span>
-                <span class="node-chip"><span class="pulse-dot"></span>Claude Code <small>Build</small></span>
+                <span class="node-chip"><img class="agent-ico" src="logos/claudecode.svg" alt="" width="16" height="16" />Claude Code <small>Build</small></span>
                 <span class="flow-line"></span>
-                <span class="node-chip"><span class="pulse-dot green"></span>Codex <small>Review</small></span>
+                <span class="node-chip"><img class="agent-ico" src="logos/codex.svg" alt="" width="16" height="16" />Codex <small>Review</small></span>
               </div>
               <div class="brain-bar">
                 <span>~/.olympus/memory/</span>
@@ -193,71 +193,18 @@ brew install --cask martianacademy/tap/olympus-coder</pre>
         </div>
 
         <div class="marquee-wrap reveal" aria-hidden="true">
-          <div class="marquee-track">
-            <span class="m-pill">Claude Code <span>ACP Native</span></span>
-            <span class="m-pill">Qwen Code <span>2,000 req/day</span></span>
-            <span class="m-pill">Gemini CLI <span>~1,000 req/day</span></span>
-            <span class="m-pill">iFlow CLI <span>Uncapped Free</span></span>
-            <span class="m-pill">OpenCode <span>12 $0 Models</span></span>
-            <span class="m-pill">Google Antigravity <span>Free Google Quota</span></span>
-            <span class="m-pill">OpenAI Codex <span>ChatGPT Free</span></span>
-            <span class="m-pill">Olympus CLI (oly) <span>Ollama + OpenRouter</span></span>
-            <span class="m-pill">Claude Code <span>ACP Native</span></span>
-            <span class="m-pill">Qwen Code <span>2,000 req/day</span></span>
-            <span class="m-pill">Gemini CLI <span>~1,000 req/day</span></span>
-            <span class="m-pill">iFlow CLI <span>Uncapped Free</span></span>
-            <span class="m-pill">OpenCode <span>12 $0 Models</span></span>
-            <span class="m-pill">Google Antigravity <span>Free Google Quota</span></span>
-            <span class="m-pill">OpenAI Codex <span>ChatGPT Free</span></span>
-            <span class="m-pill">Olympus CLI (oly) <span>Ollama + OpenRouter</span></span>
-          </div>
-          <div class="marquee-track reverse">
-            <span class="m-pill">GitHub Copilot <span>Copilot Free</span></span>
-            <span class="m-pill">Kiro CLI <span>AWS Builder ID</span></span>
-            <span class="m-pill">Kilo <span>$0 Community Models</span></span>
-            <span class="m-pill">Cline <span>Free + BYO</span></span>
-            <span class="m-pill">Cursor <span>Hobby Tier</span></span>
-            <span class="m-pill">Codebuddy <span>Auto Routing</span></span>
-            <span class="m-pill">Qoder <span>Community Free</span></span>
-            <span class="m-pill">Mistral Vibe <span>Experiment Tier</span></span>
-            <span class="m-pill">Goose <span>Local + BYO</span></span>
-            <span class="m-pill">OpenHands <span>Open Source</span></span>
-            <span class="m-pill">ZCode <span>GLM Free Plan</span></span>
-            <span class="m-pill">GitHub Copilot <span>Copilot Free</span></span>
-            <span class="m-pill">Kiro CLI <span>AWS Builder ID</span></span>
-            <span class="m-pill">Kilo <span>$0 Community Models</span></span>
-            <span class="m-pill">Cline <span>Free + BYO</span></span>
-            <span class="m-pill">Cursor <span>Hobby Tier</span></span>
-            <span class="m-pill">Codebuddy <span>Auto Routing</span></span>
-            <span class="m-pill">Qoder <span>Community Free</span></span>
-            <span class="m-pill">Mistral Vibe <span>Experiment Tier</span></span>
-            <span class="m-pill">Goose <span>Local + BYO</span></span>
-            <span class="m-pill">OpenHands <span>Open Source</span></span>
-            <span class="m-pill">ZCode <span>GLM Free Plan</span></span>
-          </div>
+          <div class="marquee-track" id="marquee-row-1"></div>
+          <div class="marquee-track reverse" id="marquee-row-2"></div>
         </div>
 
         <div class="filter-row reveal" role="tablist" aria-label="Filter coding agents">
-          <button class="filter-btn active" type="button" data-filter="all">All 18+ Agents</button>
+          <button class="filter-btn active" type="button" data-filter="all">All 20 Agents</button>
           <button class="filter-btn" type="button" data-filter="builtin">Built-in First-Class</button>
           <button class="filter-btn" type="button" data-filter="quota">High Free Quota</button>
           <button class="filter-btn" type="button" data-filter="local">Local / Zero-Key</button>
         </div>
 
-        <div class="agent-grid reveal">
-          <div class="agent-card" data-cats="builtin"><div class="agent-top"><strong>Claude Code</strong><span class="agent-tag">built-in</span></div><p>Native ACP, parallel sub-sessions, worktree chats &amp; hooks.</p></div>
-          <div class="agent-card" data-cats="builtin quota"><div class="agent-top"><strong>Google Antigravity</strong><span class="agent-tag">built-in</span></div><p>Personal Google quota across Gemini &amp; frontier models.</p></div>
-          <div class="agent-card" data-cats="builtin quota"><div class="agent-top"><strong>OpenAI Codex</strong><span class="agent-tag">built-in</span></div><p>ChatGPT Free / Plus CLI allowance &amp; device-code login.</p></div>
-          <div class="agent-card" data-cats="builtin local"><div class="agent-top"><strong>Olympus CLI (oly)</strong><span class="agent-tag">built-in</span></div><p>Unlimited local Ollama, OpenRouter :free &amp; BYO API keys.</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>Qwen Code</strong><span class="agent-tag">npx / cli</span></div><p>2,000 free requests / day (~1.5B tokens/mo coding context).</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>Gemini CLI</strong><span class="agent-tag">npx / cli</span></div><p>~1,000 free requests / day on personal Google accounts.</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>iFlow CLI</strong><span class="agent-tag">npx / cli</span></div><p>Uncapped free hosted Kimi K2, Qwen3 Coder &amp; DeepSeek-V3.</p></div>
-          <div class="agent-card" data-cats="quota local"><div class="agent-top"><strong>OpenCode</strong><span class="agent-tag">binary</span></div><p>12 zero-key $0 built-in models ready out of the box.</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>GitHub Copilot</strong><span class="agent-tag">npx / cli</span></div><p>Copilot Free monthly agent requests + completions.</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>Kiro · Kilo · Cline</strong><span class="agent-tag">registry</span></div><p>AWS Builder ID Free Tier, starter credits &amp; $0 models.</p></div>
-          <div class="agent-card" data-cats="quota"><div class="agent-top"><strong>Cursor · Codebuddy · Qoder</strong><span class="agent-tag">registry</span></div><p>Free community &amp; hobby monthly agent allowances.</p></div>
-          <div class="agent-card" data-cats="quota local"><div class="agent-top"><strong>Mistral · Goose · OpenHands · ZCode</strong><span class="agent-tag">registry</span></div><p>Experiment API tier, GLM starter plan &amp; open-source Ollama.</p></div>
-        </div>
+        <div class="agent-grid reveal" id="agent-grid"></div>
         <p class="fine-print">Free allowances are governed by each upstream provider and may change over time.</p>
       </div>
     </section>
@@ -341,6 +288,7 @@ brew install --cask martianacademy/tap/olympus-coder</pre>
     </div>
   </footer>
 
+  <script src="agents.js"></script>
   <script src="site.js"></script>
 </body>
 </html>
