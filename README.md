@@ -420,6 +420,8 @@ OLYMPUS_TEST_HIDDEN=1 npx electron . \
 - **Zero-knowledge relay:** Remote phone sessions through `relay/` derive an `AES-256-GCM` session key encoded after `#` in the pairing QR link. Because URL fragments are never sent in HTTP requests, the Cloudflare Worker relays opaque encrypted frames without ever possessing the decryption key.
 - **Guarded filesystem & process boundaries:** ACP Client FS enforces project-root path sandboxing and symlink escape checks (`acpClientFs.ts`), while a per-agent **Ask first / Approve all** switch keeps destructive shell commands under explicit user control.
 
+See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
+
 ---
 
 ## Contributing
