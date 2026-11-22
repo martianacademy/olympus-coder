@@ -13,6 +13,20 @@ const DELAY = 350;
 /** After one tooltip closes, the next one opens without delay for this long (moving along a toolbar). */
 const WARM_MS = 600;
 const GAP = 8;
+/** A tooltip is a hint, not a viewer: longer text (a whole script typed into a terminal) is cut with "…". */
+const MAX_LINES = 6;
+const MAX_CHARS = 300;
+
+export function clampTip(text: string): string {
+  const lines = text.split('\n');
+  let out = lines.slice(0, MAX_LINES).join('\n');
+  let cut = lines.length > MAX_LINES;
+  if (out.length > MAX_CHARS) {
+    out = out.slice(0, MAX_CHARS);
+    cut = true;
+  }
+  return cut ? `${out.trimEnd()}…` : out;
+}
 
 let tip: HTMLDivElement | null = null;
 let target: HTMLElement | null = null;
@@ -61,7 +75,7 @@ function show(t: HTMLElement) {
   const text = textOf(t);
   if (!text || !t.isConnected) return;
   const box = el();
-  box.textContent = keys(text);
+  box.textContent = clampTip(keys(text));
   place(t);
   box.classList.add('visible');
 }

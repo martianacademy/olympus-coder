@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bookmark, BookmarkCheck, Copy, Eraser, FlaskConical, Globe, Play, Plus, RotateCw, Search, Square, SquareTerminal, X } from 'lucide-react';
 import type { PortInfo, TerminalView } from '@shared/types';
 import { api, onEvent } from '../api';
+import { commandTip } from '../cmdFormat';
 import { portInUse } from '../compose';
 import { triggerFixError } from '../fixError';
 import { WORKBENCH_SHEET_BP } from '../responsive';
@@ -216,7 +217,7 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
             <div
               key={t.ptyId}
               className={`editor-tab term-tab ${t.ptyId === active ? 'active' : ''} ${t.alive ? '' : 'ended'}`}
-              title={`${t.command ?? t.title}\n(${stateText(t)})`}
+              title={`${t.command ? commandTip(t.command) : t.title}\n(${stateText(t)})`}
               onClick={() => setActive(t.ptyId)}
               onAuxClick={(e) => e.button === 1 && void close(t.ptyId)}
             >
@@ -234,7 +235,7 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
         // The active terminal's actions, on their own line under the tabs: small icons, nothing that runs a command
         // again by accident next to the tabs.
         <div className="term-toolbar" data-testid="term-toolbar">
-          <span className={`term-toolbar-cmd ellipsis ${current.command ? 'mono' : ''}`} title={current.command ?? current.title}>
+          <span className={`term-toolbar-cmd ellipsis ${current.command ? 'mono' : ''}`} title={current.command ? commandTip(current.command) : current.title}>
             {current.command ?? current.title}
           </span>
           <div className="term-tools">
@@ -244,7 +245,7 @@ export function TerminalPanel({ projectId, visible, canCompose, onClose }: { pro
               </button>
             )}
             {!current.alive ? (
-              <button className="btn ghost icon term-rerun" title={current.command ? `Run again: ${current.command}` : 'Start a new shell here'} aria-label={current.command ? 'Run again' : 'Restart'} onClick={() => void rerun(current.ptyId)} data-testid="term-rerun">
+              <button className="btn ghost icon term-rerun" title={current.command ? `Run again: ${commandTip(current.command)}` : 'Start a new shell here'} aria-label={current.command ? 'Run again' : 'Restart'} onClick={() => void rerun(current.ptyId)} data-testid="term-rerun">
                 {current.command ? <Play size={13} /> : <RotateCw size={13} />}
               </button>
             ) : (

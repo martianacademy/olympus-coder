@@ -840,6 +840,10 @@ html:not([data-platform='darwin']) .app.sb-collapsed .main-head { padding-left: 
 .heat-toast.thermal .heat-icon { color: var(--danger); }
 .heat-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .88em; }
 .heat-body .mono { font-size: .95em; }
+.heat-link { cursor: pointer; border-radius: 6px; }
+.heat-link:hover b { text-decoration: underline; text-underline-offset: 2px; }
+.heat-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.heat-where { max-width: 100%; }
 .heat-actions { display: flex; gap: 6px; flex: none; }
 .heat-actions .btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; }
 

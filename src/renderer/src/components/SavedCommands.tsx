@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronRight, History, Pencil, Play, ShieldAlert, Square, SquareArrowOutUpRight, Trash2, X } from 'lucide-react';
 import { GUARD_FAILURES, GUARD_WINDOW_MS, isInterrupt, statusText, type SavedCommand } from '@shared/savedCommands';
 import { errText, savedApi, type SavedNotice } from '../savedCommandsApi';
+import { commandTip } from '../cmdFormat';
 import '../savedCommands.css';
 
 /**
@@ -37,7 +38,7 @@ export function SavedStrip({ projectId, list, notice, onShow }: { projectId: str
             <button
               className="btn small primary"
               data-testid="saved-restart-all"
-              title={stopped.map((c) => c.command).join('\n')}
+              title={stopped.map((c) => commandTip(c.command, 80)).join('\n')}
               onClick={async () => {
                 setError('');
                 const r = await savedApi.restartAll(projectId).catch((e) => ({ started: 0, errors: [errText(e)] }));
@@ -58,10 +59,10 @@ export function SavedStrip({ projectId, list, notice, onShow }: { projectId: str
               {stopped.map((c) => (
                 <div key={c.id} className="saved-choose-row">
                   <span className="saved-title ellipsis">{c.title}</span>
-                  <span className="saved-cmd mono ellipsis" title={c.command}>
+                  <span className="saved-cmd mono ellipsis" title={commandTip(c.command)}>
                     {c.command}
                   </span>
-                  <button className="btn ghost icon" title={`Run: ${c.command}`} aria-label="Run" onClick={() => void run(c)}>
+                  <button className="btn ghost icon" title={`Run: ${commandTip(c.command)}`} aria-label="Run" onClick={() => void run(c)}>
                     <Play size={12} />
                   </button>
                 </div>
@@ -74,10 +75,10 @@ export function SavedStrip({ projectId, list, notice, onShow }: { projectId: str
         <div key={c.id} className="saved-strip guard" data-testid="saved-guard-notice">
           <div className="saved-strip-line">
             <ShieldAlert size={13} />
-            <span className="ellipsis" title={c.command}>
+            <span className="ellipsis" title={commandTip(c.command)}>
               Stopped restarting <b>{c.title}</b>: it failed {GUARD_FAILURES} times within {GUARD_WINDOW_MS / 60_000} minutes
             </span>
-            <button className="btn small ghost" title={`Run once more: ${c.command}`} onClick={() => void run(c)}>
+            <button className="btn small ghost" title={`Run once more: ${commandTip(c.command)}`} onClick={() => void run(c)}>
               Run
             </button>
             <button className="btn ghost icon" title="Dismiss" aria-label="Dismiss" onClick={() => void savedApi.dismiss(projectId, 'guard', c.id)}>
@@ -142,7 +143,7 @@ function SavedRow({ c, onShow }: { c: SavedCommand; onShow: (ptyId: string) => v
             {c.autoStart && <span className="saved-flag">auto-start</span>}
             {c.keepRunning && <span className="saved-flag">keep running</span>}
           </span>
-          <span className="saved-cmd mono ellipsis" title={c.command}>
+          <span className="saved-cmd mono ellipsis" title={commandTip(c.command)}>
             {c.command}
           </span>
           {c.cwd && (
@@ -162,7 +163,7 @@ function SavedRow({ c, onShow }: { c: SavedCommand; onShow: (ptyId: string) => v
               </button>
             </>
           ) : (
-            <button className="btn ghost icon" data-testid="saved-run" title={`Run in a new terminal: ${c.command}`} aria-label="Run" onClick={() => void act(async () => onShow((await savedApi.run(c.id)).ptyId))}>
+            <button className="btn ghost icon" data-testid="saved-run" title={`Run in a new terminal: ${commandTip(c.command)}`} aria-label="Run" onClick={() => void act(async () => onShow((await savedApi.run(c.id)).ptyId))}>
               <Play size={12} />
             </button>
           )}

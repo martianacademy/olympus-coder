@@ -331,3 +331,14 @@ export function formatCommandResult(raw: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trimEnd();
 }
+
+/**
+ * A command for a tooltip: its first line, at most `max` characters, and how many lines follow. A terminal
+ * opened with a whole script (`python3 - <<'PY' …`) shows "cd … && python3 - <<'PY' … (+40 lines)", not the script.
+ */
+export function commandTip(command: string, max = 120): string {
+  const lines = command.split('\n').filter((l) => l.trim());
+  const first = (lines[0] ?? '').trim();
+  const short = first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
+  return lines.length > 1 ? `${short} … (+${lines.length - 1} line${lines.length === 2 ? '' : 's'})` : short;
+}

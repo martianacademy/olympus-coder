@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { AgentDef, AppState, UserProfile } from '@shared/types';
+import type { AgentDef, AppState, RunningTask, UserProfile } from '@shared/types';
 import { api } from '../api';
 import type { AgentsInfo } from '../App';
 import { isRemoteBrowser } from '../responsive';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FilePreviewPane, type PreviewTarget } from './FilePreview';
-import { HeatToast } from './HeatToast';
+import { HeatToast, type TaskPlace } from './HeatToast';
 import { LoginDialog } from './LoginDialog';
 import { MemoryPanel } from './MemoryPanel';
 import { ProfileModal } from './Profile';
@@ -38,6 +38,9 @@ export interface AppOverlaysProps {
   onLoginAgent: (id: string | null) => void;
   onLoadAgents: () => Promise<void>;
   onOpenThread: (id: string) => void;
+  /** The heat toast: a program's project and chat in words, and opening where it runs. */
+  taskPlace: (t: RunningTask) => TaskPlace;
+  onShowTask: (t: RunningTask) => void;
   totalChats: number;
   onUpdateSettings: (patch: Partial<AppState['settings']>) => void;
 }
@@ -87,7 +90,7 @@ export function AppOverlays(props: AppOverlaysProps) {
       )}
 
       <UpdateBanner />
-      <HeatToast />
+      <HeatToast placeOf={props.taskPlace} onShow={props.onShowTask} />
       {!isRemoteBrowser() && (
         <SecurityNudge
           lockEnabled={state.lock.enabled}

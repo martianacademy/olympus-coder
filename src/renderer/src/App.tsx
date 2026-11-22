@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
-import type { AgentDef, AgentStatus, AppState, AttachmentView, DeskEvents, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
+import type { AgentDef, AgentStatus, AppState, AttachmentView, DeskEvents, Project, RunningTask, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import { api, onEvent, remoteWatch } from './api';
 import { collectSubsessions } from '@shared/acpSessions';
 import { acpSessionsApi } from './acpSessionsApi';
@@ -24,6 +24,7 @@ import { setActiveThread } from './threadStatus';
 import { doneOpening, markOpening } from './openingThread';
 import { useAppSync } from './useAppSync';
 import { workspaceProjectId } from '@shared/worktree';
+import { taskPlace, taskThread } from './taskPlace';
 import { addDraftFiles, getDraft, setDraftText } from './drafts';
 import { cleanError } from './worktreeUi';
 
@@ -430,6 +431,23 @@ export default function App() {
     if (activeProjectId) void api.runInTerminal(activeProjectId, cmd);
   }, [activeProjectId]);
   const openThreadById = useCallback((id: string) => void openThread(id), [openThread]);
+  // The heat toast's Show: the chat that started the program, with that program's terminal tab (or Tasks) open.
+  const showTask = useCallback(
+    async (t: RunningTask) => {
+      const th = taskThread(t, allThreads);
+      if (th) await openThread(th.id);
+      setWbOpen(true);
+      // A frame later the opened chat's Workbench is mounted, as in panelShow.
+      requestAnimationFrame(() => {
+        if (t.ptyId && t.projectId) {
+          addTerminal(t.projectId, t.ptyId);
+          setWbTab('terminal');
+        } else window.dispatchEvent(new CustomEvent('olympus:show-tasks'));
+      });
+    },
+    [allThreads, openThread],
+  );
+  const placeOfTask = useCallback((t: RunningTask) => taskPlace(t, allThreads, projects), [allThreads, projects]);
   const forkRef = useRef(forkThread);
   forkRef.current = forkThread;
   const forkActive = useCallback((upto?: string) => {
@@ -639,6 +657,8 @@ export default function App() {
             onLoginAgent={setLoginAgent}
             onLoadAgents={loadAgents}
             onOpenThread={openThreadById}
+            taskPlace={placeOfTask}
+            onShowTask={(t) => void showTask(t)}
             totalChats={Object.values(threads).reduce((n, l) => n + l.length, 0)}
             onUpdateSettings={(patch) => void updateSettings(patch)}
           />
