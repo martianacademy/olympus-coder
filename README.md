@@ -9,7 +9,7 @@
     <a href="https://www.producthunt.com/products/olympus-coder?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-olympus-coder" target="_blank" rel="noopener noreferrer"><img alt="Olympus Coder - Open-source desktop &amp; VPS workbench for 18+ AI coding agents | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;theme=light&amp;t=1795331946472" /></a>
   </p>
   <p>
-    <a href="https://martianacademy.github.io/olympus-coder/"><strong>Website</strong></a> · <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.2</strong></a> · <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> · <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
+    <a href="https://olympus.marsnext.in/"><strong>Website</strong></a> · <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.2</strong></a> · <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> · <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
   </p>
   <h3>⚡ 2.5B+ Free Coding Tokens / Month — 18 Free-Tier Coding CLIs Built In</h3>
   <p>
