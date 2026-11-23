@@ -2,7 +2,8 @@ import { PhoneSettings } from './settings/PhoneSettings';
 import { UpdateSettings } from './settings/UpdateSettings';
 import { ThemeEditor } from './settings/AppearanceSettings';
 import { useState } from 'react';
-import { Bot, Brain, FolderOpen, Loader2, Lock, LogIn, LogOut, Mic, Palette, Plug, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Trash2, Wrench, X } from 'lucide-react';
+import { Bot, Brain, FolderOpen, Loader2, Lock, LogIn, LogOut, Mic, Palette, Plug, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Trash2, Wrench } from 'lucide-react';
+import { SettingsWindow } from './SettingsWindow';
 import type { AppState, LockState, Settings } from '@shared/types';
 import type { AgentsInfo } from '../App';
 import { api } from '../api';
@@ -49,16 +50,8 @@ export function SettingsModal(props: {
     { id: 'security', label: 'App password', icon: <Lock size={15} /> },
   ];
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && props.onClose()}>
-      <div className="modal">
-        <div className="modal-head">
-          Settings
-          <div className="spacer" />
-          <button className="btn ghost icon" onClick={props.onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="settings">
+    <SettingsWindow title="Settings" transparentBackdrop={props.tab === 'appearance'} onClose={props.onClose}>
+      <div className="settings">
           <nav className="settings-nav">
             {tabs.map((t) => (
               <button key={t.id} className={props.tab === t.id ? 'active' : ''} onClick={() => props.onTab(t.id)}>
@@ -211,8 +204,7 @@ export function SettingsModal(props: {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </SettingsWindow>
   );
 }
 

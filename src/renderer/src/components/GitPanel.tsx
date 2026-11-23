@@ -1,20 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  CloudDownload,
-  FileCode,
-  GitBranch as BranchIcon,
-  GitCommitHorizontal,
-  GitMerge,
-  Loader2,
-  Minus,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Undo2,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, CloudDownload, FileCode, GitBranch as BranchIcon, GitCommitHorizontal, GitMerge, Loader2, Minus, MoreHorizontal, Plus, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import type { GitBranch, GitCommit, GitFileChange, GitStash, GitStatus } from '@shared/types';
 import { api } from '../api';
 import { PanelSkeleton } from './Skeleton';
@@ -59,6 +44,8 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
   const [diff, setDiff] = useState('');
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(false);
+  const [commitOpen, setCommitOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 680);
+  const [rowMenu, setRowMenu] = useState<{ f: GitFileChange; isStaged: boolean; letter: string; x: number; y: number } | null>(null);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [shown, setShown] = useState<string | null>(null);
   const [branches, setBranches] = useState<GitBranch[]>([]);
@@ -94,6 +81,19 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
       .catch((e) => setDiff(String(e?.message ?? e)));
   }, [selected, st, projectId]);
 
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !(e.target as HTMLElement)?.closest?.('.explorer-menu')) setRowMenu(null);
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [rowMenu]);
+
   /** Run one git action with a spinner, then show its output and refresh. */
   async function run(label: string, fn: () => Promise<unknown>, okText?: string) {
     setBusy(label);
@@ -127,29 +127,28 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
   const row = (f: GitFileChange, isStaged: boolean) => {
     const letter = f.conflicted ? 'U' : isStaged ? f.index : f.untracked ? '?' : f.worktree;
     const sel = selected?.path === f.path && selected.staged === isStaged;
+    const slash = f.path.lastIndexOf('/');
+    const name = slash >= 0 ? f.path.slice(slash + 1) : f.path;
+    const dir = slash >= 0 ? f.path.slice(0, slash) : '';
+    const discardFile = () => {
+      if (confirm(f.untracked ? `"${f.path}" is a new file and will be deleted. Continue?` : `Discard all changes to "${f.path}"? This can't be undone.`))
+        void run('Discard', () => api.git.discard(projectId, [f.path], f.untracked), 'Changes discarded.');
+    };
     return (
       <div key={`${isStaged}-${f.path}`} className={`git-row ${sel ? 'active' : ''}`} onClick={() => setSelected({ path: f.path, staged: isStaged, untracked: f.untracked })} title={`${LETTER[letter] ?? letter}: ${f.path}`}>
         <span className={`git-letter l-${letter === '?' ? 'U' : letter}`}>{letter === '?' ? 'U' : letter}</span>
-        <span className="grow ellipsis">
-          {f.path.split('/').pop()}
-          <span className="muted small"> {f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''}</span>
+        <span className="git-file-meta grow">
+          <span className="git-file-name ellipsis">{name}</span>
+          {dir && <span className="git-file-dir ellipsis">{dir}</span>}
         </span>
         <span className="row-actions">
           {letter !== 'D' && (
-            <button className="btn ghost icon" title="Open file" onClick={(e) => (e.stopPropagation(), onOpenFile(f.path))}>
+            <button className="btn ghost icon git-act-quick" title="Open file" onClick={(e) => (e.stopPropagation(), onOpenFile(f.path))}>
               <FileCode size={13} />
             </button>
           )}
           {!isStaged && (
-            <button
-              className="btn ghost icon"
-              title="Discard changes"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm(f.untracked ? `"${f.path}" is a new file and will be deleted. Continue?` : `Discard all changes to "${f.path}"? This can't be undone.`))
-                  void run('Discard', () => api.git.discard(projectId, [f.path], f.untracked), 'Changes discarded.');
-              }}
-            >
+            <button className="btn ghost icon git-act-quick" title="Discard changes" onClick={(e) => (e.stopPropagation(), discardFile())}>
               <Undo2 size={13} />
             </button>
           )}
@@ -160,6 +159,25 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
           ) : (
             <button className="btn ghost icon" title="Stage" onClick={(e) => (e.stopPropagation(), void run('Stage', () => api.git.stage(projectId, [f.path]), 'Staged.'))}>
               <Plus size={13} />
+            </button>
+          )}
+          {(letter !== 'D' || !isStaged) && (
+            <button
+              className="btn ghost icon git-act-more"
+              title="More actions"
+              data-testid="git-row-more"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                setRowMenu((cur) =>
+                  cur && cur.f.path === f.path && cur.isStaged === isStaged
+                    ? null
+                    : { f, isStaged, letter, x: Math.max(8, Math.min(r.right - 160, innerWidth - 176)), y: Math.min(r.bottom + 4, innerHeight - 110) },
+                );
+              }}
+            >
+              <MoreHorizontal size={14} />
             </button>
           )}
         </span>
@@ -240,48 +258,90 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
       {tab === 'changes' && (
         <div className="git-body">
           <div className="git-list">
-            <div className="commit-box">
-              <textarea
-                className="textarea"
-                rows={2}
-                placeholder={staged.length ? `Commit message (${keys('⌘Enter')} = commit)` : 'Commit message (nothing staged, so all changes will be committed)'}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && void doCommit(false)}
-              />
-              <div className="row" style={{ flexWrap: 'wrap' }}>
-                <button className="btn primary small" disabled={Boolean(busy) || (!message.trim() && !amend)} onClick={() => void doCommit(false)}>
-                  <Check size={13} /> Commit{staged.length ? '' : ' all'}
-                </button>
-                <button className="btn small" disabled={Boolean(busy) || (!message.trim() && !amend)} onClick={() => void doCommit(true)}>
-                  <ArrowUp size={13} /> Commit & push
-                </button>
-                <label className="row small muted" style={{ gap: 5, marginLeft: 'auto' }}>
-                  <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} /> Amend last commit
-                </label>
+            {!commitOpen && !message.trim() ? (
+              <button type="button" className="git-commit-trigger" data-testid="git-commit-toggle" onClick={() => setCommitOpen(true)}>
+                <GitCommitHorizontal size={14} className="muted" />
+                <span className="grow ellipsis">
+                  {staged.length ? `Commit ${staged.length} staged…` : st.files.length ? `Commit ${st.files.length} changes…` : 'Write a commit message…'}
+                </span>
+                <ChevronDown size={14} className="muted" />
+              </button>
+            ) : (
+              <div className="commit-box">
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  placeholder={staged.length ? `Commit message (${keys('⌘Enter')} = commit)` : 'Commit message (nothing staged, so all changes will be committed)'}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && void doCommit(false)}
+                />
+                <div className="row" style={{ flexWrap: 'wrap' }}>
+                  <button className="btn primary small" disabled={Boolean(busy) || (!message.trim() && !amend)} onClick={() => void doCommit(false)}>
+                    <Check size={13} /> Commit{staged.length ? '' : ' all'}
+                  </button>
+                  <button className="btn small" disabled={Boolean(busy) || (!message.trim() && !amend)} onClick={() => void doCommit(true)}>
+                    <ArrowUp size={13} /> Commit &amp; push
+                  </button>
+                  <label className="row small muted" style={{ gap: 5, marginLeft: 'auto' }}>
+                    <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} /> Amend
+                  </label>
+                  <button type="button" className="btn ghost icon git-commit-collapse" title="Collapse commit form" onClick={() => setCommitOpen(false)}>
+                    <ChevronUp size={14} />
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="git-section">
-              <span>Staged ({staged.length})</span>
-              <div className="spacer" />
-              {staged.length > 0 && (
-                <button className="btn ghost small" onClick={() => void run('Unstage all', () => api.git.unstageAll(projectId), 'All changes unstaged.')}>
-                  <Minus size={12} /> Unstage all
-                </button>
-              )}
-            </div>
-            {staged.map((f) => row(f, true))}
-            <div className="git-section">
-              <span>Changes ({unstaged.length})</span>
-              <div className="spacer" />
-              {unstaged.length > 0 && (
-                <button className="btn ghost small" onClick={() => void run('Stage all', () => api.git.stageAll(projectId), 'All changes staged.')}>
-                  <Plus size={12} /> Stage all
-                </button>
-              )}
-            </div>
-            {unstaged.map((f) => row(f, false))}
-            {!st.files.length && <div className="muted small" style={{ padding: '8px 12px' }}>Working tree clean ✓</div>}
+            )}
+            {rowMenu && (
+              <div className="explorer-menu" role="menu" style={{ left: rowMenu.x, top: rowMenu.y }} data-testid="git-row-menu">
+                {rowMenu.letter !== 'D' && (
+                  <button role="menuitem" onClick={() => (onOpenFile(rowMenu.f.path), setRowMenu(null))}>
+                    <FileCode size={14} /> Open file
+                  </button>
+                )}
+                {!rowMenu.isStaged && (
+                  <button
+                    role="menuitem"
+                    className="danger"
+                    onClick={() => {
+                      const target = rowMenu.f;
+                      setRowMenu(null);
+                      if (confirm(target.untracked ? `"${target.path}" is a new file and will be deleted. Continue?` : `Discard all changes to "${target.path}"? This can't be undone.`))
+                        void run('Discard', () => api.git.discard(projectId, [target.path], target.untracked), 'Changes discarded.');
+                    }}
+                  >
+                    <Undo2 size={14} /> Discard changes
+                  </button>
+                )}
+              </div>
+            )}
+            {staged.length > 0 && (
+              <>
+                <div className="git-section">
+                  <span>Staged</span>
+                  <span className="wb-count">{staged.length}</span>
+                  <div className="spacer" />
+                  <button className="btn ghost small" onClick={() => void run('Unstage all', () => api.git.unstageAll(projectId), 'All changes unstaged.')}>
+                    <Minus size={12} /> Unstage all
+                  </button>
+                </div>
+                {staged.map((f) => row(f, true))}
+              </>
+            )}
+            {unstaged.length > 0 && (
+              <>
+                <div className="git-section">
+                  <span>Changes</span>
+                  <span className="wb-count">{unstaged.length}</span>
+                  <div className="spacer" />
+                  <button className="btn ghost small" onClick={() => void run('Stage all', () => api.git.stageAll(projectId), 'All changes staged.')}>
+                    <Plus size={12} /> Stage all
+                  </button>
+                </div>
+                {unstaged.map((f) => row(f, false))}
+              </>
+            )}
+            {!st.files.length && <div className="wb-empty">Working tree clean.</div>}
           </div>
           {selected && (
             <div className="git-diff">
@@ -314,7 +374,7 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
                 </span>
               </div>
             ))}
-            {!commits.length && <div className="muted small" style={{ padding: 12 }}>No commits yet.</div>}
+            {!commits.length && <div className="wb-empty">No commits yet.</div>}
           </div>
           {shown && (
             <div className="git-diff">
@@ -416,7 +476,7 @@ export function GitPanel({ projectId, refreshKey, onStatus, onOpenFile }: { proj
               </span>
             </div>
           ))}
-          {!stashes.length && <div className="muted small" style={{ padding: 12 }}>No stashes.</div>}
+          {!stashes.length && <div className="wb-empty">No stashes.</div>}
         </div>
       )}
     </div>

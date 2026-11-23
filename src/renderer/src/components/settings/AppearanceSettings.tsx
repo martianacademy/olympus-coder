@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Code2, MessageSquareText, Palette, RotateCcw, Smartphone, SquareTerminal } from 'lucide-react';
+import { ChevronDown, Code2, FileCode2, MessageSquareText, Palette, RotateCcw, Smartphone, SquareTerminal } from 'lucide-react';
 import { THEME_TOKENS, type EditorSyntaxTheme, type ThemeSettings, type ThemeToken } from '@shared/types';
 import { CHAT_WIDTHS, CODE_FONTS, DEFAULT_THEME, EDITOR_SYNTAX_THEMES, resolvePalette, STEPS_SIZES, THEME_PRESETS, UI_FONTS, withPhoneTheme } from '@shared/themes';
 import { setExpandSteps, setWrapLines, useExpandSteps } from '../../prefs';
@@ -7,8 +7,9 @@ import { isRemoteBrowser } from '../../responsive';
 import { ReadingPreview } from './AppearancePreview';
 import { EditorSettingsSection, TerminalSettingsSection } from './EditorSettingsPanel';
 import { PhoneAppearance } from './PhoneAppearance';
+import { ThemeCssEditor } from './ThemeCssEditor';
 
-type AppearanceSection = 'phone' | 'theme' | 'editor' | 'terminal' | 'reading';
+type AppearanceSection = 'phone' | 'theme' | 'css' | 'editor' | 'terminal' | 'reading';
 
 const TOKEN_LABELS: Record<ThemeToken, string> = {
   bg: 'Background',
@@ -29,6 +30,11 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
   // The Phone tab exists only on a phone (or a browser connected to this Mac), and opens first there.
   const remote = isRemoteBrowser();
   const [section, setSection] = useState<AppearanceSection>(remote ? 'phone' : 'theme');
+  const switchSection = (next: AppearanceSection) => {
+    setSection(next);
+    const pane = document.querySelector('.settings-pane');
+    if (pane) pane.scrollTop = 0;
+  };
   const t: ThemeSettings = { ...DEFAULT_THEME, ...theme };
   const set = (patch: Partial<ThemeSettings>) => onChange({ ...theme, ...patch });
 
@@ -43,8 +49,9 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
   const accentKey = dark ? 'accentDark' : 'accentLight';
   const accentValue = dark ? t.accentDark : t.accentLight;
   const setAccent = (value: string) => set({ [accentKey]: value } as Partial<ThemeSettings>);
-  const clearCustomColors = { accent: undefined, overrides: {}, accentDark: undefined, accentLight: undefined, overridesDark: {}, overridesLight: {} };
+  const clearCustomColors = { accent: undefined, overrides: {}, accentDark: undefined, accentLight: undefined, overridesDark: {}, overridesLight: {}, customCss: undefined };
   const hasCustomColors = Object.keys(colorBucket ?? {}).length > 0;
+  const hasCustomCss = Boolean(t.customCss?.trim());
   const [showCustomColors, setShowCustomColors] = useState(hasCustomColors);
 
   if (compact) {
@@ -102,20 +109,23 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
       <h3>Appearance</h3>
       <div className="seg appearance-tabs" role="tablist" aria-label="Appearance sections">
         {remote && (
-          <button className={section === 'phone' ? 'active' : ''} data-testid="appearance-phone-tab" onClick={() => setSection('phone')}>
+          <button className={section === 'phone' ? 'active' : ''} data-testid="appearance-phone-tab" onClick={() => switchSection('phone')}>
             <Smartphone size={13} /> Phone
           </button>
         )}
-        <button className={section === 'theme' ? 'active' : ''} onClick={() => setSection('theme')}>
+        <button className={section === 'theme' ? 'active' : ''} data-testid="appearance-theme-tab" onClick={() => switchSection('theme')}>
           <Palette size={13} /> Theme &amp; Colors
         </button>
-        <button className={section === 'editor' ? 'active' : ''} onClick={() => setSection('editor')}>
+        <button className={section === 'css' ? 'active' : ''} data-testid="appearance-css-tab" onClick={() => switchSection('css')}>
+          <FileCode2 size={13} /> Theme CSS{hasCustomCss && <span className="tweakcn-dot" aria-label="Custom CSS active" />}
+        </button>
+        <button className={section === 'editor' ? 'active' : ''} onClick={() => switchSection('editor')}>
           <Code2 size={13} /> Code Editor
         </button>
-        <button className={section === 'terminal' ? 'active' : ''} onClick={() => setSection('terminal')}>
+        <button className={section === 'terminal' ? 'active' : ''} onClick={() => switchSection('terminal')}>
           <SquareTerminal size={13} /> Terminal
         </button>
-        <button className={section === 'reading' ? 'active' : ''} onClick={() => setSection('reading')}>
+        <button className={section === 'reading' ? 'active' : ''} onClick={() => switchSection('reading')}>
           <MessageSquareText size={13} /> Chat &amp; Reading
         </button>
       </div>
@@ -141,7 +151,18 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
             </div>
           </div>
           <div className="field">
-            <label>Theme preset</label>
+            <div className="row" style={{ alignItems: 'center' }}>
+              <label style={{ margin: 0 }}>Theme preset</label>
+              <button
+                type="button"
+                className="btn small ghost"
+                data-testid="open-tweakcn-css"
+                onClick={() => switchSection('css')}
+                style={{ marginLeft: 'auto', gap: 5 }}
+              >
+                <FileCode2 size={12} /> {hasCustomCss ? 'Edit active tweakcn CSS' : 'Import tweakcn CSS'}
+              </button>
+            </div>
             <div className="preset-grid">
               {THEME_PRESETS.map((p) => {
                 const pal = resolvePalette({ ...theme, preset: p.id, ...clearCustomColors }, systemDark).palette;
@@ -314,6 +335,7 @@ export function ThemeEditor({ theme, onChange, compact }: { theme: ThemeSettings
         </>
       )}
 
+      {section === 'css' && <ThemeCssEditor theme={theme} dark={dark} onChange={set} onBack={() => switchSection('theme')} />}
       {section === 'editor' && <EditorSettingsSection t={t} dark={dark} set={set} />}
       {section === 'terminal' && <TerminalSettingsSection t={t} set={set} />}
 

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { ThemeSettings } from '@shared/types';
 import { CHAT_WIDTHS, codeFontCss, DEFAULT_THEME, resolvePalette, STEPS_SIZES, UI_FONTS, withPhoneTheme } from '@shared/themes';
+import { parseTweakcnCss } from '@shared/tweakcnTheme';
 import { applyChatSyntaxVars } from './syntaxPalettes';
 import { isRemoteBrowser } from './responsive';
 
@@ -8,6 +9,32 @@ const media = window.matchMedia('(prefers-color-scheme: dark)');
 
 let currentTheme: ThemeSettings = { ...DEFAULT_THEME };
 const themeListeners = new Set<() => void>();
+/** Tracks extra raw `--*` properties set by `customCss` so removing/editing clears stale vars cleanly. */
+const appliedCustomVars = new Set<string>();
+/**
+ * Olympus semantic tokens whose meanings differ from Tailwind/shadcn (e.g. Olympus `--muted` is muted
+ * text color while shadcn `--muted` is a surface background; Olympus `--accent` is brand primary while
+ * shadcn `--accent` is a subtle hover surface). Never let raw Tailwind vars overwrite these.
+ */
+const OLYMPUS_PROTECTED_VARS = new Set([
+  '--bg',
+  '--panel',
+  '--surface',
+  '--border',
+  '--text',
+  '--muted',
+  '--accent',
+  '--accentText',
+  '--danger',
+  '--success',
+  '--warning',
+  '--code',
+  '--radius',
+  '--font-size',
+  '--ui-scale',
+  '--ui-font',
+  '--code-font',
+]);
 
 /** Returns the active merged `ThemeSettings` snapshot for non-React consumers (e.g. xterm observers). */
 export function getThemeSettings(): ThemeSettings {
@@ -31,14 +58,37 @@ export function applyTheme(theme: ThemeSettings) {
   currentTheme = t;
   const { palette, dark } = resolvePalette(t, media.matches);
   const root = document.documentElement;
-  for (const [k, v] of Object.entries(palette)) root.style.setProperty(`--${k}`, v);
+
+  // Clear previously injected customCss vars before applying the fresh theme.
+  for (const k of appliedCustomVars) root.style.removeProperty(k);
+  appliedCustomVars.clear();
+
+  const customMode = t.customCss?.trim() ? (() => {
+    const p = parseTweakcnCss(t.customCss);
+    return p.hasAny ? (dark ? p.dark : p.light) : null;
+  })() : null;
+
+  const effectivePalette = customMode ? { ...palette, ...customMode.palette } : palette;
+  for (const [k, v] of Object.entries(effectivePalette)) root.style.setProperty(`--${k}`, v);
   root.style.setProperty('--font-size', `${t.fontSize}px`);
   // Fixed px sizes in the chat and sidebar are written as `calc(Npx * var(--ui-scale))` so the App font size reaches them.
   root.style.setProperty('--ui-scale', String(Math.round((t.fontSize / 14) * 1000) / 1000));
-  root.style.setProperty('--radius', `${t.radius}px`);
-  root.style.setProperty('--ui-font', UI_FONTS.find((f) => f.id === t.uiFont)?.css ?? UI_FONTS[0].css);
-  const codeFamily = `${codeFontCss(t.codeFont)}, ui-monospace, Menlo, monospace`;
+  root.style.setProperty('--radius', `${customMode?.radius ?? t.radius}px`);
+  root.style.setProperty('--ui-font', customMode?.uiFont ?? UI_FONTS.find((f) => f.id === t.uiFont)?.css ?? UI_FONTS[0].css);
+  const codeFamily = customMode?.codeFont ?? `${codeFontCss(t.codeFont)}, ui-monospace, Menlo, monospace`;
   root.style.setProperty('--code-font', codeFamily);
+
+  // Expose non-colliding Tailwind/tweakcn variables (and optional shadows) on `:root` when customCss is active.
+  if (customMode) {
+    for (const [k, v] of Object.entries(customMode.vars)) {
+      if (OLYMPUS_PROTECTED_VARS.has(k)) continue;
+      root.style.setProperty(k, v);
+      appliedCustomVars.add(k);
+    }
+    if (customMode.shadows.sm) { root.style.setProperty('--shadow-sm', customMode.shadows.sm); appliedCustomVars.add('--shadow-sm'); }
+    if (customMode.shadows.md) { root.style.setProperty('--shadow-md', customMode.shadows.md); appliedCustomVars.add('--shadow-md'); }
+    if (customMode.shadows.lg) { root.style.setProperty('--shadow-lg', customMode.shadows.lg); appliedCustomVars.add('--shadow-lg'); }
+  }
   root.dataset.density = t.density === 'compact' ? 'compact' : 'comfortable';
   root.dataset.userMsg = t.userMessageStyle === 'plain' ? 'plain' : 'bubble';
   root.dataset.msgTimes = t.showMessageTimes ? 'on' : 'off';

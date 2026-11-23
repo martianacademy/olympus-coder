@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AppWindow, Copy, ExternalLink, FolderOpen, Pencil, Trash2 } from 'lucide-react';
+import { AppWindow, Copy, ExternalLink, FilePlus, FolderOpen, FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import { copyText } from '../clipboard';
 import { isRemoteBrowser } from '../responsive';
@@ -30,6 +30,8 @@ export function ExplorerMenu(props: {
   projectId: string;
   target: ExplorerMenuTarget;
   onClose: () => void;
+  onNewFile?: () => void;
+  onNewFolder?: () => void;
   onRename?: () => void;
   onTrash?: () => void;
   onError: (msg: string) => void;
@@ -53,14 +55,14 @@ export function ExplorerMenu(props: {
   }, [target.x, target.y, editors.length]);
 
   useEffect(() => {
-    const close = (e: MouseEvent | KeyboardEvent) => {
+    const close = (e: PointerEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) props.onClose();
     };
-    window.addEventListener('mousedown', close);
+    window.addEventListener('pointerdown', close);
     window.addEventListener('keydown', close);
     window.addEventListener('blur', props.onClose);
     return () => {
-      window.removeEventListener('mousedown', close);
+      window.removeEventListener('pointerdown', close);
       window.removeEventListener('keydown', close);
       window.removeEventListener('blur', props.onClose);
     };
@@ -73,6 +75,21 @@ export function ExplorerMenu(props: {
 
   return (
     <div ref={box} className="explorer-menu" role="menu" style={{ left: pos.left, top: pos.top }} data-testid="explorer-menu">
+      {(props.onNewFile || props.onNewFolder) && (
+        <>
+          {props.onNewFile && (
+            <button role="menuitem" onClick={() => (props.onClose(), props.onNewFile!())}>
+              <FilePlus size={14} /> New file
+            </button>
+          )}
+          {props.onNewFolder && (
+            <button role="menuitem" onClick={() => (props.onClose(), props.onNewFolder!())}>
+              <FolderPlus size={14} /> New folder
+            </button>
+          )}
+          <div className="explorer-menu-sep" />
+        </>
+      )}
       {local && editors.length > 0 && (
         <>
           <div className="explorer-menu-label">Open in</div>

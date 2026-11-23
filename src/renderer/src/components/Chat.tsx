@@ -42,6 +42,7 @@ import { useStickToBottom } from '../useStickToBottom';
 import { doneOpening, useOpeningThread } from '../openingThread';
 import { ChatSkeleton } from './Skeleton';
 import { SentTicks } from './DeliveryTicks';
+import { QueuedMessages } from './QueuedMessages';
 import { WorktreeChip, WorktreeToggle } from './WorktreeChatBits';
 
 export { Markdown, normalizeMath };
@@ -247,6 +248,7 @@ export function Chat(props: {
           ) : (
             <BackgroundBar threadId={thread.id} />
           )}
+          {!switching && <QueuedMessages threadId={thread.id} />}
         </div>
         {away && (
           <div className="jump-latest-wrap">

@@ -66,14 +66,14 @@ function PortsCard() {
   return (
     <div className="info-section">
       <div className="info-title row" style={{ gap: 6 }}>
-        Ports in use
+        Ports
         <span className="grow" />
         <button className="btn ghost icon" title="Refresh" onClick={load}>
           <RotateCw size={12} />
         </button>
       </div>
       {ports === null && <PanelSkeleton rows={3} head={false} />}
-      {ports !== null && !list.length && <div className="small muted">No program is listening on a port.</div>}
+      {ports !== null && !list.length && <div className="wb-empty">No active ports.</div>}
       {shown.map((p) => (
         <div key={`${p.pid}:${p.port}`} className="info-row port-row" title={`${p.command}\npid ${p.pid} · ${p.address}`}>
           <span className="port-num mono">:{p.port}</span>
@@ -179,7 +179,7 @@ export function InfoPanel(props: {
       <McpStatusSection threadId={props.thread?.id} />
       {props.thread && (
         <div className="info-section">
-          <div className="info-title">Tokens in this chat</div>
+          <div className="info-title">Tokens</div>
           <SessionStats
             thread={props.thread}
             usage={props.session?.usage}
@@ -204,7 +204,8 @@ export function InfoPanel(props: {
           <div className="info-row link-like" onClick={() => props.onTab('git')}>
             <GitBranch size={15} className="muted" /> {props.git.branch}
             <span className="small muted" style={{ marginLeft: 'auto' }}>
-              {props.git.files.length} changes{props.git.ahead ? ` · ↑${props.git.ahead}` : ''}
+              {props.git.files.length} {props.git.files.length === 1 ? 'change' : 'changes'}
+              {props.git.ahead ? ` · ↑${props.git.ahead}` : ''}
               {props.git.behind ? ` · ↓${props.git.behind}` : ''}
             </span>
           </div>
@@ -213,7 +214,13 @@ export function InfoPanel(props: {
       <div className="info-section">
         <div className="info-title">Shared memory</div>
         <div className={`info-row ${remote ? '' : 'link-like'}`} onClick={remote ? undefined : () => void api.revealMemory(memoryProjectId)}>
-          <Brain size={15} className="muted" /> {mem ? `${mem.files.filter((f) => f.name !== 'MEMORY.md').length} memories` : '…'}
+          <Brain size={15} className="muted" />{' '}
+          {mem
+            ? (() => {
+                const n = mem.files.filter((f) => f.name !== 'MEMORY.md').length;
+                return `${n} ${n === 1 ? 'memory' : 'memories'}`;
+              })()
+            : '…'}
           {!remote && (
             <span className="small muted" style={{ marginLeft: 'auto' }}>
               Open folder
@@ -254,7 +261,7 @@ export function InfoPanel(props: {
             )}
           </div>
         ) : (
-          <div className="small muted">The agent has not changed any files in this chat yet.</div>
+          <div className="wb-empty">No files changed in this chat yet.</div>
         )}
       </div>
     </div>

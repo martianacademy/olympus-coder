@@ -82,7 +82,7 @@ code, pre, kbd { font-family: var(--code-font); }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fork-icon { transform: rotate(180deg); }
 
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
 .main-head {
   height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -104,7 +104,7 @@ code, pre, kbd { font-family: var(--code-font); }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
 /* ---------- chat ---------- */
-.chat-scroll { flex: 1; overflow-y: auto; }
+.chat-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .chat-inner { max-width: 820px; margin: 0 auto; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 14px; }
 .msg-user { align-self: flex-end; max-width: 85%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 13px; white-space: pre-wrap; user-select: text; }
 .msg-agent { user-select: text; line-height: 1.6; }
@@ -1007,8 +1007,8 @@ button.orch-target:hover { color: var(--accent); text-decoration: underline; }
    Code blocks and tables keep their own horizontal scroll inside the message. */
 .chat-scroll { overflow-x: hidden; }
 .chat-inner > * { min-width: 0; max-width: 100%; }
-.msg-agent, .msg-user, .thought { overflow-wrap: anywhere; word-break: normal; }
-.msg-agent :not(pre) > code { overflow-wrap: anywhere; word-break: break-all; white-space: normal; }
+.msg-agent, .msg-user, .thought { overflow-wrap: break-word; word-break: normal; }
+.msg-agent :not(pre) > code { overflow-wrap: break-word; word-break: normal; white-space: normal; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .msg-agent pre, .msg-agent table { max-width: 100%; overflow-x: auto; }
 .msg-agent table { display: block; }
 
@@ -1034,7 +1034,7 @@ button.orch-target:hover { color: var(--accent); text-decoration: underline; }
 .pair-code .mono { font-size: 1.9em; font-weight: 700; letter-spacing: .12em; color: var(--accent); }
 .device-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
 /* Centred with left/right + auto margins, not left:50% + translate: that left it only half the screen to wrap in (one word per line on a phone). */
-.update-banner { position: fixed; top: 10px; left: 16px; right: 16px; margin-inline: auto; width: max-content; z-index: 300; display: flex; align-items: center; gap: 10px; max-width: min(720px, calc(100vw - 32px)); padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.3); font-size: .86em; -webkit-app-region: no-drag; }
+.update-banner { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 16px; right: 16px; margin-inline: auto; width: max-content; z-index: 300; display: flex; align-items: center; gap: 10px; max-width: min(720px, calc(100vw - 32px)); padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--surface); box-shadow: 0 12px 32px rgba(0,0,0,.3); font-size: .86em; -webkit-app-region: no-drag; }
 .update-banner > svg { color: var(--accent); flex: none; }
 .phone-card { display: flex; gap: 18px; align-items: flex-start; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin: 10px 0; }
 .phone-card.warn { gap: 12px; border-color: color-mix(in srgb, var(--warn, #e0a030) 50%, var(--border)); }

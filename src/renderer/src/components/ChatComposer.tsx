@@ -29,7 +29,6 @@ import { AttachButton, AttachmentChips, useAttachments } from './Attachments';
 import { CompactButton } from './CompactButton';
 import { FreshContextButton } from './FreshContextButton';
 import { ConfigPill } from './ConfigPills';
-import { QueuedMessages } from './QueuedMessages';
 import { useSlashMenu } from './SlashMenu';
 import { SwitchAgents } from './SwitchAgents';
 import { estimateTokens } from './TokenStats';
@@ -420,7 +419,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           </button>
         </div>
       )}
-      <QueuedMessages threadId={threadId} queue={queue} />
       <div className={`composer ${att.dragging ? 'dragging' : ''}`} {...att.dropProps}>
         <div
           className={`composer-resize ${resize.sized ? 'sized' : ''}`}

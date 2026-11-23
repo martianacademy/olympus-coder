@@ -139,7 +139,8 @@ h1, h2, h3, .title, .greeting { letter-spacing: -0.02em; }
 .msg-agent blockquote { margin: .8em 0; padding: 2px 14px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); color: color-mix(in srgb, var(--text) 80%, transparent); }
 .msg-agent hr { border: none; border-top: 1px solid var(--hairline); margin: 1.2em 0; }
 .msg-agent a { text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
-.msg-agent :not(pre) > code { background: color-mix(in srgb, var(--text) 7%, transparent); border: 1px solid var(--hairline); padding: .1em .38em; border-radius: calc(var(--radius) * 0.6); font-size: .86em; }
+.msg-agent :not(pre) > code { background: color-mix(in srgb, var(--text) 5.5%, transparent); color: color-mix(in srgb, var(--accent) 42%, var(--text)); border: none; padding: .12em .38em; border-radius: calc(var(--radius) * 0.55); font-size: .86em; }
+.msg-agent :not(pre) > code.file-ref { color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 /* Wide tables scroll sideways inside the message (overflow-x, not hidden: styles.css makes the table a block for
    exactly this). Cells undo the message's `overflow-wrap: anywhere`, which lets a column shrink to one letter and
    split every word ("P/l/a/n") on a phone; words now wrap only at spaces and each column keeps a readable width. */

@@ -1,0 +1,354 @@
+/**
+ * Phone & narrow-viewport Workbench styles (Info-first active pill, clean Files & Git,
+ * larger readable mobile typography & touch icons). Loaded after `workbench.css`.
+ */
+
+/* ---------- Desktop defaults for phone-enhanced controls ---------- */
+.files-back-label,
+.git-act-more,
+.git-commit-collapse {
+  display: none;
+}
+
+.git-file-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.git-file-name {
+  color: var(--text);
+  flex: 0 1 auto;
+}
+
+.git-file-dir {
+  color: var(--muted);
+  font-size: var(--wb-text-meta);
+  flex: 1 1 auto;
+}
+
+.git-commit-trigger {
+  width: calc(100% - 20px);
+  margin: 10px 10px 6px;
+  padding: 11px 13px;
+  border-radius: calc(var(--radius) * 1.1);
+  border: 1px solid var(--hairline, var(--border));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  font: inherit;
+  font-size: var(--wb-text-body);
+  cursor: pointer;
+}
+
+.git-commit-trigger:active {
+  background: var(--hover);
+}
+
+/* ---------- Narrow & Phone Workbench Redesign (Info-first pill, clean Files & Git) ---------- */
+@container (max-width: 470px) {
+  .workbench-tabs > button.active .wb-label {
+    display: inline;
+  }
+}
+
+@media (max-width: 680px) {
+  /* Comfortable, readable mobile typography scale across every Right Panel tab (Info, Files, Git, Terminal, Tasks). */
+  .workbench {
+    --wb-text-title: calc(var(--wb-base) * 1.05);
+    --wb-text-tab: calc(var(--wb-base) * 0.99);
+    --wb-text-body: calc(var(--wb-base) * 0.99);
+    --wb-text-meta: calc(var(--wb-base) * 0.89);
+    --wb-text-section: calc(var(--wb-base) * 0.82);
+    --wb-text-pill: calc(var(--wb-base) * 0.81);
+  }
+
+  /* Larger, easier-to-see top Workbench tab icons + full-width non-truncating active pill ("Info", "Files", "Git"...) */
+  .workbench .workbench-tabs {
+    gap: 3px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .workbench .workbench-tabs > button:not(.btn) {
+    height: 38px;
+    padding: 0 7px;
+    gap: 6px;
+    border-radius: 99px;
+    flex: none;
+  }
+
+  .workbench .workbench-tabs > button:not(.btn) svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+  }
+
+  .workbench .workbench-tabs > button.active {
+    padding: 0 11px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--text);
+    font-weight: 600;
+    flex: none;
+  }
+
+  .workbench .workbench-tabs > button.active .wb-label {
+    max-width: none;
+    overflow: visible;
+  }
+
+  .workbench .workbench-tabs .wb-popout {
+    display: none;
+  }
+
+  .workbench .workbench-tabs [data-testid='wb-close'],
+  .workbench .workbench-tabs .wb-sheet-action.icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .workbench .workbench-tabs > .btn svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  /* Match toolbar & list icons proportionally to mobile text size */
+  .workbench .panel-toolbar .btn.icon svg,
+  .workbench .panel-toolbar .btn.small svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .workbench .info-row > svg,
+  .workbench .tree-row > svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Match Info & Tasks row touch cadence to Files (44px) and Git (54px) on phone */
+  .workbench .info-row {
+    min-height: 36px;
+    padding: 5px 0;
+  }
+
+  .workbench .info-file {
+    min-height: 44px;
+    padding: 6px 8px;
+  }
+
+  .workbench .info-panel .btn.small,
+  .workbench .tasks-panel .btn.small {
+    font-size: var(--wb-text-meta);
+  }
+
+  .workbench button.done-group-head {
+    min-height: 44px;
+    padding: 8px 4px;
+    gap: 8px;
+  }
+
+  .workbench .done-chevron {
+    width: 14px;
+    height: 14px;
+  }
+
+  .workbench .explorer-menu button {
+    font-size: var(--wb-text-body);
+    padding: 9px 12px;
+  }
+
+  .workbench .explorer-menu button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Files tab: hide dead empty editor-tabs strip when browsing tree with no open files. */
+  .files-panel.no-open-files .editor-area {
+    display: none;
+  }
+
+  .files-panel.no-open-files .explorer {
+    inset: 0;
+  }
+
+  .files-panel .explorer {
+    width: 100% !important;
+    border-right: none;
+  }
+
+  .files-back-btn {
+    width: auto !important;
+    padding: 0 12px !important;
+    gap: 6px;
+    border-radius: 99px;
+  }
+
+  .files-back-label {
+    display: inline;
+    font-size: var(--wb-text-body);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .files-panel .tree-row {
+    min-height: 44px;
+    padding: 7px 8px 7px 12px;
+    margin: 0 6px;
+    border-radius: 10px;
+    gap: 7px;
+  }
+
+  .files-panel .tree-row .tree-act-quick {
+    display: none !important;
+  }
+
+  /* Git tab: clean GitHub Mobile underline sub-tabs instead of boxy segmented strip. */
+  .git-panel .seg.small-seg {
+    display: flex;
+    width: 100%;
+    margin: 0;
+    padding: 0 8px;
+    border: none;
+    border-bottom: 1px solid var(--hairline, var(--border));
+    border-radius: 0;
+    background: transparent;
+    gap: 4px;
+  }
+
+  .git-panel .seg.small-seg button {
+    flex: 1 1 auto;
+    border: none;
+    border-radius: 0;
+    background: transparent !important;
+    color: var(--muted);
+    padding: 11px 6px;
+    font-size: var(--wb-text-body);
+    font-weight: 500;
+    position: relative;
+  }
+
+  .git-panel .seg.small-seg button.active {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .git-panel .seg.small-seg button.active::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  .git-commit-collapse {
+    display: inline-flex;
+  }
+
+  /* Git tab: modern 2-line file rows (filename on line 1, muted directory path on line 2). */
+  .git-panel .git-row {
+    min-height: 54px;
+    padding: 9px 10px 9px 14px;
+    gap: 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--hairline, var(--border)) 55%, transparent);
+  }
+
+  .git-panel .git-file-meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  .git-panel .git-file-name {
+    font-weight: 550;
+    font-size: var(--wb-text-body);
+    line-height: 1.32;
+  }
+
+  .git-panel .git-file-dir {
+    font-size: var(--wb-text-meta);
+    line-height: 1.32;
+    opacity: 0.85;
+  }
+
+  .git-panel .git-row .git-act-quick {
+    display: none !important;
+  }
+
+  .git-panel .git-row .git-act-more {
+    display: inline-flex;
+  }
+}
+
+/* ---------- Smooth native slide animation for Right Panel (phone sheet + desktop) ---------- */
+@keyframes wb-slide-in-sheet {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes wb-slide-in-desk {
+  from {
+    transform: translateX(22px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.workbench-col:not(.is-sheet) {
+  animation: wb-slide-in-desk 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workbench-col.is-sheet {
+  animation: wb-slide-in-sheet 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+}
+
+.workbench-col.is-sheet.is-closing {
+  animation: none;
+  transform: translateX(100%);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 1, 1);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-col,
+  .workbench-col.is-sheet,
+  .workbench-col.is-sheet.is-closing {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+html[data-motion='reduce'] .workbench-col,
+html[data-motion='reduce'] .workbench-col.is-sheet,
+html[data-motion='reduce'] .workbench-col.is-sheet.is-closing {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (pointer: coarse) {
+  .files-panel .tree-row .tree-act-quick,
+  .git-panel .git-row .git-act-quick {
+    display: none !important;
+  }
+
+  .git-panel .git-row .git-act-more {
+    display: inline-flex;
+  }
+}

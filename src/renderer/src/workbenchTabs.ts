@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
-/** The five core Workbench tabs whose order the user can customise by dragging. */
-export const DEFAULT_WB_TABS = ['files', 'git', 'terminal', 'tasks', 'info'] as const;
+/** The five core Workbench tabs whose order the user can customise by dragging. Info opens first by default. */
+export const DEFAULT_WB_TABS = ['info', 'files', 'git', 'terminal', 'tasks'] as const;
 export type CoreWbTab = (typeof DEFAULT_WB_TABS)[number];
 
 const STORAGE_KEY = 'olympus.wbTabOrder.v1';

@@ -1,0 +1,309 @@
+/**
+ * Unified typography, section headers, spacing, and badges across all right-panel
+ * Workbench tabs (Files, Git, Terminal, Tasks, Info, Preview).
+ *
+ * Uses `calc(var(--font-size) * ...)` instead of nested `em` so font sizes scale cleanly
+ * with Appearance settings without shrinking inside nested rows/cards.
+ */
+
+.workbench {
+  --wb-base: var(--t-base, var(--font-size, 14px));
+  --wb-text-title: var(--t-title, calc(var(--wb-base) * 0.93));
+  --wb-text-tab: var(--t-ui, calc(var(--wb-base) * 0.90));
+  --wb-text-body: var(--t-ui, calc(var(--wb-base) * 0.90));
+  --wb-text-meta: var(--t-meta, calc(var(--wb-base) * 0.82));
+  --wb-text-section: var(--t-section, calc(var(--wb-base) * 0.75));
+  --wb-text-pill: var(--t-pill, calc(var(--wb-base) * 0.74));
+}
+
+/* ---------- Top workbench tab bar ---------- */
+.workbench .workbench-tabs > button:not(.btn) {
+  font-size: var(--wb-text-tab);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+/* ---------- Panel primary headers (Git branch, Tasks role, Preview file) ---------- */
+.workbench .git-panel .panel-toolbar b,
+.workbench .tasks-role,
+.workbench .fp-name {
+  font-size: var(--wb-text-title);
+  font-weight: var(--bold-weight, 600);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* ---------- Unified uppercase section headers across all 5 tabs ---------- */
+.workbench .explorer-title,
+.workbench .git-section,
+.workbench .tasks-section-head,
+.workbench .info-title,
+.workbench .saved-head {
+  font-size: var(--wb-text-section);
+  font-weight: 600;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.workbench .explorer-title {
+  padding-left: 4px;
+}
+
+.workbench .explorer .panel-toolbar .btn.icon {
+  padding: 4px;
+}
+
+.workbench .git-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 4px;
+}
+
+.workbench .info-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.workbench .tasks-section-head {
+  padding: 4px 2px 2px;
+}
+
+.workbench .saved-head {
+  padding: 6px 14px;
+}
+
+/* Never uppercase inline controls, counts, or muted helper tags inside section headers */
+.workbench .info-title .btn,
+.workbench .info-title .seg,
+.workbench .info-title .small,
+.workbench .git-section .btn,
+.workbench .saved-head .saved-count {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.workbench .info-title .small,
+.workbench .git-section .btn.small {
+  font-size: var(--wb-text-meta);
+}
+
+/* ---------- Unified count badges & status pills ---------- */
+.workbench .wb-count,
+.workbench .info-count,
+.workbench .tasks-section-head .count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--wb-text-pill);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.35;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--muted);
+}
+
+.workbench .session-state,
+.workbench .task-badge,
+.workbench .task-origin-pill,
+.workbench .task-role-pill,
+.workbench .task-model-pill,
+.workbench .chip,
+.workbench .port-here,
+.workbench .saved-count,
+.workbench .done-group-count,
+.workbench .done-group-failed,
+.workbench .done-label,
+.workbench .step-pill,
+.workbench .step-block-head,
+.workbench .stats-ring-label span {
+  font-size: var(--wb-text-pill);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.workbench .port-here {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---------- Unified panel padding & section cadence ---------- */
+.workbench .info-panel {
+  padding: 14px;
+}
+
+.workbench .info-section {
+  padding-bottom: 13px;
+  margin-bottom: 13px;
+  border-bottom-color: var(--hairline, var(--border));
+}
+
+.workbench .tasks-panel {
+  padding: 14px;
+  gap: 12px;
+}
+
+.workbench .tasks-head {
+  padding-bottom: 12px;
+  border-bottom-color: var(--hairline, var(--border));
+}
+
+.workbench .commit-box {
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+/* ---------- Unified primary row & body text across all tabs ---------- */
+.workbench .tree,
+.workbench .git-row,
+.workbench .info-row,
+.workbench .mcp-status-row,
+.workbench .wt-branch-line,
+.workbench .info-file-name,
+.workbench .task-title,
+.workbench .run-title,
+.workbench .done-card,
+.workbench button.done-group-head,
+.workbench .done-row-head,
+.workbench .step-title,
+.workbench .tasks-none,
+.workbench .live-row,
+.workbench .saved-title,
+.workbench .commit-box .textarea,
+.workbench .git-panel .input,
+.workbench .info-panel .input,
+.workbench .info-panel .meter .row {
+  font-size: var(--wb-text-body);
+  line-height: 1.45;
+}
+
+.workbench .tree-row {
+  height: 27px;
+}
+
+.workbench .git-row {
+  min-height: 29px;
+  padding: 4px 10px;
+}
+
+.workbench .info-row {
+  min-height: 28px;
+  padding: 3px 0;
+  gap: 8px;
+}
+
+.workbench .info-file {
+  min-height: 29px;
+  padding: 4px 8px;
+}
+
+.workbench .mcp-status-row {
+  min-height: 26px;
+  padding: 3px 0;
+}
+
+/* Tabs & segmented controls inside panels */
+.workbench .editor-tab,
+.workbench .small-seg button,
+.workbench .fp-head .seg button,
+.workbench .term-tab {
+  font-size: calc(var(--wb-base) * 0.84);
+  white-space: nowrap;
+}
+
+.workbench .small-seg {
+  margin: 8px 12px 0;
+}
+
+.workbench .small-seg button {
+  padding: 4px 10px;
+}
+
+.workbench .seg.compact button {
+  padding: 2px 8px;
+  font-size: var(--wb-text-meta);
+  line-height: 1.4;
+}
+
+/* ---------- Unified secondary / meta / caption / empty text ---------- */
+.workbench .editor-path,
+.workbench .term-toolbar-cmd,
+.workbench .git-row .small,
+.workbench .info-row .small,
+.workbench .info-file-dir,
+.workbench .info-more,
+.workbench .info-pre,
+.workbench .mcp-status-row .mcp-state,
+.workbench .mcp-status-row .mcp-why,
+.workbench .tasks-head .small,
+.workbench .task-card-sub,
+.workbench .tasks-hint,
+.workbench .done-when,
+.workbench .done-more,
+.workbench .step-title.mono,
+.workbench .step-sub,
+.workbench .step-dur,
+.workbench .step-path,
+.workbench .step-meta,
+.workbench .saved-cmd,
+.workbench .saved-strip,
+.workbench .wt-counts,
+.workbench .wt-disclosure,
+.workbench .wb-empty,
+.workbench .term-empty {
+  font-size: var(--wb-text-meta);
+  line-height: 1.45;
+}
+
+.workbench .info-panel .small.muted,
+.workbench .git-panel .small.muted,
+.workbench .tasks-panel .small.muted {
+  font-size: var(--wb-text-meta);
+}
+
+.workbench .wb-empty {
+  color: var(--muted);
+  padding: 8px 14px;
+}
+
+.workbench .info-panel .wb-empty {
+  padding: 2px 0;
+}
+
+.workbench .tasks-panel .tasks-none.small,
+.workbench .tasks-panel .tasks-none,
+.workbench .tasks-none {
+  font-size: var(--wb-text-body);
+  padding: 10px 12px;
+  border: 1px dashed var(--hairline, var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted);
+}
+
+/* Crisp tabular numbers in stats & diffs inside right panel */
+.workbench .stats-big {
+  font-size: calc(var(--wb-text-title) * 1.12);
+}
+
+.workbench .stats-ring-label b,
+.workbench .tile b {
+  font-size: var(--wb-text-title);
+}
+
+.workbench .tile span,
+.workbench .split-legend {
+  font-size: var(--wb-text-meta);
+}

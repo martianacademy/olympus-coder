@@ -185,7 +185,7 @@ export function TasksPanel(props: {
           <span className="grow" />
           <span className={`session-state ${props.running || liveChildren.length > 0 || now.background.length || parentProcs.some((p) => p.threadId === thread.id) ? 'live' : ''}`}>
             {props.running || liveChildren.length > 0 ? <Loader2 size={12} className="spin" /> : <span className="live-dot" />}
-            {props.running || liveChildren.length > 0 ? 'working' : now.background.length || parentProcs.some((p) => p.threadId === thread.id) ? 'background work' : 'idle'}
+            {props.running || liveChildren.length > 0 ? 'Working' : now.background.length || parentProcs.some((p) => p.threadId === thread.id) ? 'Background' : 'Idle'}
           </span>
         </div>
         {data.parent && (

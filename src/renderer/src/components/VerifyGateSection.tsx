@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleCheck, CircleX, Loader2, Play, ShieldCheck } from 'lucide-react';
+import { CircleCheck, CircleX, Loader2, Play } from 'lucide-react';
 import type { Project, VerifyGateConfig, VerifyRunResult } from '@shared/types';
 import { api } from '../api';
 
@@ -53,10 +53,9 @@ export function VerifyGateSection({ project }: { project: Project }) {
   return (
     <div className="info-section" data-testid="verify-gate-section">
       <div className="info-title row" style={{ gap: 6, alignItems: 'center' }}>
-        <ShieldCheck size={13} className="muted" />
         <span>Verify gate</span>
         <span className="grow" />
-        <div className="seg" data-testid="verify-gate-toggle" style={{ transform: 'scale(0.92)', transformOrigin: 'right center' }}>
+        <div className="seg compact" data-testid="verify-gate-toggle">
           <button type="button" className={!cfg.enabled ? 'active' : ''} onClick={() => void save({ enabled: false })}>
             Off
           </button>

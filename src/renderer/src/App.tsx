@@ -69,7 +69,33 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
-  const [wbTab, setWbTab] = useState<WorkbenchTab>('files');
+  const [wbTab, setWbTab] = useState<WorkbenchTab>('info');
+  const [wbClosing, setWbClosing] = useState(false);
+  const wbCloseTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (wbOpen && wbCloseTimer.current) {
+      window.clearTimeout(wbCloseTimer.current);
+      wbCloseTimer.current = null;
+      setWbClosing(false);
+    }
+  }, [wbOpen]);
+  const closeWorkbench = useCallback(() => {
+    const reduced =
+      document.documentElement.dataset.motion === 'reduce' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!isSheetWorkbench || reduced) {
+      setWbClosing(false);
+      setWbOpen(false);
+      return;
+    }
+    setWbClosing(true);
+    if (wbCloseTimer.current) window.clearTimeout(wbCloseTimer.current);
+    wbCloseTimer.current = window.setTimeout(() => {
+      wbCloseTimer.current = null;
+      setWbClosing(false);
+      setWbOpen(false);
+    }, 180);
+  }, [isSheetWorkbench, setWbOpen]);
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const previewCtx = useRef<{ projectId?: string; workbench: boolean; tasksAvailable?: boolean }>({ workbench: false });
 
@@ -605,7 +631,7 @@ export default function App() {
           {(codeWorkbench || chatTasksPanel) && wbOpen && project && (
             <>
               {!isSheetWorkbench && <div className="resizer wb-resizer" onMouseDown={startWorkbenchResize} title="Drag to resize" />}
-              <div className={`workbench-col ${isSheetWorkbench ? 'is-sheet' : ''}`} style={isSheetWorkbench ? undefined : { width: panelWidth }}>
+              <div className={`workbench-col ${isSheetWorkbench ? 'is-sheet' : ''} ${wbClosing ? 'is-closing' : ''}`} style={isSheetWorkbench ? undefined : { width: panelWidth }}>
                 {codeWorkbench ? (
                   <Suspense fallback={<div className="workbench"><div className="muted small" style={{ padding: 16 }}>Loading…</div></div>}>
                     <Workbench
@@ -622,7 +648,7 @@ export default function App() {
                       onClosePreview={closePreview}
                       tab={wbTab}
                       onTab={setWbTab}
-                      onClose={() => setWbOpen(false)}
+                      onClose={closeWorkbench}
                       dark={dark}
                       refreshKey={refreshKey}
                       onDetach={api.panels.available() ? detachTool : undefined}
@@ -648,7 +674,7 @@ export default function App() {
                           : undefined
                       }
                       onOpenThread={openThreadById}
-                      onClose={() => setWbOpen(false)}
+                      onClose={closeWorkbench}
                     />
                   )
                 )}

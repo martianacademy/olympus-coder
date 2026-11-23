@@ -77,7 +77,7 @@
     },
     dmg: {
       code: 'xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"',
-      note: 'Download Olympus.Coder-0.3.3-arm64.dmg from Releases, drag to Applications, then run once (ad-hoc signed).',
+      note: 'Download Olympus.Coder-0.3.4-arm64.dmg from Releases, drag to Applications, then run once (ad-hoc signed).',
     },
   };
 

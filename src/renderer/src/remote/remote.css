@@ -5,6 +5,7 @@ html.remote body,
 html.remote #root {
   height: 100vh;
   height: 100dvh;
+  height: var(--app-h, 100dvh);
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
 }
@@ -13,8 +14,7 @@ html.remote #root {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
   background: var(--bg);
 }
@@ -50,8 +50,7 @@ html.remote #root {
 
 /* ---------- Pairing & Unlock Gate ---------- */
 .r-pair {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -137,12 +136,14 @@ html.remote #root {
 /* Home-screen app: full window height from remote/main.tsx (iOS's 100dvh is short there by the status bar). */
 html.remote.standalone,
 html.remote.standalone body,
-html.remote.standalone #root {
+html.remote.standalone #root,
+html.remote.standalone .remote-host,
+html.remote.standalone .r-pair {
   height: var(--app-h, 100dvh);
 }
 
 /* Keyboard open (remote/main.tsx): the home indicator is under the keyboard, so no safe-area band above it. */
-html.remote.standalone.kb-open .composer-wrap {
+html.remote.kb-open .composer-wrap {
   padding-bottom: 8px;
 }
 

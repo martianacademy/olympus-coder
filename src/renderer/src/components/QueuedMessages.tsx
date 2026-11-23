@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import type { PromptQueueView, QueuedPromptView } from '@shared/promptQueue';
-import { promptQueueApi } from '../promptQueueApi';
+import { promptQueueApi, usePromptQueue } from '../promptQueueApi';
 import { addDraftFiles, getDraft, setDraftText } from '../drafts';
 import { AttachmentChips } from './Attachments';
 import { DeliveryTicks } from './DeliveryTicks';
 
 /**
- * Messages waiting to go out, shown dimmed above the composer (below the running reply) with their ticks and small
- * "Send now · Edit · Remove" actions. They leave this list once sent and appear in the chat as normal messages.
+ * Messages waiting to go out, rendered inside the scrollable chat stream (below the running reply)
+ * with their delivery ticks and "Send now · Edit · Remove" actions so long pending prompts and
+ * attachments scroll naturally instead of squeezing the chat viewport.
  */
-export function QueuedMessages({ threadId, queue }: { threadId: string; queue: PromptQueueView | null }) {
-  if (!queue?.items.length) return null;
+export function QueuedMessages({ threadId, queue }: { threadId: string; queue?: PromptQueueView | null }) {
+  const liveQueue = usePromptQueue(threadId);
+  const effective = queue !== undefined ? queue : liveQueue;
+  if (!effective?.items.length) return null;
   return (
     <div className="queued-list" data-testid="queued-list">
-      {queue.items.map((q) => (
-        <QueuedRow key={q.id} threadId={threadId} q={q} sendNowTitle={sendNowTitle(queue, q)} />
+      {effective.items.map((q) => (
+        <QueuedRow key={q.id} threadId={threadId} q={q} sendNowTitle={sendNowTitle(effective, q)} />
       ))}
     </div>
   );

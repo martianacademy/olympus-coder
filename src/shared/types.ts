@@ -523,6 +523,8 @@ export interface ThemeSettings {
   accentLight?: string;
   overridesDark?: Partial<ThemePalette>;
   overridesLight?: Partial<ThemePalette>;
+  /** Optional standard Tailwind / shadcn / tweakcn `globals.css` (`:root` + `.dark`) applied live on top of the active preset. */
+  customCss?: string;
   fontSize: number;
   uiFont: string;
   codeFont: string;

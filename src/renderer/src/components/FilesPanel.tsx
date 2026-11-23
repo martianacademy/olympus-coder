@@ -303,28 +303,29 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               <span className="row-actions">
                 {e.dir && (
                   <>
-                    <button className="btn ghost icon" title="New file" onClick={(ev) => (ev.stopPropagation(), setExpanded((x) => new Set([...x, e.path])), !children[e.path] && void loadDir(e.path), setCreating({ dir: e.path, isDir: false }))}>
+                    <button className="btn ghost icon tree-act-quick" title="New file" onClick={(ev) => (ev.stopPropagation(), setExpanded((x) => new Set([...x, e.path])), !children[e.path] && void loadDir(e.path), setCreating({ dir: e.path, isDir: false }))}>
                       <FilePlus size={12} />
                     </button>
-                    <button className="btn ghost icon" title="New folder" onClick={(ev) => (ev.stopPropagation(), setExpanded((x) => new Set([...x, e.path])), !children[e.path] && void loadDir(e.path), setCreating({ dir: e.path, isDir: true }))}>
+                    <button className="btn ghost icon tree-act-quick" title="New folder" onClick={(ev) => (ev.stopPropagation(), setExpanded((x) => new Set([...x, e.path])), !children[e.path] && void loadDir(e.path), setCreating({ dir: e.path, isDir: true }))}>
                       <FolderPlus size={12} />
                     </button>
                   </>
                 )}
-                <button className="btn ghost icon" title="Rename" onClick={(ev) => (ev.stopPropagation(), setRenaming(e.path))}>
+                <button className="btn ghost icon tree-act-quick" title="Rename" onClick={(ev) => (ev.stopPropagation(), setRenaming(e.path))}>
                   <Pencil size={11} />
                 </button>
-                <button className="btn ghost icon" title="Move to Trash" onClick={(ev) => (ev.stopPropagation(), void trash(e))}>
+                <button className="btn ghost icon tree-act-quick" title="Move to Trash" onClick={(ev) => (ev.stopPropagation(), void trash(e))}>
                   <Trash2 size={12} />
                 </button>
                 <button
                   className="btn ghost icon"
                   title="More: open in an editor, reveal, copy path"
                   data-testid="tree-row-more"
+                  onPointerDown={(ev) => ev.stopPropagation()}
                   onClick={(ev) => {
                     ev.stopPropagation();
                     const r = ev.currentTarget.getBoundingClientRect();
-                    setMenu({ rel: e.path, dir: e.dir, x: r.right - 4, y: r.bottom + 4, entry: e });
+                    setMenu((cur) => (cur && cur.rel === e.path ? null : { rel: e.path, dir: e.dir, x: r.right - 4, y: r.bottom + 4, entry: e }));
                   }}
                 >
                   <MoreHorizontal size={13} />
@@ -341,13 +342,11 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
   const current = files.find((f) => f.path === active);
 
   return (
-    <div className="files-panel">
+    <div className={`files-panel ${files.length === 0 ? 'no-open-files' : ''}`}>
       {showTree && (
         <div className="explorer" style={{ '--explorer-w': `${explorerW}px` } as React.CSSProperties}>
           <div className="panel-toolbar">
-            <span className="small muted explorer-title" style={{ fontWeight: 600 }}>
-              EXPLORER
-            </span>
+            <span className="explorer-title">Files</span>
             <div className="spacer" />
             <button className="btn ghost icon" title="New file" onClick={() => setCreating({ dir: '', isDir: false })}>
               <FilePlus size={14} />
@@ -362,9 +361,10 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               className="btn ghost icon"
               title="Open the project folder in an editor or the file manager"
               data-testid="explorer-more"
+              onPointerDown={(ev) => ev.stopPropagation()}
               onClick={(ev) => {
                 const r = ev.currentTarget.getBoundingClientRect();
-                setMenu({ rel: '', dir: true, x: r.left, y: r.bottom + 4 });
+                setMenu((cur) => (cur && cur.rel === '' ? null : { rel: '', dir: true, x: r.left, y: r.bottom + 4 }));
               }}
             >
               <MoreHorizontal size={14} />
@@ -377,6 +377,28 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
               target={menu}
               onClose={() => setMenu(null)}
               onError={setError}
+              onNewFile={
+                menu.dir
+                  ? () => {
+                      if (menu.rel) {
+                        setExpanded((x) => new Set([...x, menu.rel]));
+                        if (!children[menu.rel]) void loadDir(menu.rel);
+                      }
+                      setCreating({ dir: menu.rel, isDir: false });
+                    }
+                  : undefined
+              }
+              onNewFolder={
+                menu.dir
+                  ? () => {
+                      if (menu.rel) {
+                        setExpanded((x) => new Set([...x, menu.rel]));
+                        if (!children[menu.rel]) void loadDir(menu.rel);
+                      }
+                      setCreating({ dir: menu.rel, isDir: true });
+                    }
+                  : undefined
+              }
               onRename={menu.entry ? () => setRenaming(menu.entry!.path) : undefined}
               onTrash={menu.entry ? () => void trash(menu.entry!) : undefined}
             />
@@ -395,8 +417,9 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
       )}
       <div className="editor-area">
         <div className="editor-tabs">
-          <button className="btn ghost icon" title={showTree ? 'Hide explorer' : 'Show explorer'} aria-label={showTree ? 'Hide explorer' : 'Show explorer'} data-testid="files-toggle-tree" onClick={() => setShowTree((s) => !s)}>
+          <button className="btn ghost icon files-back-btn" title={showTree ? 'Hide explorer' : 'Show explorer'} aria-label={showTree ? 'Hide explorer' : 'Show explorer'} data-testid="files-toggle-tree" onClick={() => setShowTree((s) => !s)}>
             <PanelLeft size={14} />
+            {!showTree && <span className="files-back-label">Files</span>}
           </button>
           <div className="tabs-scroll">
             {files.map((f) => (
@@ -468,7 +491,7 @@ export const FilesPanel = forwardRef<FilesPanelHandle, { projectId: string; dark
             </>
           )
         ) : (
-          <div className="empty muted small">Select a file in the explorer. Press {keys('⌘S')} to save.</div>
+          <div className="empty wb-empty">Select a file to edit · {keys('⌘S')} to save</div>
         )}
       </div>
     </div>

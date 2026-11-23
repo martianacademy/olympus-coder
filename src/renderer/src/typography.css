@@ -1,0 +1,189 @@
+/**
+ * App-wide 6-step typography scale (`--t-*`).
+ *
+ * Loaded after `styles.css`, `design.css`, `appearance.css`, and `responsive.css` so every
+ * surface (Sidebar, Main Header, Chat/Composer chrome, Right Workbench, Menus, Settings,
+ * Usage/Scheduled) shares one proportional hierarchy derived from `var(--font-size)` — with
+ * zero nested `em` shrinkage and full compatibility with Appearance font-size sliders.
+ */
+
+:root {
+  --t-base: var(--font-size, 14px);
+  --t-heading: calc(var(--t-base) * 1.07);  /* ~15.0px at 14px — modal & page titles */
+  --t-subhead: calc(var(--t-base) * 1.00);  /* ~14.0px at 14px — pane h3 & chat prose */
+  --t-title: calc(var(--t-base) * 0.93);    /* ~13.0px at 14px — header title, picker, project name, field labels */
+  --t-ui: calc(var(--t-base) * 0.90);       /* ~12.6px at 14px — nav rows, threads, workbench rows, menus, controls */
+  --t-meta: calc(var(--t-base) * 0.82);     /* ~11.5px at 14px — subtitles, paths, timestamps, helper text, small buttons */
+  --t-section: calc(var(--t-base) * 0.75);  /* ~10.5px at 14px — ALL uppercase section labels */
+  --t-pill: calc(var(--t-base) * 0.74);     /* ~10.4px at 14px — ALL badges, counts, chips, kbd */
+}
+
+/* ---------- Unified uppercase section labels across the entire app ---------- */
+.section-label,
+.settings-sub,
+.explorer-menu-label,
+.config-menu-group {
+  font-size: var(--t-section);
+  font-weight: 600;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* ---------- Left Sidebar (honors Settings -> Appearance -> Sidebar text size) ---------- */
+.sidebar .nav-item,
+.sidebar .profile-btn {
+  font-size: var(--t-ui);
+  line-height: 1.4;
+}
+
+.sidebar .profile-btn .small {
+  font-size: var(--t-meta);
+}
+
+.sidebar .sidebar-scroll {
+  --sb-base: var(--sb-font-size, var(--t-base));
+}
+
+.sidebar .project-head {
+  font-size: calc(var(--sb-base) * 0.93);
+  line-height: 1.4;
+}
+
+.sidebar .thread-row {
+  font-size: calc(var(--sb-base) * 0.90);
+  line-height: 1.4;
+}
+
+.sidebar .thread-row .small,
+.sidebar .project-head .small {
+  font-size: calc(var(--sb-base) * 0.80);
+}
+
+/* ---------- Main Header ---------- */
+.main-head .title {
+  font-size: var(--t-title);
+  font-weight: var(--bold-weight, 600);
+  letter-spacing: -0.01em;
+}
+
+.main-head .head-sub {
+  font-size: var(--t-meta);
+  line-height: 1.35;
+}
+
+.picker-btn,
+.picker-btn span[style] {
+  font-size: var(--t-title) !important;
+  font-weight: 550;
+}
+
+.stats-btn {
+  font-size: var(--t-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Chat & Composer Chrome (chat reading prose keeps --chat-size) ---------- */
+.composer textarea {
+  font-size: var(--chat-size, var(--t-base));
+  line-height: 1.55;
+}
+
+.msg-meta {
+  font-size: var(--t-meta);
+  font-weight: 600;
+}
+
+.composer-pills .pill,
+.switch-line {
+  font-size: var(--t-meta);
+}
+
+.working {
+  font-size: var(--t-title);
+}
+
+.tok-chip,
+.type-estimate,
+.status-pill,
+.chip,
+.kbd {
+  font-size: var(--t-pill);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Shared UI Controls, Menus & Popovers ---------- */
+.btn,
+.input,
+.select,
+.textarea,
+.seg button,
+.menu-item,
+.config-menu-row,
+.explorer-menu button {
+  font-size: var(--t-ui);
+}
+
+.btn.small {
+  font-size: var(--t-meta);
+}
+
+.menu-item .small,
+.config-menu-empty {
+  font-size: var(--t-meta);
+}
+
+.config-menu-tag {
+  font-size: var(--t-pill);
+}
+
+/* ---------- Modals, Settings, Usage & Scheduled Pages ---------- */
+.modal-head {
+  font-size: var(--t-heading);
+  font-weight: var(--bold-weight, 600);
+  letter-spacing: -0.015em;
+}
+
+.settings-nav button {
+  font-size: var(--t-ui);
+  line-height: 1.4;
+}
+
+.settings-pane h3,
+.page-inner h2 {
+  font-size: var(--t-subhead);
+  font-weight: var(--bold-weight, 600);
+  letter-spacing: -0.01em;
+}
+
+.page-inner h1 {
+  font-size: var(--t-heading);
+  font-weight: var(--bold-weight, 600);
+  letter-spacing: -0.015em;
+}
+
+.field > label {
+  font-size: var(--t-title);
+  font-weight: 550;
+}
+
+.field .small,
+.settings-pane .small.muted,
+.usage-stats,
+.modal-body .small.muted {
+  font-size: var(--t-meta);
+  line-height: 1.45;
+}
+
+.usage-table {
+  font-size: var(--t-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table th {
+  font-size: var(--t-section);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}

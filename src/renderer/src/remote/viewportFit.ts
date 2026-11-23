@@ -20,6 +20,12 @@ export interface FitState {
   orientation: 'portrait' | 'landscape' | '';
   /** Tallest visible height seen in this orientation (keyboard closed). */
   base: number;
+  /**
+   * Stable status-bar shortfall measured while keyboard is closed (`screenH - visible`).
+   * Kept separately so a transient 1-frame `visible === screenH` spike during iOS keyboard dismissal
+   * never zeroes out the shortfall and leaves a 59pt bottom gap after tapping Send.
+   */
+  shortfall?: number;
 }
 
 export interface Fit {
@@ -36,15 +42,25 @@ export function fitHeight(input: FitInput, prev: FitState): Fit {
   const long = Math.max(input.screenWidth, input.screenHeight);
   // Width does not change with the keyboard, height does: decide the orientation from the width.
   const orientation = input.innerWidth > short + 1 ? 'landscape' : 'portrait';
-  const base = Math.max(orientation === prev.orientation ? prev.base : 0, input.visible);
+  const sameOrient = orientation === prev.orientation;
+  const base = Math.max(sameOrient ? prev.base : 0, input.visible);
   const screenW = orientation === 'landscape' ? long : short;
   const screenH = orientation === 'landscape' ? short : long;
   // Only a window as wide as the screen fills it (not an iPad split / Slide Over window).
   const fillsScreen = Math.abs(input.innerWidth - screenW) <= 1;
-  const shortfall = fillsScreen ? Math.max(0, screenH - base) : 0;
+  if (!fillsScreen) {
+    return {
+      height: Math.round(input.visible),
+      keyboard: base - input.visible > KEYBOARD_MIN,
+      state: { orientation, base, shortfall: 0 },
+    };
+  }
+  const keyboard = screenH - input.visible > KEYBOARD_MIN;
+  const prevShortfall = sameOrient ? (prev.shortfall ?? 0) : 0;
+  const shortfall = !keyboard && input.visible < screenH ? Math.max(prevShortfall, screenH - input.visible) : prevShortfall;
   return {
-    height: Math.round(input.visible + shortfall),
-    keyboard: base - input.visible > KEYBOARD_MIN,
-    state: { orientation, base },
+    height: Math.round(keyboard ? input.visible + shortfall : screenH),
+    keyboard,
+    state: { orientation, base, shortfall },
   };
 }

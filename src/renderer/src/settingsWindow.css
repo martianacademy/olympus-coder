@@ -1,0 +1,220 @@
+/**
+ * Draggable, resizable, container-query-responsive Settings window & Theme CSS editor styles.
+ */
+
+.settings-overlay {
+  transition: background-color 0.16s ease;
+}
+
+/* Keep the live app clearly visible (true colors, no dark wash) while tweaking Appearance or after moving Settings. */
+.settings-overlay.is-live-preview {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.settings-overlay.is-moving,
+.settings-overlay.is-moving * {
+  user-select: none !important;
+}
+
+.settings-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  container-name: settings-win;
+  min-width: 0;
+  overflow: hidden;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--hairline, var(--border));
+}
+
+.settings-modal.is-moving {
+  animation: none !important;
+}
+
+.settings-drag-head {
+  cursor: grab;
+  user-select: none;
+  flex: none;
+  padding: 12px 14px 12px 18px;
+}
+
+.settings-modal.is-moving .settings-drag-head {
+  cursor: grabbing;
+}
+
+.settings-modal .settings {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.settings-modal .settings-pane {
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---------- 8-direction resize handles ---------- */
+.sw-resize {
+  position: absolute;
+  z-index: 20;
+  touch-action: none;
+}
+
+.sw-n { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.sw-s { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.sw-e { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.sw-w { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.sw-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.sw-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.sw-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.sw-se {
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.sw-se::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid color-mix(in srgb, var(--muted) 55%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--muted) 55%, transparent);
+  border-bottom-right-radius: 2px;
+  pointer-events: none;
+}
+
+/* ---------- Container-query responsiveness when resized narrow ---------- */
+@container settings-win (max-width: 680px) {
+  .settings {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-right: none;
+    border-bottom: 1px solid var(--hairline, var(--border));
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-nav button {
+    flex: none;
+    white-space: nowrap;
+    padding: 6px 10px;
+  }
+
+  .settings-pane {
+    padding: 14px 16px;
+  }
+}
+
+@container settings-win (max-width: 540px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(98px, 1fr));
+    gap: 8px;
+  }
+
+  .appearance-tabs {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    display: flex;
+  }
+
+  .appearance-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .appearance-tabs button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .settings-pane .row {
+    flex-wrap: wrap;
+  }
+
+  .settings-pane .row > .field.grow {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+}
+
+/* ---------- Theme CSS / tweakcn editor ---------- */
+.tweakcn-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.tweakcn-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tweakcn-editor-wrap {
+  height: 300px;
+  min-height: 200px;
+  border: 1px solid var(--hairline, var(--border));
+  border-radius: calc(var(--radius) * 0.9);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.tweakcn-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tweakcn-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tweakcn-swatches i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--hairline, var(--border));
+}
+
+.tweakcn-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: var(--t-pill, 10.5px);
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}

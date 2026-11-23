@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, FileCode, GitBranch, GitMerge, Loader2, RotateCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileCode, GitMerge, Loader2, RotateCw, Trash2 } from 'lucide-react';
 import type { Thread, WorktreeMergeResult, WorktreeStatusView } from '@shared/types';
 import { api } from '../api';
 import { cleanError, hasWorkToMerge, resolveConflictsPrompt, worktreeCounts, WORKTREE_STATUS_EVENT } from '../worktreeUi';
@@ -118,7 +118,6 @@ export function WorktreeSection(props: {
   return (
     <div className="info-section wt-section" data-testid="worktree-section">
       <div className="info-title row" style={{ gap: 6, alignItems: 'center' }}>
-        <GitBranch size={13} className="muted" />
         <span className="grow">Worktree</span>
         <button className="btn ghost icon" title="Refresh worktree status" aria-label="Refresh worktree status" data-testid="worktree-refresh" onClick={load} disabled={busy !== null}>
           <RotateCw size={12} />

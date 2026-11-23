@@ -1,7 +1,7 @@
 {
   "name": "olympus-coder",
   "productName": "Olympus Coder",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Olympus Coder: one desktop app for Claude Code, Antigravity CLI, Codex and other ACP coding agents, with shared memory.",
   "main": "out/main/index.js",
   "private": true,

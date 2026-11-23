@@ -24,15 +24,15 @@ function test(name, fn) {
 }
 
 test('normalizeTabOrder preserves valid custom order and appends missing defaults', () => {
-  assert.deepEqual(normalizeTabOrder(['terminal', 'files']), ['terminal', 'files', 'git', 'tasks', 'info']);
+  assert.deepEqual(normalizeTabOrder(['terminal', 'files']), ['terminal', 'files', 'info', 'git', 'tasks']);
   assert.deepEqual(normalizeTabOrder(['git', 'git', 'bogus', 42, 'info']), ['git', 'info', 'files', 'terminal', 'tasks']);
   assert.deepEqual(normalizeTabOrder(null), [...DEFAULT_WB_TABS]);
 });
 
 test('reorderTabs moves source into target slot without mutating original', () => {
   const start = [...DEFAULT_WB_TABS];
-  assert.deepEqual(reorderTabs(start, 'files', 'terminal'), ['git', 'terminal', 'files', 'tasks', 'info']);
-  assert.deepEqual(reorderTabs(start, 'info', 'files'), ['info', 'files', 'git', 'terminal', 'tasks']);
+  assert.deepEqual(reorderTabs(start, 'files', 'terminal'), ['info', 'git', 'terminal', 'files', 'tasks']);
+  assert.deepEqual(reorderTabs(start, 'tasks', 'info'), ['tasks', 'info', 'files', 'git', 'terminal']);
   assert.deepEqual(reorderTabs(start, 'git', 'git'), start);
   assert.deepEqual(start, [...DEFAULT_WB_TABS]);
 });

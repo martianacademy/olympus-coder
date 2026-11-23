@@ -62,5 +62,21 @@ test('an iPad split / Slide Over window (narrower than the screen) is left as re
   assert.equal(r.height, 1200);
 });
 
+test('1-frame full-height spike on keyboard dismiss never leaves a 59pt bottom gap', () => {
+  const boot = fitHeight(phone(873), fresh);
+  assert.equal(boot.height, 932);
+  const open = fitHeight(phone(467), boot.state);
+  assert.equal(open.height, 526);
+  // iOS momentarily reports visible === 932 while dismissing keyboard after Send, then settles back to 873.
+  const spike = fitHeight(phone(932), open.state);
+  assert.equal(spike.height, 932);
+  assert.equal(spike.keyboard, false);
+  const settled = fitHeight(phone(873), spike.state);
+  assert.equal(settled.height, 932, 'settled closed height must remain full 932px with zero bottom gap');
+  assert.equal(settled.keyboard, false);
+  const reopen = fitHeight(phone(467), settled.state);
+  assert.equal(reopen.height, 526, 'reopening keyboard must still preserve 59pt shortfall');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

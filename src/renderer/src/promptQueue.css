@@ -3,9 +3,13 @@
 .delivery-ticks { display: inline-flex; align-items: center; color: color-mix(in srgb, var(--muted) 80%, transparent); line-height: 0; cursor: default; }
 .delivery-ticks.seen { color: #4ea1ff; }
 
-.queued-list { max-width: var(--chat-width, 780px); margin: 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 0 2px 8px; }
-.queued-msg { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 85%; min-width: 0; }
-.queued-msg .msg-user { max-width: 100%; opacity: .62; border-style: dashed; }
+.queued-list { width: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; padding: 0; }
+.queued-msg { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 85%; min-width: 0; }
+.queued-msg .attachment-chips { justify-content: flex-end; max-width: 100%; }
+.queued-msg .msg-user { max-width: 100%; opacity: .68; border-style: dashed; }
+@media (max-width: 560px) {
+  .queued-msg { max-width: 92%; }
+}
 .queued-edit-modal { width: min(720px, calc(100vw - 32px)); }
 .queued-edit-modal textarea { width: 100%; min-height: 220px; max-height: 60vh; resize: vertical; font: inherit; line-height: 1.5; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
 .queued-edit-actions { gap: 8px; align-items: center; margin-top: 10px; }
