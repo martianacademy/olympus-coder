@@ -9,6 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { ThreadItem } from '@shared/types';
+import { noteNativeWake } from './wakeSignals';
 
 interface AgentInitiatedRuntime {
   thread: { id: string; items: ThreadItem[]; nativeSubagent?: unknown };
@@ -150,6 +151,8 @@ export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: strin
     ended: false,
   };
   activeTurns.set(rt.thread.id, active);
+  // The agent started work on its own: a backup wake due about now (Claude's ScheduleWakeup, agy over ACP) is redundant.
+  noteNativeWake(rt.thread.id, cause ?? '');
   rt.running = true;
   rt.turn = {};
   host.onAgentTurn?.(rt, true);

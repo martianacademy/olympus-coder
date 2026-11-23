@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { dirname } from 'node:path';
 import { isMuted, notifyAgent } from './appmsg';
 import { runState } from './agents';
+import { onNativeWake, wakesSatisfiedBy } from './wakeSignals';
 
 /**
  * Agent self wake-ups. Some agents can schedule themselves to look again later (Antigravity's `schedule` tool:
@@ -22,6 +23,8 @@ export interface SavedAgentTimer {
 const MAX_DELAY = 24 * 3_600_000;
 const STALE_OVERDUE_MS = 24 * 3_600_000;
 const RESTART_SETTLE_MS = 2000;
+/** A backup wake fires this long after the agent's own deadline, so an agent that wakes itself is seen first. */
+const WAKE_GRACE_MS = 10_000;
 const timers = new Map<string, NodeJS.Timeout>();
 const entries = new Map<string, SavedAgentTimer>();
 /** Tool calls already turned into a wake-up (agents re-send the same call when its timer completes). */
@@ -129,10 +132,25 @@ export function keepWake(threadId: string, toolCallId: string, ms: number, note:
   if (seen.has(key)) return;
   seen.add(key);
   if (seen.size > 5000) seen.clear();
-  const delay = ms + 3000;
+  const delay = ms + WAKE_GRACE_MS;
   armEntry({ key, threadId, kind: 'wake', dueAt: Date.now() + delay, note: note.slice(0, 600) });
   persistEntries();
 }
+
+/** Cancels one pending entry (timeout + saved copy). */
+function cancelEntry(key: string): boolean {
+  const t = timers.get(key);
+  if (t) clearTimeout(t);
+  timers.delete(key);
+  return entries.delete(key);
+}
+
+// The agent woke itself (Antigravity's own wake message, an agent-initiated turn): its backup wake is redundant.
+onNativeWake((threadId, text) => {
+  let changed = false;
+  for (const key of wakesSatisfiedBy(entries.values(), threadId, text, Date.now())) changed = cancelEntry(key) || changed;
+  if (changed) persistEntries();
+});
 
 /** Drops a chat's wake-ups (chat deleted or stopped by the user). */
 export function dropWakes(threadId: string) {

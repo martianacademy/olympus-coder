@@ -12,6 +12,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { ThreadItem } from '@shared/types';
 import type { NativeRuntimeHandle, NativeSubagentHost } from './nativeSubagents';
+import { noteNativeWake } from './wakeSignals';
 import { buildAgyToolItem, dedupToolTimestamps, parseAgyMessage, readNewLines, type LineTail } from './agyTranscript';
 
 const POLL_MS = 1_000;
@@ -162,6 +163,14 @@ function consume(watch: IdleWatch, line: string): void {
   // A new model step or user message means any previous step's tools are over: close both tracked `pendingTools`
   // and any orphaned `:idle:tool:<olderStep>:*` items in the thread so nothing stays stuck in Tasks → Running.
   if (step.type === 'PLANNER_RESPONSE' || step.type === 'USER_INPUT') closePending(watch, ts, stepIndex);
+  // agy woke itself (its own `schedule` fired): the app's backup wake for it would arrive seconds later as a
+  // duplicate prompt, so cancel it. Read in every mode, and only for fresh lines.
+  if (step.type === 'SYSTEM_MESSAGE' && Date.now() - ts < 120_000) {
+    const content = String(step.content ?? '');
+    if (!content.includes('All your subagents and background tasks have been stopped')) {
+      noteNativeWake(watch.rt.thread.id, parseAgyMessage(content).text || content);
+    }
+  }
   if (watch.mode === 'muted' && step.type !== 'GENERIC') return;
   if (watch.mode === 'live' && step.type !== 'GENERIC' && step.type !== 'SYSTEM_MESSAGE') return;
   const id = watch.rt.sessionId!;
