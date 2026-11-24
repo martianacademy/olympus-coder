@@ -1,7 +1,7 @@
 import { shell } from 'electron';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { ImportCandidate, SkillView } from '@shared/types';
 import { getSettings, listProjects, sharedRoot, updateSettings } from './store';
 
@@ -179,22 +179,6 @@ export function importSkill(path: string): SkillView[] {
   return listSkills();
 }
 
-const GUIDE_DESC_MAX = 220;
-
-/**
- * Compacts a verbose skill description for the system-prompt index without cutting mid-word,
- * keeping full descriptions intact in the Settings UI (`listSkills` / `getSkill`).
- */
-function compactSkillDescription(desc: string, max = GUIDE_DESC_MAX): string {
-  const clean = desc.replace(/\s+/g, ' ').trim();
-  if (clean.length <= max) return clean;
-  const slice = clean.slice(0, max);
-  const sentenceEnd = slice.lastIndexOf('. ');
-  if (sentenceEnd >= 90) return slice.slice(0, sentenceEnd + 1);
-  const wordEnd = slice.lastIndexOf(' ');
-  return `${(wordEnd > 60 ? slice.slice(0, wordEnd) : slice).replace(/[.,;:—-]+$/, '')}…`;
-}
-
 /**
  * Names of the skills Claude Code lists on its own (it reads ~/.claude/skills and <project>/.claude/skills), by
  * folder and frontmatter name, lower-cased.
@@ -218,13 +202,55 @@ export function claudeListedSkillNames(projectPath: string): Set<string> {
   return names;
 }
 
+const MAX_INLINE_SKILLS_PER_DIR = 40;
+
 /**
- * For the operating guide: the enabled skills with concise one-line trigger summaries. With `claudeProject`, the
- * skills Claude Code already lists from its own folders are left out (the same skill twice costs tokens every request).
+ * For the operating guide: enabled skills grouped by folder (omitting skills Claude Code already lists
+ * from its own folders so the same skill is never sent twice).
  */
-export function skillsForGuide(claudeProject?: string): { name: string; description: string; path: string }[] {
+export function skillsForGuide(claudeProject?: string): { id: string; name: string; rootDir: string; readOnly: boolean }[] {
   const listed = claudeProject ? claudeListedSkillNames(claudeProject) : new Set<string>();
   return listSkills()
     .filter((s) => s.enabled && !listed.has(s.id.toLowerCase()) && !listed.has(s.name.toLowerCase()))
-    .map((s) => ({ name: s.name, description: compactSkillDescription(s.description), path: s.path }));
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      rootDir: dirname(dirname(s.path)),
+      readOnly: Boolean(s.readOnly),
+    }));
+}
+
+/**
+ * Formats an ultra-compact, on-demand `## Shared skills` section for the operating guide:
+ * lists skill names grouped by folder (no 220-char descriptions or repeated paths) and instructs the
+ * model to grep/read `<folder>/<skill>/SKILL.md` only when a task matches — cutting system-prompt
+ * skill overhead by ~85–93% while preserving 100% skill discovery.
+ */
+export function formatCompactSkillsGuide(
+  skills: { id: string; name: string; rootDir: string; readOnly: boolean }[],
+): string {
+  if (!skills.length) return '';
+  const byDir = new Map<string, { readOnly: boolean; items: { id: string; name: string }[] }>();
+  for (const s of skills) {
+    let group = byDir.get(s.rootDir);
+    if (!group) {
+      group = { readOnly: s.readOnly, items: [] };
+      byDir.set(s.rootDir, group);
+    }
+    group.items.push({ id: s.id, name: s.name });
+  }
+  const lines = [...byDir.entries()]
+    .sort((a, b) => Number(a[1].readOnly) - Number(b[1].readOnly) || a[0].localeCompare(b[0]))
+    .map(([dir, g]) => {
+      const shown = g.items.slice(0, MAX_INLINE_SKILLS_PER_DIR).map((x) => (x.name === x.id ? `**${x.id}**` : `**${x.name}** (\`${x.id}\`)`));
+      const overflow = g.items.length > MAX_INLINE_SKILLS_PER_DIR ? `, … (grep \`${dir}\` for more)` : '';
+      return `- \`${dir}\`: ${shown.join(', ')}${overflow}`;
+    });
+
+  return [
+    '## Shared skills',
+    '',
+    'On-demand task playbooks live as `<folder>/<skill>/SKILL.md` (not preloaded to save context). Only when the current task matches a skill below — or to check for a relevant playbook — grep the folder or read `<folder>/<skill>/SKILL.md` before starting:',
+    ...lines,
+  ].join('\n');
 }

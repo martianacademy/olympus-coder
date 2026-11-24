@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Project, Thread } from '@shared/types';
 import { olympusServerName, sharesMcpRegistry } from '@shared/olympusServer';
 import { claudeNativeMemory, globalInstructionsPath, memoryDir, projectInstructionsPath, readProjectInstructions } from './memory';
-import { skillsDir, skillsForGuide } from './skills';
+import { formatCompactSkillsGuide, skillsDir, skillsForGuide } from './skills';
 import { learningOn } from './usernotes';
 import { baseProjectId, findThread, GENERAL_PROJECT_ID, getSettings, sharedRoot, writeJson } from './store';
 
@@ -181,11 +181,9 @@ ${writeBackRule}`,
   // others are named here. A worker gets the folder, not the list: its task brief rarely needs one.
   const skills = skillsForGuide(agentId === 'claude' ? project.path : undefined);
   if (skills.length && role === 'worker') {
-    out.push(`## Shared skills\n\nReusable task instructions shared by every agent live in \`${skillsDir()}/<skill>/SKILL.md\`. If your task looks like one (for example a video, a framework setup), list that folder and follow the matching SKILL.md.`);
+    out.push(`## Shared skills\n\nReusable task instructions shared by every agent live in \`${skillsDir()}/<skill>/SKILL.md\`. If your task looks like one (for example a video, a framework setup), grep or list that folder and read the matching SKILL.md.`);
   } else if (skills.length) {
-    out.push(
-      `## Shared skills\n\nReusable instructions for particular kinds of task, shared by every agent. When a task matches a skill's description, read its SKILL.md before you start and follow it; other files in its folder are its resources.\n\n${skills.map((k) => `- **${k.name}** — ${k.description} (${k.path})`).join('\n')}`,
-    );
+    out.push(formatCompactSkillsGuide(skills));
   }
 
   out.push(

@@ -185,10 +185,22 @@ await test('Claude guide leaves out shared skills Claude lists itself; other age
   const c = G.buildGuide(project, main, 'claude');
   assert.ok(c.includes('**db-setup**'));
   assert.ok(!c.includes('**video-maker**'));
+  assert.ok(!c.includes('Set up databases.'), 'verbose descriptions stay out of the guide (read SKILL.md on demand)');
   const x = G.buildGuide(project, { ...main, agentId: 'codex' }, 'codex');
   assert.ok(x.includes('**db-setup**') && x.includes('**video-maker**'));
+  assert.ok(x.includes('grep'), 'guide instructs on-demand grep/read of SKILL.md');
   const w = G.buildGuide(project, { ...worker, agentId: 'codex' }, 'codex');
   assert.ok(!w.includes('**db-setup**') && w.includes('/<skill>/SKILL.md'), 'workers get the folder, not the list');
+});
+
+await test('compact skills section stays tiny even with 30 verbose skills (no description bloat)', () => {
+  const verboseDesc = 'A very detailed trigger description explaining many edge cases and domain workflows that would otherwise consume lots of prompt tokens on every single turn.';
+  for (let i = 0; i < 30; i++) skill(join(SHARED, 'skills'), `domain-${String(i).padStart(2, '0')}`, verboseDesc);
+  const g = G.buildGuide(project, { ...main, agentId: 'codex' }, 'codex');
+  const section = g.slice(g.indexOf('## Shared skills'), g.indexOf('## Honesty'));
+  assert.ok(section.includes('**domain-00**') && section.includes('**domain-29**'));
+  assert.ok(!section.includes('A very detailed trigger description'));
+  assert.ok(section.length < 1200, `expected compact skills section (<1200 chars), got ${section.length}`);
 });
 
 await test('Claude preamble does not repeat MEMORY.md (auto-memory has it); others get the catalog', () => {
