@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Olympus Coder Browser",
+  "version": "0.2.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0g+6ly4jncCWd3LqcGhlNqDzj9SgHW84seRLhb2We7kSRXn5zoz3StpMqabVl/t10iuj+wbsQ+sF+cPqpE+eagatCjWunHCRUnATxft5oOQSzInwQEYKAntuu0tpgluT37ulJjFHIIvg3OJb8/5N5YrY8OUcXtVkGgDot1w5uJDihEkxqhD19XnGnNOt2JzRTrLTODeWOb6zIEFj3I4yFcqfHPpdYX0hvgT8H1WLHKcuGTKWpos7/D2tUzOl76WRrJXbsZ3M3zjEeNbbgSBfKboi/A/iac+o3lH+B9/JYYJPi+fPwbS6TQjL/6kOz5D08kB8N9NRcLFTjMM8mwzlNQIDAQAB",
+  "description": "Auto-connects your real Chrome browser to Olympus Coder agents with live visual cursor, smooth scrolling, and CDP debugging.",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "scripting",
+    "storage",
+    "alarms",
+    "activeTab",
+    "debugger"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Olympus Coder Browser",
+    "default_icon": {
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}

@@ -3,6 +3,7 @@ import type { AgentDef, AppState, RunningTask, UserProfile } from '@shared/types
 import { api } from '../api';
 import type { AgentsInfo } from '../App';
 import { isRemoteBrowser } from '../responsive';
+import { ChromeExtToast } from './ChromeExtToast';
 import { ErrorBoundary } from './ErrorBoundary';
 import type { PreviewTarget } from './FilePreview';
 import { HeatToast, type TaskPlace } from './HeatToast';
@@ -96,6 +97,7 @@ export function AppOverlays(props: AppOverlaysProps) {
 
       <UpdateBanner />
       <HeatToast placeOf={props.taskPlace} onShow={props.onShowTask} />
+      {!isRemoteBrowser() && <ChromeExtToast onSetUp={() => props.onSettingsTab('connectors')} />}
       {!isRemoteBrowser() && (
         <SecurityNudge
           lockEnabled={state.lock.enabled}

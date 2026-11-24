@@ -39,6 +39,7 @@ import { listSchedules } from './schedules';
 import { canManageSchedules, handleScheduleTool, scheduleToolDefs } from './scheduleTools';
 import { agentToolDefs, canManageAgents, handleAgentTool } from './agentTools';
 import { canManageProjects, handleProjectTool, projectToolDefs } from './projectTools';
+import { browserToolDefs, handleBrowserTool } from './browserTools';
 import { agySubagentSummary, discoverAgySubagents } from './agySubagents';
 import { claudeSubagentSummary, discoverClaudeSubagents } from './claudeSubagents';
 import { nativeSubagentSummary } from './nativeSubagents';
@@ -686,7 +687,8 @@ export function toolsFor(t: Thread) {
   const schedules = canManageSchedules(t) ? scheduleToolDefs(t.agentId) : [];
   const agentMgmt = canManageAgents(t) ? agentToolDefs() : [];
   const projectMgmt = canManageProjects(t) ? projectToolDefs() : [];
-  if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...learn, ...schedules, ...agentMgmt, ...projectMgmt];
+  const browser = browserToolDefs(Boolean(t.secondOpinion));
+  if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...browser, ...learn, ...schedules, ...agentMgmt, ...projectMgmt];
   // Keep these schemas small: Antigravity (agy 1.5.8) silently disables MCP tools whose declaration is too large
   // ("tool … is not enabled for server …"; seen at ≥1144 chars, fine at ≤840). Agent ids are validated server-side
   // (assertAgentQuotaAvailable) instead of a long `enum`; list_agents shows the ids, models, modes and efforts.
@@ -709,6 +711,7 @@ export function toolsFor(t: Thread) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     ...term,
+    ...browser,
     ...learn,
     ...schedules,
     ...agentMgmt,
@@ -944,6 +947,16 @@ async function callTool(threadId: string, name: string, args: any, closed: () =>
         const projectOut = await handleProjectTool(t, name, args, emit);
         if (projectOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
         text = projectOut;
+        break;
+      }
+      case 'browser_tabs':
+      case 'browser_open':
+      case 'browser_read':
+      case 'browser_act':
+      case 'browser_close': {
+        const browserOut = await handleBrowserTool(name, args, Boolean(t.secondOpinion));
+        if (browserOut === undefined) throw new ToolError(`Unknown tool ${name}.`);
+        text = browserOut;
         break;
       }
       default:

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Download, Globe, Loader2, Pencil, Plug, Plus, SquareTerminal, Trash2, Zap } from 'lucide-react';
-import type { AgentDef, ConnectorView, ImportCandidate } from '@shared/types';
-import { api } from '../../api';
+import { ChevronDown, ChevronRight, Download, ExternalLink, FolderOpen, Globe, Loader2, Pencil, Plug, Plus, SquareTerminal, Trash2, Zap } from 'lucide-react';
+import { chromeConnectorArgs, detectChromeConnectorMode, type ChromeConnectorMode } from '@shared/defaultConnectors';
+import type { AgentDef, BrowserBridgeStatus, ConnectorView, ImportCandidate } from '@shared/types';
+import { api, onEvent } from '../../api';
 import { AgentLogo } from '../../logos';
+import { isRemoteBrowser } from '../../responsive';
 
 type Form = { id?: string; name: string; transport: 'stdio' | 'http'; command: string; args: string; env: string; url: string; headers: string; agents: 'all' | string[]; enabled: boolean; source?: string };
 const EMPTY: Form = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', agents: 'all', enabled: true };
@@ -28,8 +30,34 @@ export function ConnectorsSettings({ agentDefs }: { agentDefs: AgentDef[] }) {
   const [testing, setTesting] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [cands, setCands] = useState<ImportCandidate[] | null>(null);
+  const [bridge, setBridge] = useState<BrowserBridgeStatus | null>(null);
+  const [chromeOpenFailed, setChromeOpenFailed] = useState(false);
+  const [sharedRoot, setSharedRoot] = useState('~/.olympus');
 
-  useEffect(() => void api.connectors().then(setList), []);
+  useEffect(() => {
+    void api.connectors().then(setList);
+    void api.browser.status().then(setBridge).catch(() => {});
+    void api.state().then((s) => s.settings.sharedRoot && setSharedRoot(s.settings.sharedRoot)).catch(() => {});
+    return onEvent((ch, payload) => {
+      if (ch === 'browser:status') setBridge(payload as BrowserBridgeStatus);
+    });
+  }, []);
+
+  const switchChromeMode = async (c: ConnectorView, mode: ChromeConnectorMode) => {
+    const next = await api.saveConnector({
+      id: c.id,
+      name: c.name,
+      enabled: c.enabled,
+      transport: 'stdio',
+      command: c.command || 'npx',
+      args: chromeConnectorArgs(mode, sharedRoot),
+      env: c.env,
+      headers: c.headers,
+      agents: c.agents,
+      source: c.source,
+    });
+    setList(next);
+  };
 
   const edit = (c?: ConnectorView) => {
     setError('');
@@ -95,6 +123,57 @@ export function ConnectorsSettings({ agentDefs }: { agentDefs: AgentDef[] }) {
           <Download size={13} /> Import from Claude / Codex / Gemini
         </button>
       </div>
+
+      {bridge && (
+        <div className="card set-card" data-testid="olympus-chrome-ext-card">
+          <div className="row" style={{ gap: 8 }}>
+            <Globe size={16} className="muted" />
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="row" style={{ gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Olympus Chrome Extension</span>
+                <span className="small" style={{ color: bridge.connected ? 'var(--success, #22c55e)' : 'var(--muted)', fontWeight: 600 }}>
+                  · {bridge.connected ? `Connected${bridge.extensionVersion ? ` · v${bridge.extensionVersion}` : ''}` : 'Not connected'}
+                </span>
+              </div>
+              <div className="small muted">
+                Lets agents use your real Chrome, with your logins, in their own orange “Olympus Coder” tab group. You watch every step live and can press Stop on the page at any time.
+              </div>
+            </div>
+          </div>
+          {!bridge.connected && !isRemoteBrowser() && (
+            <ol className="ext-steps small" data-testid="chrome-ext-steps">
+              <li>
+                <span>
+                  Open Chrome’s extensions page and turn on <b>Developer mode</b> (top right).
+                </span>
+                <button
+                  className="btn small"
+                  onClick={() => void api.browser.openChromeExtensions().then((ok) => setChromeOpenFailed(!ok))}
+                  title="Open chrome://extensions in Google Chrome"
+                >
+                  <ExternalLink size={12} /> Open in Chrome
+                </button>
+              </li>
+              <li>
+                <span>
+                  Drag the <code>olympus-chrome</code> folder onto that page, or click <b>Load unpacked</b> and pick it.
+                </span>
+                <button className="btn small" onClick={() => void api.browser.revealExtension()} title="Show the extension folder in Finder">
+                  <FolderOpen size={12} /> Show folder
+                </button>
+              </li>
+              <li>
+                <span>That’s it. It connects by itself and this card turns green.</span>
+              </li>
+            </ol>
+          )}
+          {!bridge.connected && chromeOpenFailed && (
+            <div className="small muted" style={{ marginTop: 6 }}>
+              Couldn’t open Chrome. Type <code>chrome://extensions</code> in Chrome’s address bar instead.
+            </div>
+          )}
+        </div>
+      )}
 
       {cands && (
         <div className="card set-card">
@@ -230,6 +309,29 @@ export function ConnectorsSettings({ agentDefs }: { agentDefs: AgentDef[] }) {
             </button>
             <button className={`switch ${c.enabled ? 'on' : ''}`} title={c.enabled ? 'On' : 'Off'} onClick={() => void api.enableConnector(c.id, !c.enabled).then(setList)} />
           </div>
+          {c.id === 'chrome-devtools' && (
+            <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <span className="small muted">Mode:</span>
+              <div className="seg">
+                {(
+                  [
+                    ['agent-profile', 'Agent Chrome'],
+                    ['headless', 'Headless'],
+                    ['real-chrome', 'My Real Chrome'],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    className={detectChromeConnectorMode(c.args) === m ? 'active' : ''}
+                    onClick={() => void switchChromeMode(c, m)}
+                    data-testid={`chrome-mode-${m}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="row small muted" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             <span className="row" style={{ gap: 4 }}>
               {c.agents === 'all'

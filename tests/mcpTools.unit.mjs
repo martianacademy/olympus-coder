@@ -81,6 +81,11 @@ const EXPECTED_ANNOTATIONS = {
   message_subsession: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   cancel_subsession: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   delete_subsession: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  browser_tabs: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  browser_open: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  browser_read: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  browser_act: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  browser_close: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 };
 
 let pass = 0;
@@ -102,9 +107,9 @@ const proj = S.addProject(projDir);
 const mainThread = S.createThread(proj.id, 'antigravity', { title: 'Main orchestrator' });
 const allTools = ORCH.toolsFor(mainThread);
 
-await test('all 24 MCP tools declare complete boolean 4-hint annotations, strict schemas, and fit <= 910 bytes', () => {
+await test('all 29 MCP tools declare complete boolean 4-hint annotations, strict schemas, and fit <= 910 bytes', () => {
   const names = allTools.map((t) => t.name).sort();
-  assert.deepEqual(names, Object.keys(EXPECTED_ANNOTATIONS).sort(), 'exact 24 MCP tools registered');
+  assert.deepEqual(names, Object.keys(EXPECTED_ANNOTATIONS).sort(), 'exact 29 MCP tools registered');
   for (const tool of allTools) {
     assert.deepEqual(tool.annotations, EXPECTED_ANNOTATIONS[tool.name], `annotations for ${tool.name}`);
     for (const k of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) {
@@ -122,12 +127,15 @@ await test('all 24 MCP tools declare complete boolean 4-hint annotations, strict
 await test('second-opinion read-only threads hide mutating terminal, schedule, agent, project, and orchestration tools', () => {
   const roThread = S.createThread(proj.id, 'claude', { title: 'Second opinion', secondOpinion: true });
   const names = new Set(ORCH.toolsFor(roThread).map((t) => t.name));
-  for (const keep of ['session_info', 'set_timer', 'read_terminal', 'list_saved_commands']) {
+  for (const keep of ['session_info', 'set_timer', 'read_terminal', 'list_saved_commands', 'browser_tabs', 'browser_read']) {
     assert.ok(names.has(keep), `expected ${keep} on second-opinion thread`);
   }
   for (const hide of [
     'run_in_terminal',
     'run_saved_command',
+    'browser_open',
+    'browser_act',
+    'browser_close',
     'remember_about_user',
     'list_schedules',
     'save_schedule',

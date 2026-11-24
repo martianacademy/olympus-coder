@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { AppState, AttachmentView, DeskEvents, MaxEffortSettings, ProcAction, Settings, UiMode, VerifyGateConfig } from '@shared/types';
 import * as agents from './agents';
 import { cancelMaxEffort, effectiveMaxEffort, initMaxEffort, isMaxEffortRunning, runMaxEffortTurn, updateThreadMaxEffort } from './maxEffort';
+import { browserBridgeStatus, extensionFolderPath, openChromeExtensionsPage, startBrowserBridge, stopBrowserBridge } from './browserBridge';
 import * as attachments from './attachments';
 import { readClipboardMessage, writeClipboard, type ClipboardPayload } from './clipboard';
 import * as catalog from './catalog';
@@ -180,6 +181,9 @@ const announceProjects = () => emit('projects:changed', store.listProjectsWithMi
 store.onProjectsWritten(() => projectsWatch?.notify());
 initOrchestrator(emit);
 initMaxEffort(emit);
+if (process.env.OLYMPUS_TEST_HIDDEN !== '1') {
+  void startBrowserBridge(emit).catch(() => {});
+}
 setTerminalEmitter(emit);
 /** The ACP client features' events (live agent terminals, files agents wrote): same channel and lock rule as `emit`. */
 const emitAcp = <K extends keyof AcpClientEvents>(channel: K, payload: AcpClientEvents[K]) => {
@@ -686,6 +690,12 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   'connectors.enable': (id: string, on: boolean) => connectors.setConnectorEnabled(id, on),
   'connectors.test': (id: string) => connectors.testConnector(id),
   'connectors.candidates': () => connectors.importCandidates(),
+  'browser.status': () => browserBridgeStatus(),
+  'browser.openChromeExtensions': () => openChromeExtensionsPage(),
+  'browser.revealExtension': () => {
+    const dir = extensionFolderPath();
+    if (existsSync(dir)) void shell.openPath(dir);
+  },
 
   'tools.rules': (rules: Settings['toolRules']) => store.updateSettings({ toolRules: rules }),
   'tools.forgetSeen': () => store.updateSettings({ seenTools: [] }),
@@ -985,6 +995,7 @@ app.on('before-quit', (e) => {
   stopRemote();
   agents.shutdownAgents();
   stopOrchestrator();
+  stopBrowserBridge();
   killAllPtys();
   acpTerminals.killAll();
   shutdownVoice();

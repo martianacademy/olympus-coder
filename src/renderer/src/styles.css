@@ -1287,3 +1287,10 @@ button.pdash-chip:hover { color: var(--text); border-color: var(--accent); }
 .voice-test-out { max-width: 560px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; gap: 4px; }
 .dictate-note { flex: 1 1 auto; min-width: 0; }
 .dictate-fallback { flex: none; }
+
+/* Chrome extension setup (Settings → Connectors) and the "an agent wants Chrome" toast */
+.ext-steps { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.ext-steps li { padding-left: 2px; line-height: 1.7; }
+.ext-steps li .btn { margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.ext-toast { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.ext-toast-icon { color: var(--accent); flex: none; }

@@ -692,6 +692,8 @@ export interface Settings {
   maxEffort?: MaxEffortSettings;
   /** MCP servers every agent session gets (Settings → Connectors). Env and header values live in the keychain. */
   connectors: ConnectorDef[];
+  /** Built-in connector ids already seeded once (prevents re-adding one the user deleted). */
+  seededConnectors?: string[];
   /** Auto-answers for permission requests (Settings → Tools). */
   toolRules: ToolRule[];
   /** Tools agents recently asked permission for, to make rules from. */
@@ -895,6 +897,16 @@ export interface MemoryView {
 }
 
 /** Events the main process pushes to the renderer. */
+export interface BrowserBridgeStatus {
+  running: boolean;
+  port: number;
+  connected: boolean;
+  paused: boolean;
+  extensionId?: string;
+  extensionVersion?: string;
+  extensionPath: string;
+}
+
 export interface DeskEvents {
   'thread:item': { threadId: string; item: ThreadItem };
   'thread:meta': ThreadMeta;
@@ -915,6 +927,9 @@ export interface DeskEvents {
   'catalog:progress': { id: string; phase: 'download' | 'verify' | 'extract' | 'done' | 'error'; received?: number; total?: number; error?: string };
   /** An agent was added or removed outside the Settings screen (e.g. by an agent's add_agent tool). */
   'agents:changed': { defs: AgentDef[]; statuses: AgentStatus[] };
+  'browser:status': BrowserBridgeStatus;
+  /** An agent called a browser_* tool while the Chrome extension wasn't connected (throttled in main). */
+  'browser:needed': { at: number };
   'skills:changed': SkillView[];
   /** A chat was deleted (from the sidebar, by delete_subsession, or a disposable sub-session cleaned up). */
   'thread:deleted': { id: string; projectId: string; parentId?: string };

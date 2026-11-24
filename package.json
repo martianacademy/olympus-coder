@@ -84,6 +84,7 @@
     },
     "files": [
       "out/**/*",
+      "extensions/**/*",
       "package.json"
     ],
     "asar": false,

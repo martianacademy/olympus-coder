@@ -55,6 +55,8 @@ export const DENIED = new Set([
   'memory.openGlobal',
   'shared.reveal',
   'skills.reveal',
+  'browser.revealExtension',
+  'browser.openChromeExtensions',
   'preview.openDefault',
   'preview.reveal',
   'preview.saveAs',

@@ -9,6 +9,7 @@ import { DEFAULT_THEME, migrateThemeColors } from '@shared/themes';
 import { parseWorktreeProjectId } from '@shared/worktree';
 import { chatMediaDir, removeChatMedia } from './acpContent';
 import { defaultSharedRoot, migrateLegacySharedRoot } from './sharedMigration';
+import { seedDefaultConnectors } from '@shared/defaultConnectors';
 import { relocateOnDisk } from './relocate';
 
 function readJson<T>(file: string, fallback: T): T {
@@ -92,6 +93,16 @@ export function getSettings(): Settings {
       },
     });
     if (migrateUpdateMode(saved)) writeJson(settingsFile(), saved);
+    // Once per built-in connector: seed default MCP connectors (e.g. Chrome DevTools) unless running hidden E2E tests.
+    if (process.env.OLYMPUS_TEST_HIDDEN !== '1' || process.env.OLYMPUS_SEED_CONNECTORS === '1') {
+      const rootForSeed = saved.sharedRoot || DEFAULT_SETTINGS.sharedRoot;
+      const seeded = seedDefaultConnectors(saved, rootForSeed);
+      if (seeded.changed) {
+        saved.connectors = seeded.connectors;
+        saved.seededConnectors = seeded.seededConnectors;
+        writeJson(settingsFile(), saved);
+      }
+    }
     // Once: global custom colors become dark-mode custom colors (light must never inherit a color set in dark).
     const migratedTheme = migrateThemeColors({ ...DEFAULT_THEME, ...(saved.theme ?? {}) });
     settings = {

@@ -19,6 +19,7 @@ import type {
   FileContent,
   FileEntry,
   ConnectorView,
+  BrowserBridgeStatus,
   ImportCandidate,
   SkillView,
   ToolRule,
@@ -285,6 +286,11 @@ export const api = {
   enableConnector: (id: string, on: boolean) => call<ConnectorView[]>('connectors.enable', id, on),
   testConnector: (id: string) => call<ConnectorView[]>('connectors.test', id),
   connectorCandidates: () => call<ImportCandidate[]>('connectors.candidates'),
+  browser: {
+    status: () => call<BrowserBridgeStatus>('browser.status'),
+    revealExtension: () => call<void>('browser.revealExtension'),
+    openChromeExtensions: () => call<boolean>('browser.openChromeExtensions'),
+  },
 
   setToolRules: (rules: ToolRule[]) => call<Settings>('tools.rules', rules),
   forgetSeenTools: () => call<Settings>('tools.forgetSeen'),
