@@ -43,6 +43,8 @@ import { acpServersFor } from './connectors';
 import { parseDiffHunks } from '@shared/diffHunks';
 import { workspaceProjectId } from '@shared/worktree';
 import { applyHunkPatch, changedSince, changes, checkHunkStates, fileDiff, restore, snapshot } from './checkpoints';
+import { resolveSkillSlash } from '@shared/skillSlash';
+import { getSkill, listSkills } from './skills';
 import {
   beginAgentInitiatedTurn,
   drainQueuedPrompts,
@@ -103,7 +105,16 @@ import {
 } from './acpSessions';
 import { setAcpSessionHost } from './acpSessionService';
 import { acpMcp, loginLinks, mcpStatus, noteAuthStatus, reapplyProvider, setAcpConfigHost } from './acpConfigService';
-import { authenticateParams, cliLoginArgs, effectiveAuthMethods, envForMethods, type AgentAuthMeta } from './acpAuth';
+import {
+  authenticateParams,
+  cliLoginArgs,
+  cliLogoutArgsFor,
+  cliSwitchArgsFor,
+  effectiveAuthMethods,
+  envForMethods,
+  findRejectedExperimentalArg,
+  type AgentAuthMeta,
+} from './acpAuth';
 import { afterSet, configRequest, configView, CONFIG_SESSION_CAPS, defaultsToApply, initialConfigOptions, mapConfigOptions, matchChoice, normalizeValue, withCurrentMode } from './acpConfig';
 import { describeServers, mcpStatusFromUpdate, nextCreateAttempt, supportsAcpMcp } from './acpMcp';
 import { limitsKindOf, probeCommandFor, ProbeSessions, runProbe, type LimitsKind } from './limitProbe';
@@ -219,6 +230,8 @@ class AgentConn {
   status: AgentStatus;
   /** Set once an agent rejects unstable ACP clientCapabilities (-32602), so retries send baseline v1 capabilities. */
   minimalCaps = false;
+  /** Obsolete `--experimental-*` flags rejected by an upgraded CLI binary, stripped automatically on retry. */
+  droppedArgs = new Set<string>();
   /** `olympus` server names registered in the running process (agy keeps one MCP registry per process). */
   mcpNames = new Set<string>();
 
@@ -263,15 +276,16 @@ class AgentConn {
     const base: Record<string, string> = { OLYMPUS_SHARED_DIR: sharedRoot(), ...(this.def.env ?? {}), ...this.secretEnv() };
     const cli = this.def.builtin ? installedCli(this.def.id) : null;
     if (cli) base[CLI[this.def.id].envVar] = cli;
+    const activeArgs = this.def.args.filter((a) => !this.droppedArgs.has(a));
     if (this.def.command === '@node') {
-      return { command: process.execPath, args: [...this.def.args, ...extraArgs], env: agentEnv({ ...base, ELECTRON_RUN_AS_NODE: '1' }) };
+      return { command: process.execPath, args: [...activeArgs, ...extraArgs], env: agentEnv({ ...base, ELECTRON_RUN_AS_NODE: '1' }) };
     }
-    return { ...spawnable(which(this.def.command) ?? this.def.command, [...this.def.args, ...extraArgs]), env: agentEnv(base) };
+    return { ...spawnable(which(this.def.command) ?? this.def.command, [...activeArgs, ...extraArgs]), env: agentEnv(base) };
   }
 
   async ensureStarted(): Promise<void> {
-    if (this.conn && !this.conn.signal.aborted) return;
     if (this.starting) return this.starting;
+    if (this.conn && this.init && !this.conn.signal.aborted) return;
     this.starting = this.start().finally(() => {
       this.starting = undefined;
     });
@@ -283,6 +297,7 @@ class AgentConn {
       this.setStatus({ state: 'not-installed', detail: this.def.installHint ?? `${this.def.command} not found (check your PATH).` });
       throw new Error(this.status.detail);
     }
+    this.init = undefined;
     this.setStatus({ state: 'starting', detail: undefined });
     const spec = this.spawnSpec();
     const proc = spawn(spec.command, spec.args, { env: spec.env, cwd: homedir(), stdio: ['pipe', 'pipe', 'pipe'] });
@@ -379,11 +394,34 @@ class AgentConn {
         }
       }
     } catch (e: any) {
+      const detail = `${describeError(e)}\n${this.stderr.slice(-8).join('\n')}`.trim();
+      const activeArgs = this.def.args.filter((a) => !this.droppedArgs.has(a));
+      const badExp = findRejectedExperimentalArg(activeArgs, `${describeError(e)}\n${this.stderr.join('\n')}`);
+      if (badExp) {
+        this.droppedArgs.add(badExp);
+        this.kill();
+        return this.start();
+      }
       this.kill();
-      this.setStatus({ state: 'error', detail: `${describeError(e)}\n${this.stderr.slice(-8).join('\n')}`.trim() });
+      const fallbackMethods: AuthMethodView[] = effectiveAuthMethods(this.def.id, undefined, authMetaOf(this.def)).map((m) => ({
+        id: m.id,
+        name: m.name,
+        description: m.description,
+        flow: m.flow === 'env-vars' ? 'env-vars' : m.flow === 'api-key' ? 'api-key' : m.flow === 'terminal' ? 'terminal' : 'agent',
+        envVar: m.vars.length === 1 ? m.vars[0].name : undefined,
+      }));
+      const savedSecrets = secretVarNamesForAgent(this.def.id);
+      this.setStatus({
+        state: 'error',
+        detail,
+        ...(fallbackMethods.length ? { authMethods: fallbackMethods } : {}),
+        canLogout: savedSecrets.length > 0 || Boolean(cliLogoutArgsFor(this.def.id, authMetaOf(this.def))),
+        hasApiKey: savedSecrets.length > 0,
+      });
       throw e;
     }
-    const detailedMethods = effectiveAuthMethods(this.def.id, this.init.authMethods, authMetaOf(this.def));
+    const meta = authMetaOf(this.def);
+    const detailedMethods = effectiveAuthMethods(this.def.id, this.init.authMethods, meta);
     const authMethods: AuthMethodView[] = detailedMethods.map((m) => ({
       id: m.id,
       name: m.name,
@@ -396,7 +434,7 @@ class AgentConn {
       state: 'ready',
       version: this.init.agentInfo?.version,
       authMethods,
-      canLogout: Boolean(this.init.agentCapabilities?.auth?.logout) || savedSecrets.length > 0,
+      canLogout: Boolean(this.init.agentCapabilities?.auth?.logout) || savedSecrets.length > 0 || Boolean(cliLogoutArgsFor(this.def.id, meta)),
       hasApiKey: savedSecrets.length > 0 || authMethods.some((m) => m.envVar && Boolean(getSecret(`${this.def.id}:${m.envVar}`))),
     });
     // Model provider routing lives in the agent process only: send the saved one again after every start.
@@ -765,8 +803,14 @@ export async function logout(agentId: string): Promise<AgentStatus> {
   await c.ensureStarted();
   try {
     await c.conn!.agent.request('logout', {});
-  } catch {
-    /* some agents only support logout from their own CLI */
+  } catch (e: any) {
+    if (e?.code === -32601) {
+      try {
+        await c.conn!.agent.request('auth/logout', {});
+      } catch {
+        /* some agents only support logout from their own CLI */
+      }
+    }
   }
   for (const name of secretVarNamesForAgent(agentId)) setSecret(`${agentId}:${name}`, null);
   for (const m of c.status.authMethods) if (m.envVar) setSecret(`${agentId}:${m.envVar}`, null);
@@ -783,19 +827,27 @@ export function restartAgent(agentId: string) {
 
 export function terminalLoginSpec(agentId: string, methodId: string) {
   const c = getConn(agentId);
-  const m = effectiveAuthMethods(agentId, c.init?.authMethods, authMetaOf(c.def)).find((x) => x.id === methodId);
+  const meta = authMetaOf(c.def);
+  const baseEnv = { OLYMPUS_SHARED_DIR: sharedRoot(), ...(c.def.env ?? {}), ...c.secretEnv(), TERM: 'xterm-256color' };
+  if (methodId === '__olympus_cli_logout' || methodId === '__olympus_cli_switch') {
+    const cliArgs = methodId === '__olympus_cli_logout' ? cliLogoutArgsFor(agentId, meta) : cliSwitchArgsFor(agentId, meta);
+    if (!cliArgs || c.def.command === '@node') throw new Error('This agent does not support interactive CLI account management.');
+    const cmd = which(c.def.command) ?? c.def.command;
+    const s = spawnable(cmd, cliLoginArgs(cmd, c.def.args, cliArgs));
+    return { ...s, env: agentEnv(baseEnv) };
+  }
+  const m = effectiveAuthMethods(agentId, c.init?.authMethods, meta).find((x) => x.id === methodId);
   if (!m || m.flow !== 'terminal') throw new Error('This is not a terminal login method.');
+  const envWithTerm = { ...baseEnv, ...(m.terminalEnv ?? {}) };
+  const explicitCmd = m.terminalCommand ? which(m.terminalCommand) : null;
+  if (explicitCmd) {
+    const s = spawnable(explicitCmd, m.terminalArgs ?? []);
+    return { ...s, env: agentEnv(envWithTerm) };
+  }
   if (m.replaceAgentArgs && c.def.command !== '@node') {
     const cmd = which(c.def.command) ?? c.def.command;
     const s = spawnable(cmd, cliLoginArgs(cmd, c.def.args, m.terminalArgs ?? []));
-    const env = agentEnv({ ...(c.def.env ?? {}), ...c.secretEnv(), ...(m.terminalEnv ?? {}), TERM: 'xterm-256color' });
-    return { ...s, env };
-  }
-  if (c.def.id === 'olympus' && m.terminalArgs?.length) {
-    const cmd = which(c.def.command) ?? c.def.command;
-    const s = spawnable(cmd, m.terminalArgs);
-    const base = { OLYMPUS_SHARED_DIR: sharedRoot(), ...(c.def.env ?? {}), ...c.secretEnv(), ...(m.terminalEnv ?? {}), TERM: 'xterm-256color' };
-    return { ...s, env: agentEnv(base) };
+    return { ...s, env: agentEnv(envWithTerm) };
   }
   const spec = c.spawnSpec(m.terminalArgs ?? []);
   return { ...spec, env: { ...spec.env, ...(m.terminalEnv ?? {}), TERM: 'xterm-256color' } };
@@ -1377,7 +1429,9 @@ async function runTurn(rt: Runtime, userItem: ThreadItem, text: string, attachme
   const guideNow = inject ? buildGuide(project, rt.thread, rt.agentId) : '';
   // An agent command ("/review x") only works as the prompt's first block (Claude Code's local commands need it to
   // be the only one): it goes alone, and the preamble or guide update waits for the next normal message.
-  const command = isSlashCommand(text);
+  // An Olympus shared skill invocation ("/quantum ...", "/math ...") injects its SKILL.md playbook cleanly instead.
+  const skillSlash = resolveSkillSlash(text, rt.commands, { listSkills, getSkill });
+  const command = !skillSlash && isSlashCommand(text);
   // The guide this session has (guide.ts SessionGuide): its system prompt never changes, so a newer guide goes as a
   // message, once, with only the sections that changed.
   const had = rt.sessionId ? readSessionGuide(rt.sessionId) : undefined;
@@ -1401,9 +1455,17 @@ async function runTurn(rt: Runtime, userItem: ThreadItem, text: string, attachme
     if (update) (userItem as any).contextAttached = true;
     pushItem(rt, userItem);
   }
-  // The file list is also spelled out in text, for agents that skip link blocks.
-  const list = attachments.length ? `\n\nAttached files:\n${attachments.map((a) => `- ${a.path} (${a.mime})`).join('\n')}` : '';
-  blocks.push({ type: 'text', text: (command ? text.trimStart() : text || 'See the attached files.') + list });
+  // The file list is also spelled out in text, mapping `@name -> path` so user `@filename` references resolve unambiguously.
+  const list = attachments.length
+    ? `\n\nAttached files:\n${attachments.map((a) => `- @${a.name} → ${a.path} (${a.mime})${a.note ? ` — ${a.note}` : ''}`).join('\n')}`
+    : '';
+  if (skillSlash) blocks.push({ type: 'text', text: skillSlash.skillBlock });
+  const promptBody = skillSlash
+    ? skillSlash.userText || (attachments.length ? 'Apply the active skill instructions above to the attached files.' : 'Apply the active skill instructions above to this conversation.')
+    : command
+      ? text.trimStart()
+      : text || 'See the attached files.';
+  blocks.push({ type: 'text', text: promptBody + list });
   blocks.push(...toBlocks(attachments, rt.conn?.init?.agentCapabilities?.promptCapabilities ?? {}));
   if (!command) rt.preambleSent = true;
   rt.turn.sentTexts = blocks.filter((b) => b.type === 'text').map((b) => b.text);

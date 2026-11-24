@@ -28,9 +28,11 @@ export interface AppSidebarProps {
   currentAgentStatus?: AgentStatus;
   profile: UserProfile;
   lockEnabled: boolean;
+  maxEffortEnabled?: boolean;
   onToggleSidebar: () => void;
   onSwitchMode: (m: UiMode) => void;
   onNewChatHome: () => void;
+  onNewMaxHome: () => void;
   onNewCodeChat: (projectId?: string) => void;
   onShowSearch: () => void;
   onSelectPage: (p: AppPage) => void;
@@ -108,20 +110,20 @@ export const AppSidebar = memo(function AppSidebar(props: AppSidebarProps) {
             <PanelLeftClose size={isDrawer ? 22 : 16} strokeWidth={isDrawer ? 2.1 : 2} />
           </button>
           <div className="spacer" />
-          <ModeSwitch mode={mode} onMode={props.onSwitchMode} />
+          <ModeSwitch mode={mode} onMode={props.onSwitchMode} showMax={Boolean(props.maxEffortEnabled)} />
         </div>
 
         <nav className="nav">
-          {mode === 'chat' ? (
+          {mode === 'chat' || mode === 'max' ? (
             <>
               <button
                 className={`nav-item ${page === 'home' ? 'active' : ''}`}
                 onClick={() => {
-                  props.onNewChatHome();
+                  mode === 'max' ? props.onNewMaxHome() : props.onNewChatHome();
                   closeIfDrawer();
                 }}
               >
-                <SquarePen size={16} /> New chat <span className="kbd">{keys('⌘N')}</span>
+                <SquarePen size={16} /> {mode === 'max' ? 'New Max session' : 'New chat'} <span className="kbd">{keys('⌘N')}</span>
               </button>
               <button
                 className="nav-item"
@@ -132,15 +134,17 @@ export const AppSidebar = memo(function AppSidebar(props: AppSidebarProps) {
               >
                 <Search size={16} /> Search <span className="kbd">{keys('⌘K')}</span>
               </button>
-              <button
-                className={`nav-item ${page === 'projects' ? 'active' : ''}`}
-                onClick={() => {
-                  props.onSelectPage('projects');
-                  closeIfDrawer();
-                }}
-              >
-                <FolderOpen size={16} /> Projects
-              </button>
+              {mode === 'chat' && (
+                <button
+                  className={`nav-item ${page === 'projects' ? 'active' : ''}`}
+                  onClick={() => {
+                    props.onSelectPage('projects');
+                    closeIfDrawer();
+                  }}
+                >
+                  <FolderOpen size={16} /> Projects
+                </button>
+              )}
               <button
                 className={`nav-item ${page === 'scheduled' ? 'active' : ''}`}
                 onClick={() => {
@@ -197,9 +201,10 @@ export const AppSidebar = memo(function AppSidebar(props: AppSidebarProps) {
           <div className="sidebar-scroll" ref={scrollRef}>
             {listsLoading ? (
               <SidebarSkeleton />
-            ) : mode === 'chat' ? (
+            ) : mode === 'chat' || mode === 'max' ? (
               <ChatThreadLists
                 threads={allThreads}
+                listMode={mode}
                 activeId={activeId}
                 agentDefs={agentDefs}
                 onOpen={(id) => {

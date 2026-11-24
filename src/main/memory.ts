@@ -237,9 +237,15 @@ function buildRecentSessionsSummary(p: Project, currentThreadId: string, maxSess
 export function transcript(thread: Thread, maxChars: number): string {
   const entries: { text: string; item: Thread['items'][number] }[] = [];
   for (const it of thread.items) {
-    const id = it.kind === 'switch' ? it.to : it.agentId;
+    const id = it.kind === 'switch' ? it.to : it.kind === 'max-deliberation' ? it.solverAgentId : it.agentId;
     const who = AGENT_NAMES[id] ?? id;
-    if (it.kind === 'user') {
+    if (it.kind === 'max-deliberation') {
+      const critic = AGENT_NAMES[it.criticAgentId] ?? it.criticAgentId;
+      entries.push({
+        text: `--- Max Effort deliberation (${who} ⇄ ${critic}, ${it.rounds.length} pass(es), ${it.converged ? 'converged' : it.status}) ---`,
+        item: it,
+      });
+    } else if (it.kind === 'user') {
       const att = it.attachments?.length ? ` [attached: ${it.attachments.map((a) => a.path).join(', ')}]` : '';
       const cp =
         it.checkpoint?.undone

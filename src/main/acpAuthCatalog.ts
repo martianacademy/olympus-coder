@@ -82,6 +82,34 @@ export const CLI_TERMINAL_LOGINS: Record<string, { name: string; description: st
   devin: { name: 'Sign in via Devin CLI', description: 'Runs `devin login` interactively in a terminal.', args: ['login'] },
 };
 
+/**
+ * Additional interactive terminal login methods offered alongside an agent's default sign-in
+ * (e.g. GitHub Copilot `--device-code` so users can choose a different GitHub account / browser profile or sign in from a phone).
+ */
+export const CLI_EXTRA_TERMINAL_LOGINS: Record<string, { id: string; name: string; description: string; args: string[] }[]> = {
+  'github-copilot-cli': [
+    {
+      id: '__olympus_copilot_device_code',
+      name: 'Sign in with GitHub device code',
+      description: 'Runs `copilot login --device-code` so you can pick any GitHub account, browser profile, or sign in from a phone.',
+      args: ['login', '--device-code'],
+    },
+  ],
+};
+
+/** Interactive CLI logout subcommands for agents whose ACP servers do not advertise `agentCapabilities.auth.logout`. */
+export const CLI_TERMINAL_LOGOUTS: Record<string, string[]> = {
+  opencode: ['auth', 'logout'],
+  'opencode-v2': ['auth', 'logout'],
+  kilo: ['auth', 'logout'],
+};
+
+/** Interactive CLI account-switch subcommands for multi-account agents (`opencode auth switch`). */
+export const CLI_TERMINAL_SWITCHES: Record<string, string[]> = {
+  opencode: ['auth', 'switch'],
+  'opencode-v2': ['auth', 'switch'],
+};
+
 /** Environment variable credentials supported by registry CLIs (stored encrypted and injected on start). */
 export const CLI_ENV_FALLBACKS: Record<string, { name: string; description?: string; link?: string; vars: AuthVarView[] }> = {
   iflow: {

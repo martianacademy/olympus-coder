@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode, type RefObject } from 'react';
 import { Code2, FileCode, FolderPlus, GitBranch, Info, MessageSquarePlus, PanelRightOpen, SquareTerminal, Workflow } from 'lucide-react';
 import type { PanelTool } from '@shared/panels';
-import type { AgentDef, AttachmentView, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
+import type { AgentDef, AttachmentView, MaxEffortSettings, Project, SessionView, Thread, ThreadMeta, UiMode, UserProfile } from '@shared/types';
 import type { AgentsInfo } from '../App';
 import { useWorkbenchTabOrder, type CoreWbTab } from '../workbenchTabs';
 import type { AppPage } from './AppSidebar';
@@ -9,6 +9,7 @@ import type { WorkbenchTab } from './Workbench';
 import { AppMark } from './AppMark';
 import { Chat } from './Chat';
 import { ChatHome } from './ChatHome';
+import { MaxEffortBar, MaxHome } from './MaxEffortBar';
 import { ProjectsPage } from './ChatNav';
 import { liveNow, useTasks } from './TasksPanel';
 import { UsagePage } from './Usage';
@@ -48,6 +49,9 @@ export interface AppMainProps {
   onNewCodeChat: (pid?: string) => void;
   onAddProject: (then?: 'code' | 'none') => Promise<Project | null>;
   onStartChat: (text: string, files?: AttachmentView[]) => void;
+  onStartMaxChat: (text: string, files?: AttachmentView[]) => void;
+  maxEffortConfig?: Partial<MaxEffortSettings>;
+  onUpdateMaxEffort: (patch: Partial<MaxEffortSettings>) => void;
   onPickAgent: (agentId: string) => void;
   onSwitchMode: (m: UiMode) => void;
   onSetModeOnly: (m: UiMode) => void;
@@ -192,8 +196,23 @@ export function AppMain(props: AppMainProps) {
           agentStatus={agents.statuses[active.agentId]}
           parentTitle={active.parentId ? allThreads.find((t) => t.id === active.parentId)?.title : undefined}
           headerLeft={picker}
+          subHeader={
+            mode === 'max' ? (
+              <div className="main-head" style={{ borderTop: 'none', paddingTop: 0, height: 'auto', paddingBottom: 8 }}>
+                <MaxEffortBar
+                  defs={agents.defs}
+                  statuses={agents.statuses}
+                  solverId={active.agentId}
+                  config={props.maxEffortConfig}
+                  disabled={session?.status === 'running'}
+                  onChangeSolver={props.onPickAgent}
+                  onChangeConfig={props.onUpdateMaxEffort}
+                />
+              </div>
+            ) : undefined
+          }
           headerRight={
-            mode === 'chat' ? (
+            mode === 'chat' || mode === 'max' ? (
               isSheetWorkbench ? (
                 sheetDrawerButton
               ) : (
@@ -248,6 +267,28 @@ export function AppMain(props: AppMainProps) {
               if (p) props.onSetHomeProject(p.id);
             }}
             onStart={props.onStartChat}
+            onOpen={props.onOpenThread}
+          />
+        </>
+      ) : mode === 'max' ? (
+        <>
+          <div className="main-head">{picker}</div>
+          <MaxHome
+            projects={projects}
+            general={general}
+            agents={agents}
+            solverId={currentAgent}
+            projectId={homeProject}
+            config={props.maxEffortConfig}
+            recents={allThreads.filter((t) => modeOf(t) === 'max')}
+            onSolver={props.onPickAgent}
+            onConfig={props.onUpdateMaxEffort}
+            onProject={props.onSetHomeProject}
+            onAddProject={async () => {
+              const p = await props.onAddProject('none');
+              if (p) props.onSetHomeProject(p.id);
+            }}
+            onStart={props.onStartMaxChat}
             onOpen={props.onOpenThread}
           />
         </>

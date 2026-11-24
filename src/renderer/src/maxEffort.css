@@ -1,0 +1,255 @@
+/* Max Effort (Dual-Mind Adversarial Thinking) — header bar, home view, and collapsible deliberation card */
+
+.max-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.max-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm, 7px);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
+  font-size: var(--t-ui, 12.6px);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 210px;
+  min-width: 0;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.max-role-pill:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 22%, var(--border));
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.max-role-pill:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.max-role-tag {
+  font-size: var(--t-section, 10.5px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.max-role-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.max-swap-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--radius-sm, 7px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.max-swap-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.max-swap-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.max-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm, 7px);
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: var(--t-meta, 11.5px);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.max-meta-pill:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 20%, var(--border));
+}
+.max-meta-pill b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Max Home subtitle */
+.max-home-sub {
+  margin: -6px 0 16px;
+  font-size: var(--t-ui, 12.6px);
+  color: var(--muted);
+  text-align: center;
+  max-width: 540px;
+}
+
+.max-home-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Deliberation Timeline Card in Chat (minimal monochrome + subtle accent when live) */
+.max-delib {
+  margin: 8px 0 12px;
+  border-radius: var(--radius, 10px);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 45%, transparent);
+  overflow: hidden;
+}
+.max-delib.is-running {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+}
+.max-delib-head {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--t-ui, 12.6px);
+  color: var(--text);
+  min-width: 0;
+}
+.max-delib-head:hover {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+}
+.max-delib-title {
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.max-delib-meta {
+  font-size: var(--t-meta, 11.5px);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.max-delib-badge {
+  font-size: var(--t-pill, 10.4px);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.max-delib-badge.ok {
+  background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent);
+  color: var(--success, #22c55e);
+}
+.max-delib-badge.warn {
+  background: color-mix(in srgb, var(--warning, #eab308) 15%, transparent);
+  color: var(--warning, #eab308);
+}
+
+.max-delib-body {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.max-round {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 7px);
+  background: var(--bg);
+  overflow: hidden;
+}
+.max-round-head {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--t-meta, 11.5px);
+  color: var(--text);
+  text-align: left;
+}
+.max-round-head:hover {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+}
+.max-round-grid {
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+.max-mind-col {
+  background: var(--bg);
+  padding: 10px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.max-mind-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-meta, 11.5px);
+  font-weight: 600;
+  color: var(--text);
+}
+.max-thought-box {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  font-family: var(--code-font, monospace);
+  font-size: var(--t-meta, 11.5px);
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.max-reply-box {
+  font-size: var(--t-ui, 12.6px);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .max-round-grid {
+    grid-template-columns: 1fr;
+  }
+  .max-role-pill {
+    max-width: 150px;
+  }
+}

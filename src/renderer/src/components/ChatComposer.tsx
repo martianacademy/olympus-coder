@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUp,
@@ -30,6 +30,9 @@ import { CompactButton } from './CompactButton';
 import { FreshContextButton } from './FreshContextButton';
 import { ConfigPill } from './ConfigPills';
 import { useSlashMenu } from './SlashMenu';
+import { useMentionMenu } from './MentionMenu';
+import { mergeSlashCommands, useSkillCommands } from '../skillCommands';
+import { ProjectIdContext } from '../fixError';
 import { SwitchAgents } from './SwitchAgents';
 import { estimateTokens } from './TokenStats';
 import { ContextMeter, fmtReset, LimitsFreshness } from './Usage';
@@ -85,7 +88,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const slash = useSlashMenu({ text, setText, commands: session?.commands ?? NO_COMMANDS, ta });
+  const projectId = useContext(ProjectIdContext);
+  const skillCommands = useSkillCommands();
+  const slashCommands = useMemo(() => mergeSlashCommands(session?.commands ?? NO_COMMANDS, skillCommands), [session?.commands, skillCommands]);
+  const slash = useSlashMenu({ text, setText, commands: slashCommands, ta });
+  const mention = useMentionMenu({ text, setText, attachments: att.files, projectId, ta, disabled: Boolean(slash.menu) });
   const queue = usePromptQueue(threadId);
   const [dictateNote, setDictateNote] = useState<{ text: string; error?: boolean; offerSystem?: boolean } | null>(null);
   useEffect(() => {
@@ -431,6 +438,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           data-testid="composer-resize"
         />
         {slash.menu}
+        {mention.menu}
         <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a, el) => att.open(a, el, openFile)} />
         <div className="growable-textarea" data-replicated-value={text}>
           <textarea
@@ -444,8 +452,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             onChange={(e) => setText(e.target.value)}
             onPaste={att.onPaste}
             {...slash.textareaProps}
+            onFocus={() => {
+              slash.textareaProps.onFocus();
+              mention.onFocus();
+            }}
+            onBlur={() => {
+              slash.textareaProps.onBlur();
+              mention.onBlur();
+            }}
+            onSelect={() => {
+              slash.textareaProps.onSelect();
+              mention.onSelect();
+            }}
             onKeyDown={(e) => {
-              if (slash.onKeyDown(e)) return;
+              if (slash.onKeyDown(e) || mention.onKeyDown(e)) return;
               if (enterSends(e)) {
                 e.preventDefault();
                 void send();

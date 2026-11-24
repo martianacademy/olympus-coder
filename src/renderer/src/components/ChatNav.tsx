@@ -1,11 +1,11 @@
 import { StatusDot } from './StatusDot';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Code2, FolderOpen, FolderPlus, MessageSquare, MessageSquarePlus, Pin, PinOff, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Code2, Flame, FolderOpen, FolderPlus, MessageSquare, MessageSquarePlus, Pin, PinOff, Trash2 } from 'lucide-react';
 import type { AgentDef, Project, ThreadMeta, UiMode } from '@shared/types';
 import { AgentLogo } from '../logos';
 
-/** The two halves of the app: Chat (talk) and Code (projects, files, git, terminal). */
-export function ModeSwitch({ mode, onMode }: { mode: UiMode; onMode: (m: UiMode) => void }) {
+/** Top-left mode switcher: Chat (talk), Code (workbench), and optionally Max (Dual-Mind adversarial deliberation). */
+export function ModeSwitch({ mode, onMode, showMax = false }: { mode: UiMode; onMode: (m: UiMode) => void; showMax?: boolean }) {
   return (
     <div className="mode-switch" role="tablist">
       <button className={mode === 'chat' ? 'active' : ''} onClick={() => onMode('chat')} title="Chat (⌘1)" data-testid="mode-chat">
@@ -16,6 +16,12 @@ export function ModeSwitch({ mode, onMode }: { mode: UiMode; onMode: (m: UiMode)
         <Code2 size={16} />
         <span className="mode-switch-label">Code</span>
       </button>
+      {showMax && (
+        <button className={mode === 'max' ? 'active' : ''} onClick={() => onMode('max')} title="Max effort — Dual-Mind deliberation (⌘3)" data-testid="mode-max">
+          <Flame size={16} />
+          <span className="mode-switch-label">Max</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -32,9 +38,10 @@ function Section({ title, children, initial = true }: { title: string; children:
   );
 }
 
-/** Chat mode sidebar body: pinned chats, then recent chat-mode conversations. */
+/** Chat / Max mode sidebar body: pinned sessions, then recent conversations for the active mode. */
 export function ChatThreadLists(props: {
   threads: ThreadMeta[];
+  listMode?: 'chat' | 'max';
   activeId?: string;
   agentDefs: Record<string, AgentDef>;
   onOpen: (id: string) => void;
@@ -42,8 +49,10 @@ export function ChatThreadLists(props: {
   onDelete: (t: ThreadMeta) => void;
 }) {
   const [all, setAll] = useState(false);
-  const pinned = props.threads.filter((t) => t.pinned);
-  const recents = props.threads.filter((t) => !t.pinned && t.mode === 'chat');
+  const targetMode = props.listMode ?? 'chat';
+  const visible = props.threads.filter((t) => !t.parentId && !t.nativeSubagent);
+  const pinned = visible.filter((t) => t.pinned && (t.mode ?? 'code') === targetMode);
+  const recents = visible.filter((t) => !t.pinned && (t.mode ?? 'code') === targetMode);
   const shown = all ? recents : recents.slice(0, 15);
   const row = (t: ThreadMeta) => {
     const d = props.agentDefs[t.agentId];

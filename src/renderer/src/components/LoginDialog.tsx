@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, KeyRound, Loader2, LogIn, LogOut, SquareTerminal, X } from 'lucide-react';
+import { ExternalLink, KeyRound, Loader2, LogIn, LogOut, RefreshCw, SquareTerminal, X } from 'lucide-react';
 import type { AgentDef, AgentStatus, AuthMethodView } from '@shared/types';
 import { api } from '../api';
 import { AgentLogo } from '../logos';
@@ -196,17 +196,33 @@ export function LoginDialog({ def, status, onClose }: { def: AgentDef; status?: 
             </>
           )}
           {error && <div className="err-box">{error}</div>}
-          {status?.canLogout && status.state === 'ready' && !ptyId && !keyFor && !varsFor && (
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="btn small ghost"
-                title={`Log out of ${def.name}. This may also log out its CLI.`}
-                onClick={async () => {
-                  if (confirm(`Log out of ${def.name}? This may also log out its CLI.`)) await api.logoutAgent(def.id);
-                }}
-              >
-                <LogOut size={13} /> Log out of {def.name}
-              </button>
+          {(status?.canLogout || details?.canLogout || details?.terminalSwitch) && !ptyId && !keyFor && !varsFor && (
+            <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+              {details?.terminalSwitch && (
+                <button
+                  className="btn small ghost"
+                  title={`Switch the active saved account in ${def.name}`}
+                  onClick={() => void start({ id: '__olympus_cli_switch', name: 'Switch account', flow: 'terminal' })}
+                >
+                  <RefreshCw size={13} /> Switch account
+                </button>
+              )}
+              {(status?.canLogout || details?.canLogout) && (
+                <button
+                  className="btn small ghost"
+                  title={`Log out of ${def.name}. This may also log out its CLI.`}
+                  onClick={async () => {
+                    if (details?.terminalLogout) {
+                      if ((details.savedVars?.length ?? 0) > 0) await api.logoutAgent(def.id).catch(() => {});
+                      await start({ id: '__olympus_cli_logout', name: 'Log out', flow: 'terminal' });
+                      return;
+                    }
+                    if (confirm(`Log out of ${def.name}? This may also log out its CLI.`)) await api.logoutAgent(def.id);
+                  }}
+                >
+                  <LogOut size={13} /> Log out of {def.name}
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, ChevronDown, ChevronRight, CircleSlash, Ext
 import type { ThreadItem } from '@shared/types';
 import { api } from '../api';
 import { useOpenFile } from '../fileLinks';
-import { useStepChoice } from '../prefs';
+import { useExpandSteps, useStepChoice } from '../prefs';
 import { isRemoteBrowser } from '../responsive';
 import { fmtStepDuration } from '../toolStep';
 import { Markdown } from './ChatMarkdown';
@@ -152,3 +152,18 @@ export const PlanDocBlock = memo(function PlanDocBlock({ item, agentName }: { it
     </div>
   );
 });
+
+/** Collapsible block for long compact prompts in `Transcript` (follows "Steps open" unless clicked). */
+export function Collapsible(p: { stepKey: string; label: React.ReactNode; body: React.ReactNode; icon?: React.ReactNode; follow?: boolean }) {
+  const expandAll = useExpandSteps();
+  const [choice, setChoice] = useStepChoice(p.stepKey);
+  const open = choice ?? (p.follow ? expandAll : false);
+  return (
+    <div className="msg-wrap">
+      <button className="btn ghost small muted collapse-head" onClick={() => setChoice(!open)} style={{ paddingLeft: 4 }}>
+        {p.icon} {p.label} {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      </button>
+      {open && p.body}
+    </div>
+  );
+}

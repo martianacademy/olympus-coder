@@ -12,6 +12,27 @@ import { getProject } from './store';
 const MAX_EDIT_BYTES = 2 * 1024 * 1024;
 /** Hidden by default in the tree; still reachable by path. */
 const HIDDEN = new Set(['.git', '.DS_Store']);
+/** Heavy generated/dependency folders skipped during fast `@` mention file indexing. */
+const SEARCH_SKIP = new Set([
+  '.git',
+  '.DS_Store',
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.venv',
+  'venv',
+  '__pycache__',
+  'target',
+  '.cache',
+  'coverage',
+]);
+const SEARCH_CACHE_TTL_MS = 5_000;
+const SEARCH_MAX_INDEX = 3_500;
+const searchCache = new Map<string, { at: number; files: FileEntry[] }>();
 
 function root(projectId: string): string {
   const p = getProject(projectId);
@@ -116,4 +137,71 @@ export async function trashEntry(projectId: string, rel: string): Promise<void> 
 
 export function revealEntry(projectId: string, rel: string): void {
   shell.showItemInFolder(inside(projectId, rel));
+}
+
+function indexProjectFiles(projectId: string): FileEntry[] {
+  if (!projectId || projectId === 'general') return [];
+  let base: string;
+  try {
+    base = root(projectId);
+  } catch {
+    return [];
+  }
+  const hit = searchCache.get(base);
+  if (hit && Date.now() - hit.at < SEARCH_CACHE_TTL_MS) return hit.files;
+
+  const files: FileEntry[] = [];
+  const queue: string[] = [''];
+  while (queue.length && files.length < SEARCH_MAX_INDEX) {
+    const relDir = queue.shift()!;
+    const absDir = relDir ? join(base, relDir) : base;
+    let entries;
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const d of entries) {
+      if (SEARCH_SKIP.has(d.name)) continue;
+      const relPath = relDir ? `${relDir}/${d.name}` : d.name;
+      if (d.isDirectory()) {
+        queue.push(relPath);
+      } else if (d.isFile()) {
+        files.push({ name: d.name, path: relPath, dir: false });
+        if (files.length >= SEARCH_MAX_INDEX) break;
+      }
+    }
+  }
+  searchCache.set(base, { at: Date.now(), files });
+  return files;
+}
+
+function scoreFileQuery(f: FileEntry, q: string): number {
+  if (!q) return 1;
+  const lowName = f.name.toLowerCase();
+  const lowPath = f.path.toLowerCase();
+  if (lowName === q) return 100;
+  if (lowName.startsWith(q)) return 82;
+  if (lowName.split(/[-_.\s/]/).some((w) => w.startsWith(q))) return 66;
+  if (lowPath.startsWith(q)) return 56;
+  if (lowName.includes(q)) return 46;
+  if (lowPath.includes(q)) return 32;
+  let k = 0;
+  for (const ch of lowPath) if (ch === q[k]) k++;
+  return k === q.length ? 16 : 0;
+}
+
+/** Fast bounded BFS search of files inside `projectId` for composer `@` mentions. */
+export function searchFiles(projectId: string, query = '', limit = 50): FileEntry[] {
+  const all = indexProjectFiles(projectId);
+  if (!all.length) return [];
+  const cap = Math.max(1, Math.min(200, Math.round(limit) || 50));
+  const q = query.trim().toLowerCase();
+  if (!q) return all.slice(0, cap);
+  return all
+    .map((f, i) => ({ f, s: scoreFileQuery(f, q), i }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s || a.f.path.split('/').length - b.f.path.split('/').length || a.i - b.i)
+    .slice(0, cap)
+    .map((x) => x.f);
 }

@@ -6,7 +6,9 @@ import type { QueuedPrompt, UserDelivery } from './promptQueue';
 import type { VoiceSettings } from './voice';
 import type { ModelTags } from './modelTags';
 import type { PanelContext, PanelTool } from './panels';
+import type { MaxDeliberationItem, MaxEffortSettings } from './maxEffort';
 export type { ModelTags } from './modelTags';
+export type { MaxDeliberationItem, MaxEffortSettings, MaxRoundTrace } from './maxEffort';
 
 export type AgentId = string;
 
@@ -368,7 +370,8 @@ export type ThreadItem =
       /** Olympus Coder itself asks the user to approve an action an agent requested (e.g. adding an agent). */
       confirm?: ConfirmRequest;
       ts: number;
-    };
+    }
+  | MaxDeliberationItem;
 
 /** What an Olympus-owned confirm card shows: a title, labelled rows (commands in monospace) and the yes button. */
 export interface ConfirmRequest {
@@ -414,8 +417,10 @@ export interface ThreadMeta {
   autoApprove?: boolean;
   /** Set on chats started by a scheduled task. */
   scheduleId?: string;
-  /** 'chat' = general conversation (Chat mode); 'code' (default) = coding session in a project. */
+  /** 'chat' = general conversation; 'code' (default) = coding session; 'max' = Dual-Mind adversarial deliberation. */
   mode?: UiMode;
+  /** Per-thread overrides for Max Effort (Dual-Mind) deliberation (`criticAgentId`, `maxRounds`, `watchdogSeconds`). */
+  maxEffort?: MaxEffortSettings;
   pinned?: boolean;
   /** Present when this chat runs in an isolated git worktree (`<sharedRoot>/worktrees/<projectId>/<shortId>`). */
   worktree?: ThreadWorktree;
@@ -636,7 +641,7 @@ export interface ThemeSettings {
 /** What a phone can set for itself in Settings → Appearance → Phone (see `withPhoneTheme` in themes.ts). */
 export type PhoneTheme = Partial<Pick<ThemeSettings, 'mode' | 'fontSize' | 'chatFontSize' | 'codeFontSize' | 'lineHeight' | 'stepsSize'>>;
 
-export type UiMode = 'chat' | 'code';
+export type UiMode = 'chat' | 'code' | 'max';
 
 export interface UserProfile {
   name: string;
@@ -683,6 +688,8 @@ export interface Settings {
   theme: ThemeSettings;
   customAgents: AgentDef[];
   orchestrator: OrchestratorSettings;
+  /** Defaults for Max Effort (Dual-Mind adversarial deliberation) mode. */
+  maxEffort?: MaxEffortSettings;
   /** MCP servers every agent session gets (Settings → Connectors). Env and header values live in the keychain. */
   connectors: ConnectorDef[];
   /** Auto-answers for permission requests (Settings → Tools). */
@@ -838,6 +845,8 @@ export interface AppState {
   platform: string;
   home: string;
   version: string;
+  /** True only when `OLYMPUS_MAX_EFFORT_ENABLED=1` is set in the main process environment. */
+  maxEffortEnabled?: boolean;
 }
 
 export interface SearchHit {
@@ -906,6 +915,7 @@ export interface DeskEvents {
   'catalog:progress': { id: string; phase: 'download' | 'verify' | 'extract' | 'done' | 'error'; received?: number; total?: number; error?: string };
   /** An agent was added or removed outside the Settings screen (e.g. by an agent's add_agent tool). */
   'agents:changed': { defs: AgentDef[]; statuses: AgentStatus[] };
+  'skills:changed': SkillView[];
   /** A chat was deleted (from the sidebar, by delete_subsession, or a disposable sub-session cleaned up). */
   'thread:deleted': { id: string; projectId: string; parentId?: string };
   /** projects.json changed (the app, an agent's create_project, or any outside write): the full `projects.list`. */

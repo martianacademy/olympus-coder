@@ -2,7 +2,10 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Keyb
 import type { SessionView } from '@shared/types';
 import '../slashMenu.css';
 
-export type SlashCommand = SessionView['commands'][number];
+export type SlashCommand = SessionView['commands'][number] & {
+  /** `'skill'` marks shared Olympus skills (`~/.olympus/skills/` & `~/.agents/skills/`); default is native agent command. */
+  kind?: 'command' | 'skill';
+};
 
 /**
  * The `/name` token at the very start of the message. Leading spaces are allowed because `send()` trims them;
@@ -107,7 +110,10 @@ export function useSlashMenu(opts: {
       el.setSelectionRange(pendingCaret.current, pendingCaret.current);
       pendingCaret.current = null;
     }
-    if (document.activeElement === el) setCaret(el.selectionStart ?? text.length);
+    if (document.activeElement === el) {
+      setFocused(true);
+      setCaret(el.selectionStart ?? text.length);
+    }
   }, [text, ta]);
 
   // Esc hides the menu for the current query only; deleting the `/` forgets it.
@@ -186,6 +192,7 @@ export function useSlashMenu(opts: {
           role="option"
           aria-selected={i === active}
           data-index={i}
+          data-kind={c.kind ?? 'command'}
           className={`slash-item ${i === active ? 'active' : ''}`}
           onMouseMove={(e) => onRowMove(e, i)}
           onClick={() => pick(c)}
@@ -193,6 +200,7 @@ export function useSlashMenu(opts: {
         >
           <span className="slash-name">
             {`/${bare(c.name)}`}
+            {c.kind === 'skill' && <span className="slash-badge">Skill</span>}
             {c.inputHint && <span className="slash-hint"> {c.inputHint}</span>}
           </span>
           {c.description && <span className="slash-desc">{c.description}</span>}

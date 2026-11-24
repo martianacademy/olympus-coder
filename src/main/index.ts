@@ -3,8 +3,9 @@ import { copyFileSync, existsSync, mkdirSync, realpathSync, statSync } from 'nod
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AppState, AttachmentView, DeskEvents, ProcAction, Settings, VerifyGateConfig } from '@shared/types';
+import type { AppState, AttachmentView, DeskEvents, MaxEffortSettings, ProcAction, Settings, UiMode, VerifyGateConfig } from '@shared/types';
 import * as agents from './agents';
+import { cancelMaxEffort, effectiveMaxEffort, initMaxEffort, isMaxEffortRunning, runMaxEffortTurn, updateThreadMaxEffort } from './maxEffort';
 import * as attachments from './attachments';
 import { readClipboardMessage, writeClipboard, type ClipboardPayload } from './clipboard';
 import * as catalog from './catalog';
@@ -178,6 +179,7 @@ let projectsWatch: ProjectsWatcher | null = null;
 const announceProjects = () => emit('projects:changed', store.listProjectsWithMissing());
 store.onProjectsWritten(() => projectsWatch?.notify());
 initOrchestrator(emit);
+initMaxEffort(emit);
 setTerminalEmitter(emit);
 /** The ACP client features' events (live agent terminals, files agents wrote): same channel and lock rule as `emit`. */
 const emitAcp = <K extends keyof AcpClientEvents>(channel: K, payload: AcpClientEvents[K]) => {
@@ -219,8 +221,17 @@ lock.onLockChange((s) => {
   sendToWindows('lock:state', s);
 });
 
+const MAX_EFFORT_ENABLED = process.env.OLYMPUS_MAX_EFFORT_ENABLED === '1';
+
 function appState(): AppState {
-  return { settings: store.getSettings(), lock: lock.lockState(), platform: process.platform, home: homedir(), version: app.getVersion() };
+  return {
+    settings: store.getSettings(),
+    lock: lock.lockState(),
+    platform: process.platform,
+    home: homedir(),
+    version: app.getVersion(),
+    maxEffortEnabled: MAX_EFFORT_ENABLED,
+  };
 }
 
 const projectOrThrow = (id: string) => {
@@ -365,6 +376,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...savedCommandHandlers,
 
   'files.list': (projectId: string, rel: string) => files.listDir(projectId, rel),
+  'files.search': (projectId: string, query: string, limit?: number) => files.searchFiles(projectId, query, limit),
   'files.read': (projectId: string, rel: string) => files.readFile(projectId, rel),
   'files.write': (projectId: string, rel: string, text: string, mtime?: number) => files.writeFile(projectId, rel, text, mtime),
   'files.create': (projectId: string, rel: string, dir: boolean) => files.createEntry(projectId, rel, dir),
@@ -451,12 +463,13 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     const t = store.findThread(id);
     if (!t) return null;
     store.updateSettings({ lastThreadId: id, lastProjectId: t.projectId });
-    return { thread: t, session: agents.sessionView(id) };
+    const baseSession = agents.sessionView(id);
+    return { thread: t, session: isMaxEffortRunning(id) ? { ...baseSession, status: 'running' as const } : baseSession };
   },
   'threads.all': () => store.listAllThreads(),
   'threads.pin': (id: string, pinned: boolean) => store.updateThreadMeta(id, { pinned }),
   'projects.general': () => store.generalProject(),
-  'threads.create': async (projectId: string, agentId: string, mode?: 'chat' | 'code', opts?: { worktree?: boolean }) => {
+  'threads.create': async (projectId: string, agentId: string, mode?: UiMode, opts?: { worktree?: boolean }) => {
     projectId = store.baseProjectId(projectId);
     const t = store.createThread(projectId, agentId, { ...(mode ? { mode } : {}), ...(agents.autoApproveDefault(agentId) ? { autoApprove: true } : {}) });
     if (opts?.worktree) {
@@ -514,6 +527,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
       t,
     ];
     for (const cur of all) {
+      void cancelMaxEffort(cur.id).catch(() => {});
       void agents.cancel(cur.id).catch(() => {});
       agents.forgetThread(cur.id);
       promptQueue.forget(cur.id);
@@ -573,7 +587,13 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
     app.relaunch();
     app.quit();
   },
-  'chat.states': () => agents.allRunStates(),
+  'chat.states': () =>
+    agents.allRunStates().map((s) => (isMaxEffortRunning(s.threadId) ? { ...s, status: 'running' } : s)),
+  'maxEffort.getConfig': (threadId: string) => {
+    const t = store.findThread(threadId);
+    return t ? effectiveMaxEffort(t) : null;
+  },
+  'maxEffort.setConfig': (threadId: string, patch: Partial<MaxEffortSettings>) => updateThreadMaxEffort(threadId, patch),
   'turn.changes': (threadId: string, itemId: string) => agents.turnChanges(threadId, itemId),
   'turn.fileDiff': (threadId: string, itemId: string, path: string) => agents.turnFileDiff(threadId, itemId, path),
   'turn.fileReview': (threadId: string, itemId: string, path: string) => agents.turnFileReview(threadId, itemId, path),
@@ -591,6 +611,10 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   // Returns at once; the turn streams back through 'thread:item' and 'session:state' events.
   'chat.send': (threadId: string, text: string, files: AttachmentView[] = []) => {
     userSent(threadId);
+    if (store.findThread(threadId)?.mode === 'max') {
+      void runMaxEffortTurn(threadId, text, files).catch(() => {});
+      return;
+    }
     void agents.sendPrompt(threadId, text, files, { delivery: true }).catch(() => {});
   },
   'attach.pick': () => attachments.pick(win),
@@ -602,14 +626,19 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   /** Desktop copy: text, HTML and (macOS) a copied message's files as file URLs. Denied over remote. */
   'clipboard.write': (p: ClipboardPayload) => writeClipboard(p),
   'clipboard.readMessage': () => readClipboardMessage(),
-  'chat.cancel': (threadId: string) => {
+  'chat.cancel': async (threadId: string) => {
     userCancelled(threadId);
     promptQueue.onUserStop(threadId);
+    await cancelMaxEffort(threadId).catch(() => {});
     return agents.cancel(threadId);
   },
   /** Composer send: goes out now, or waits in the chat's queue while the agent is busy or offline (ticks show which). */
   'queue.submit': (threadId: string, text: string, files: AttachmentView[] = []) => {
     userSent(threadId);
+    if (store.findThread(threadId)?.mode === 'max' && !isMaxEffortRunning(threadId) && !agents.runState(threadId).running) {
+      void runMaxEffortTurn(threadId, text, files).catch(() => {});
+      return promptQueue.view(threadId);
+    }
     return promptQueue.submit(threadId, text, files);
   },
   'queue.get': (threadId: string) => promptQueue.view(threadId),
@@ -663,11 +692,27 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
 
   'skills.list': () => skills.listSkills(),
   'skills.get': (id: string) => skills.getSkill(id),
-  'skills.save': (input: { id?: string; name: string; description: string; body: string }) => skills.saveSkill(input),
-  'skills.delete': (id: string) => skills.deleteSkill(id),
-  'skills.enable': (id: string, on: boolean) => skills.setSkillEnabled(id, on),
+  'skills.save': (input: { id?: string; name: string; description: string; body: string }) => {
+    const list = skills.saveSkill(input);
+    emit('skills:changed', list);
+    return list;
+  },
+  'skills.delete': async (id: string) => {
+    const list = await skills.deleteSkill(id);
+    emit('skills:changed', list);
+    return list;
+  },
+  'skills.enable': (id: string, on: boolean) => {
+    const list = skills.setSkillEnabled(id, on);
+    emit('skills:changed', list);
+    return list;
+  },
   'skills.candidates': () => skills.skillImportCandidates(),
-  'skills.import': (path: string) => skills.importSkill(path),
+  'skills.import': (path: string) => {
+    const list = skills.importSkill(path);
+    emit('skills:changed', list);
+    return list;
+  },
   'skills.reveal': () => {
     mkdirSync(skills.skillsDir(), { recursive: true });
     void shell.openPath(skills.skillsDir());
@@ -804,6 +849,7 @@ function buildMenu() {
           { label: 'Search Chats', accelerator: 'CmdOrCtrl+K', click: (_i, w) => sendMenu('search', w) },
           { label: 'Chat Mode', accelerator: 'CmdOrCtrl+1', click: (_i, w) => sendMenu('mode-chat', w) },
           { label: 'Code Mode', accelerator: 'CmdOrCtrl+2', click: (_i, w) => sendMenu('mode-code', w) },
+          ...(MAX_EFFORT_ENABLED ? ([{ label: 'Max Effort Mode', accelerator: 'CmdOrCtrl+3', click: (_i, w) => sendMenu('mode-max', w) }] satisfies Electron.MenuItemConstructorOptions[]) : []),
           { label: 'Save File', accelerator: 'CmdOrCtrl+S', click: (_i, w) => sendMenu('save', w) },
           { label: 'Toggle Terminal', accelerator: 'Ctrl+`', click: (_i, w) => sendMenu('terminal', w) },
           { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: (_i, w) => sendMenu('sidebar', w) },

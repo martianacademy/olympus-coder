@@ -36,7 +36,8 @@ import { TurnBar } from './TurnChanges';
 import { WorkGroup } from './WorkGroup';
 import { BackgroundBar, WorkingIndicator } from './Working';
 import { ElicitationCard } from './ElicitationCard';
-import { CompactionRow, NoticeRow, PlanDocBlock } from './SessionUpdateRows';
+import { Collapsible, CompactionRow, NoticeRow, PlanDocBlock } from './SessionUpdateRows';
+import { MaxEffortCard } from './MaxEffortCard';
 import { isRemoteBrowser } from '../responsive';
 import { useStickToBottom } from '../useStickToBottom';
 import { doneOpening, useOpeningThread } from '../openingThread';
@@ -66,6 +67,8 @@ export function Chat(props: {
   /** Header slots: the agent picker sits on the left, Code mode's panel toggles on the right. */
   headerLeft?: React.ReactNode;
   headerRight?: React.ReactNode;
+  /** Optional secondary bar below the header (used by Max Effort mode for Solver ⇄ Critic controls). */
+  subHeader?: React.ReactNode;
   onLogin: () => void;
   onFork: (uptoItemId?: string) => void;
   onOpenThread: (id: string) => void;
@@ -165,7 +168,8 @@ export function Chat(props: {
   }, [groups, startIdx, running, thread.id, props.agentDefs, props.onFork, props.onOpenThread]);
 
   const lastGroup = groups[groups.length - 1];
-  const hasLiveWorkGroup = Boolean(running && lastGroup?.kind === 'work');
+  const hasLiveDelib = Boolean(lastGroup?.kind === 'item' && lastGroup.item.kind === 'max-deliberation' && lastGroup.item.status === 'running');
+  const hasLiveWorkGroup = Boolean((running && lastGroup?.kind === 'work') || hasLiveDelib);
 
   return (
     <ProjectIdContext.Provider value={props.project.id}>
@@ -192,6 +196,7 @@ export function Chat(props: {
         </button>
         {props.headerRight}
       </div>
+      {props.subHeader}
 
       <div
         className={`chat-scroll ${paneDrop ? 'pane-dragging' : ''}`}
@@ -310,6 +315,8 @@ function groupItems(items: ThreadItem[]): Group[] {
   for (const it of items) {
     // A plan the agent withdrew (`plan_removed`) is no longer shown.
     if ((it.kind === 'plan' || it.kind === 'plan-doc') && it.removed) continue;
+    // Internal synthesis handoff message in Max mode is represented by the MaxEffortCard right above it.
+    if (it.kind === 'user' && it.fromApp && it.text.startsWith('[Max Effort · Dual-Mind Synthesis]')) continue;
     if (it.kind === 'thought' || it.kind === 'tool' || it.kind === 'plan') {
       const last = out[out.length - 1];
       if (last?.kind === 'work') last.items.push(it);
@@ -354,7 +361,7 @@ const Item = memo(function Item({
   onFork: (uptoItemId?: string) => void;
   compact?: boolean;
 }) {
-  const def = agentDefs[item.kind === 'switch' ? item.to : item.agentId];
+  const def = agentDefs[item.kind === 'max-deliberation' ? item.solverAgentId : item.kind === 'switch' ? item.to : item.agentId];
   const openFile = useOpenFile();
   switch (item.kind) {
     case 'user': {
@@ -486,20 +493,7 @@ const Item = memo(function Item({
       );
     case 'elicitation':
       return <ElicitationCard item={item} threadId={threadId} agentName={def?.name ?? 'The agent'} />;
+    case 'max-deliberation':
+      return <MaxEffortCard item={item} agentDefs={agentDefs} />;
   }
 });
-
-/** Collapsible block for long compact prompts in `Transcript` (follows "Steps open" unless clicked). */
-function Collapsible(p: { stepKey: string; label: React.ReactNode; body: React.ReactNode; icon?: React.ReactNode; follow?: boolean }) {
-  const expandAll = useExpandSteps();
-  const [choice, setChoice] = useStepChoice(p.stepKey);
-  const open = choice ?? (p.follow ? expandAll : false);
-  return (
-    <div className="msg-wrap">
-      <button className="btn ghost small muted collapse-head" onClick={() => setChoice(!open)} style={{ paddingLeft: 4 }}>
-        {p.icon} {p.label} {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-      </button>
-      {open && p.body}
-    </div>
-  );
-}

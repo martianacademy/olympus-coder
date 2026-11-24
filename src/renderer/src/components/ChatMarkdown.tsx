@@ -10,6 +10,8 @@ import { HighlightedCode } from '../codeHighlight';
 import { langFromFence } from '../codeLang';
 import { normalizeMath } from '@shared/markdownMath';
 import { isViewerTarget, openViewer, viewerAttrs, viewerKindOf } from '../mediaViewerApi';
+import { extractBlockMediaLinks, type HastNode } from '../markdownMedia';
+import { MdMediaStrip } from './MdMediaPreview';
 
 function openRefSmart(ref: string, from: Element | null, openInPanel: (r: string) => void) {
   if (isViewerTarget(ref)) openViewer({ ref, from, openInPanel });
@@ -198,7 +200,38 @@ function hasMathSyntax(md: string): boolean {
   return false;
 }
 
+/** Paragraphs: standalone local media links upgrade to inline previews; prose paragraphs keep text + attach previews below. */
+function MdParagraph({ node, children }: { node?: HastNode; children?: React.ReactNode }) {
+  const { links, standalone } = extractBlockMediaLinks(node);
+  if (!links.length) return <p>{children}</p>;
+  if (standalone) return <MdMediaStrip links={links} standalone />;
+  return (
+    <>
+      <p>{children}</p>
+      <MdMediaStrip links={links} />
+    </>
+  );
+}
+
+/** Tight list items with local media links attach previews inside the item (loose lists use `<p>` and aren't duplicated). */
+function MdListItem({ node, children, className }: { node?: HastNode; children?: React.ReactNode; className?: string }) {
+  const { links } = extractBlockMediaLinks(node);
+  if (!links.length) return <li className={className}>{children}</li>;
+  return (
+    <li className={className}>
+      {children}
+      <MdMediaStrip links={links} />
+    </li>
+  );
+}
+
 const MD_COMPONENTS = {
+  p: ({ node, children }: { node?: HastNode; children?: React.ReactNode }) => <MdParagraph node={node}>{children}</MdParagraph>,
+  li: ({ node, children, className }: { node?: HastNode; children?: React.ReactNode; className?: string }) => (
+    <MdListItem node={node} className={className}>
+      {children}
+    </MdListItem>
+  ),
   pre: ({ children }: { children?: React.ReactNode }) => <CodeBlock>{children}</CodeBlock>,
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => <MdLink href={href}>{children}</MdLink>,
   code: ({ className, children }: { className?: string; children?: React.ReactNode }) => <MdCode className={className}>{children}</MdCode>,

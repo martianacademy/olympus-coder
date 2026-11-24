@@ -1,5 +1,14 @@
 import type { AuthAccountView, AuthInfoView, AuthVarView, LoginLinkView } from '@shared/acpConfig';
-import { CLI_ENV_FALLBACKS, CLI_TERMINAL_LOGINS, KNOWN_KEY_VARS, METHOD_ID_VAR, PURE_ACP_WRAPPERS } from './acpAuthCatalog';
+import {
+  CLI_ENV_FALLBACKS,
+  CLI_EXTRA_TERMINAL_LOGINS,
+  CLI_TERMINAL_LOGINS,
+  CLI_TERMINAL_LOGOUTS,
+  CLI_TERMINAL_SWITCHES,
+  KNOWN_KEY_VARS,
+  METHOD_ID_VAR,
+  PURE_ACP_WRAPPERS,
+} from './acpAuthCatalog';
 
 /**
  * ACP login, beyond what the SDK schema types: every auth method shape agents send, the status they report,
@@ -25,6 +34,8 @@ export interface AuthMethodDetail {
   link?: string;
   /** Synthesized Olympus env-var setup (save secrets + restart agent; skip `authenticate` RPC). */
   synthetic?: boolean;
+  /** Explicit terminal binary supplied via `_meta['terminal-auth'].command`, when present on disk. */
+  terminalCommand?: string;
   /** Terminal CLI login arguments (replaces trailing ACP server flags when `replaceAgentArgs` is true). */
   terminalArgs?: string[];
   terminalEnv?: Record<string, string>;
@@ -70,12 +81,31 @@ export function authMethodDetail(agentId: string, rawInput: any): AuthMethodDeta
   const m = unwrapAuthMethod(rawInput);
   const base = { id: String(m?.id ?? ''), name: str(m?.name) ?? String(m?.id ?? 'Login'), ...(str(m?.description) ? { description: m.description.trim() } : {}) };
   if (m?.type === 'terminal') {
+    const args = Array.isArray(m.args) ? m.args.map(String) : [];
+    // Subcommand-style args (`['login']`, `['auth', 'login']`) replace trailing `acp`/`--acp` server flags,
+    // whereas flag-style args (`['--login']` for `agy acp --login` or `['--cli', ...]` for `@node` adapters) append.
+    const isSubcommand = args.length > 0 && !args[0].startsWith('-');
     return {
       ...base,
       flow: 'terminal',
       vars: [],
-      terminalArgs: Array.isArray(m.args) ? m.args.map(String) : [],
+      terminalArgs: args,
+      ...(isSubcommand ? { replaceAgentArgs: true } : {}),
       ...(m.env && typeof m.env === 'object' ? { terminalEnv: m.env } : {}),
+    };
+  }
+  const termMeta = m?._meta?.['terminal-auth'] ?? m?._meta?.terminalAuth;
+  if (termMeta && typeof termMeta === 'object') {
+    const args = Array.isArray(termMeta.args) ? termMeta.args.map(String) : [];
+    return {
+      ...base,
+      ...(str(termMeta.label) && !str(m?.name) ? { name: termMeta.label.trim() } : {}),
+      flow: 'terminal',
+      vars: [],
+      ...(str(termMeta.command) ? { terminalCommand: termMeta.command.trim() } : {}),
+      terminalArgs: args,
+      replaceAgentArgs: true,
+      ...(termMeta.env && typeof termMeta.env === 'object' ? { terminalEnv: termMeta.env } : {}),
     };
   }
   if (m?.type === 'env_var' || Array.isArray(m?.vars)) {
@@ -132,6 +162,21 @@ export function effectiveAuthMethods(agentId: string, raw: any[] | undefined, me
         flow: 'terminal',
         vars: [],
         terminalArgs: [],
+        replaceAgentArgs: true,
+        synthetic: true,
+      });
+    }
+  }
+
+  for (const extra of CLI_EXTRA_TERMINAL_LOGINS[key] ?? []) {
+    if (!out.some((m) => m.id === extra.id)) {
+      out.push({
+        id: extra.id,
+        name: extra.name,
+        description: extra.description,
+        flow: 'terminal',
+        vars: [],
+        terminalArgs: extra.args,
         replaceAgentArgs: true,
         synthetic: true,
       });
@@ -210,6 +255,35 @@ export function cliLoginArgs(command: string, agentArgs: string[], loginArgs: st
     return [...prefix, ...loginArgs];
   }
   return [...loginArgs];
+}
+
+/**
+ * Detects when an upgraded CLI rejects a graduated/removed `--experimental-*` flag in `args`
+ * (e.g. Qwen Code 1.0 removing `--experimental-skills` with `error: unknown option '--experimental-skills'`).
+ * Never strips core ACP flags (`--experimental-acp`).
+ */
+export function findRejectedExperimentalArg(args: string[], errorText: string): string | null {
+  if (!args.length || !errorText) return null;
+  if (!/(?:unknown|unrecognized|unexpected|invalid)\s+(?:option|argument|flag)/i.test(errorText)) return null;
+  for (const arg of args) {
+    const clean = arg.split('=')[0];
+    if (!/^--experimental-[a-z0-9-]+$/i.test(clean)) continue;
+    if (/^--experimental-acp$/i.test(clean)) continue;
+    if (errorText.includes(clean)) return arg;
+  }
+  return null;
+}
+
+/** Interactive CLI logout args when an agent omits ACP `logout` (e.g. `opencode auth logout`, `kilo auth logout`). */
+export function cliLogoutArgsFor(agentId: string, meta?: AgentAuthMeta): string[] | undefined {
+  if (meta?.builtin) return undefined;
+  return CLI_TERMINAL_LOGOUTS[meta?.registryId || agentId];
+}
+
+/** Interactive CLI account-switch args when an agent supports multiple saved accounts (`opencode auth switch`). */
+export function cliSwitchArgsFor(agentId: string, meta?: AgentAuthMeta): string[] | undefined {
+  if (meta?.builtin) return undefined;
+  return CLI_TERMINAL_SWITCHES[meta?.registryId || agentId];
 }
 
 /** Env for the agent process: every saved variable of its methods (multi-variable `env_var` methods included). */

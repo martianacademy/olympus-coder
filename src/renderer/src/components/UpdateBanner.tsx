@@ -19,13 +19,36 @@ function ownEntry(): string | undefined {
  * Otherwise, when GitHub has a newer release (src/main/updates.ts): a notice with links, or in auto mode the download
  * progress and "ready — restart to update". A phone shows the notice only.
  */
+const REMOTE_LATER_KEY = 'olympus.updateLaterVersion';
+
+function readRemoteLater(): string | undefined {
+  if (!isRemoteBrowser()) return undefined;
+  try {
+    return localStorage.getItem(REMOTE_LATER_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function UpdateBanner() {
+  const remote = isRemoteBrowser();
   const [state, setState] = useState<'ok' | 'updated' | 'reload' | 'mismatch'>('ok');
   /** The notice dismissed with "Later": hidden until a different one is due. */
   const [hiddenFor, setHiddenFor] = useState<string>();
   const [release, setRelease] = useState<UpdateInfo | null>(null);
-  /** "Later" on "ready": hidden for this window session. */
-  const [laterFor, setLaterFor] = useState<string>();
+  /** "Later" on "ready": hidden for this desktop session, or persisted per version on phone PWAs (which reload often). */
+  const [laterFor, setLaterFor] = useState<string | undefined>(readRemoteLater);
+
+  const dismissLater = (version: string) => {
+    setLaterFor(version);
+    if (remote) {
+      try {
+        localStorage.setItem(REMOTE_LATER_KEY, version);
+      } catch {
+        /* ignore private-mode storage failures */
+      }
+    }
+  };
   useEffect(() => {
     const check = () =>
       void window.desk
@@ -57,12 +80,14 @@ export function UpdateBanner() {
         <RefreshCw size={14} />
         <span className="grow">
           {state === 'updated'
-            ? 'A new version of Olympus is installed. Restart to use it — running agents and terminals stop.'
+            ? remote
+              ? 'A new version of Olympus is installed on your Mac. Restart the Mac app to use it.'
+              : 'A new version of Olympus is installed. Restart to use it — running agents and terminals stop.'
             : state === 'reload'
               ? 'A new version of this window is installed. Reload to use it — agents and terminals keep running.'
               : 'Olympus kept running from an older version, so some parts of this window may not work. Quit Olympus fully (⌘Q → "Quit and stop them") and open it again.'}
         </span>
-        {state === 'updated' && (
+        {state === 'updated' && !remote && (
           <button className="btn small primary" onClick={() => void window.desk.invoke('app.restart')}>
             Restart
           </button>
@@ -72,13 +97,12 @@ export function UpdateBanner() {
             Reload
           </button>
         )}
-        <button className="btn ghost icon" title="Later" onClick={() => setHiddenFor(state)}>
+        <button className="btn ghost icon" title="Dismiss" aria-label="Dismiss update banner" onClick={() => setHiddenFor(state)}>
           <X size={13} />
         </button>
       </div>
     );
   if (!release || laterFor === release.version) return null;
-  const remote = isRemoteBrowser();
   // On a phone the links open there (the Mac's browser is not in front of the user).
   const open = (url: string) => (remote ? window.open(url, '_blank', 'noopener,noreferrer') : void api.openExternal(url));
   const pct = release.total ? Math.min(100, Math.round(((release.received ?? 0) / release.total) * 100)) : undefined;
@@ -119,10 +143,21 @@ export function UpdateBanner() {
           <button className="btn small primary" onClick={() => void api.installUpdate()} data-testid="release-restart">
             Restart
           </button>
-          <button className="btn small ghost" onClick={() => setLaterFor(release.version)} data-testid="release-later">
+          <button className="btn small ghost" onClick={() => dismissLater(release.version)} data-testid="release-later">
             Later
           </button>
         </>
+      )}
+      {remote && release.state === 'ready' && (
+        <button
+          className="btn ghost icon"
+          title="Dismiss"
+          aria-label="Dismiss update banner"
+          onClick={() => dismissLater(release.version)}
+          data-testid="release-later"
+        >
+          <X size={13} />
+        </button>
       )}
       {!remote && !release.state && (
         <button className="btn small primary" onClick={() => open(release.downloadUrl)} data-testid="release-download">

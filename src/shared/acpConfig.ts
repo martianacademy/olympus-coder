@@ -226,6 +226,10 @@ export interface AuthDetailsView {
   info?: AuthInfoView;
   link?: LoginLinkView;
   canLogout: boolean;
+  /** True when logout runs interactively in the CLI terminal (`opencode auth logout`, `kilo auth logout`). */
+  terminalLogout?: boolean;
+  /** True when the CLI offers an interactive account switcher (`opencode auth switch`). */
+  terminalSwitch?: boolean;
   /** The agent answers `auth/status` (else status only arrives as pushed updates, or not at all). */
   canCheckStatus: boolean;
 }

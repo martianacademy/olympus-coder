@@ -141,7 +141,11 @@ export default function App() {
 
   const locked = Boolean(state?.lock.locked);
   const settings = state?.settings;
-  const mode: UiMode = settings?.uiMode ?? 'code';
+  const maxEffortEnabled = Boolean(state?.maxEffortEnabled);
+  const maxEffortEnabledRef = useRef(maxEffortEnabled);
+  maxEffortEnabledRef.current = maxEffortEnabled;
+  const rawMode: UiMode = settings?.uiMode ?? 'code';
+  const mode: UiMode = rawMode === 'max' && !maxEffortEnabled ? 'code' : rawMode;
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
@@ -203,7 +207,8 @@ export default function App() {
       setActive(r.thread);
       setSession(r.session);
       lastStatus.current = r.session.status;
-      if (modeRef.current !== modeOf(r.thread)) void setMode(modeOf(r.thread));
+      const targetMode = modeOf(r.thread) === 'max' && !maxEffortEnabledRef.current ? 'chat' : modeOf(r.thread);
+      if (modeRef.current !== targetMode) void setMode(targetMode);
       void api.ensureSession(id);
     },
     [setMode],
@@ -314,6 +319,33 @@ export default function App() {
     await loadThreads(t.projectId);
   }
 
+  function newMaxHome(projectId = 'general') {
+    setActive(null);
+    setSession(null);
+    setHomeProject(projectId);
+    setPage('home');
+    if (mode !== 'max') void setMode('max');
+  }
+
+  async function startMaxChat(text: string, files: AttachmentView[] = []) {
+    const pid = homeProject === 'general' || projects.some((p) => p.id === homeProject) ? homeProject : 'general';
+    const t = await api.createThread(pid, currentAgent, 'max');
+    await api.send(t.id, text, files);
+    await loadThreads(pid);
+    await openThread(t.id);
+  }
+
+  async function updateMaxEffortConfig(patch: Partial<NonNullable<AppState['settings']['maxEffort']>>) {
+    if (active && modeOf(active) === 'max') {
+      const next = await api.maxEffort.setConfig(active.id, patch);
+      setActive((prev) => (prev ? { ...prev, maxEffort: next } : prev));
+      setState((st) => (st ? { ...st, settings: { ...st.settings, maxEffort: next } } : st));
+    } else {
+      const merged = { maxRounds: 2, watchdogSeconds: 180, ...(settings?.maxEffort ?? {}), ...patch };
+      await updateSettings({ maxEffort: merged });
+    }
+  }
+
   function newChatHome(projectId = 'general') {
     setActive(null);
     setSession(null);
@@ -382,10 +414,11 @@ export default function App() {
   };
 
   function switchMode(m: UiMode) {
+    if (m === 'max' && !maxEffortEnabled) return;
     if (m === mode) return;
     void setMode(m);
-    if (m === 'chat') {
-      if (!active || modeOf(active) !== 'chat') {
+    if (m === 'chat' || m === 'max') {
+      if (!active || modeOf(active) !== m) {
         setActive(null);
         setPage('home');
       }
@@ -409,10 +442,11 @@ export default function App() {
 
   menuHandler.current = (cmd: string) => {
     if (cmd === 'settings') setSettingsTab('general');
-    if (cmd === 'new-chat') mode === 'chat' ? newChatHome() : void newCodeChat();
+    if (cmd === 'new-chat') mode === 'chat' ? newChatHome() : mode === 'max' ? newMaxHome() : void newCodeChat();
     if (cmd === 'search') setShowSearch(true);
     if (cmd === 'mode-chat') switchMode('chat');
     if (cmd === 'mode-code') switchMode('code');
+    if (cmd === 'mode-max' && maxEffortEnabled) switchMode('max');
     if (cmd === 'save') workbench.current?.save();
     if (cmd === 'terminal' && mode === 'code') toggleWorkbench('terminal');
     if (cmd === 'sidebar') toggleSidebar();
@@ -544,9 +578,11 @@ export default function App() {
             currentAgentStatus={agents.statuses[currentAgent]}
             profile={profile}
             lockEnabled={state.lock.enabled}
+            maxEffortEnabled={maxEffortEnabled}
             onToggleSidebar={toggleSidebar}
             onSwitchMode={switchMode}
             onNewChatHome={() => newChatHome()}
+            onNewMaxHome={() => newMaxHome()}
             onNewCodeChat={(pid) => void newCodeChat(pid)}
             onShowSearch={() => setShowSearch(true)}
             onSelectPage={setPage}
@@ -615,6 +651,9 @@ export default function App() {
             onNewCodeChat={(pid) => void newCodeChat(pid)}
             onAddProject={addProject}
             onStartChat={(text, files) => void startChat(text, files)}
+            onStartMaxChat={(text, files) => void startMaxChat(text, files)}
+            maxEffortConfig={active && modeOf(active) === 'max' ? active.maxEffort ?? settings?.maxEffort : settings?.maxEffort}
+            onUpdateMaxEffort={(patch) => void updateMaxEffortConfig(patch)}
             onPickAgent={(id) => void pickAgent(id)}
             onSwitchMode={switchMode}
             onSetModeOnly={(m) => void setMode(m)}

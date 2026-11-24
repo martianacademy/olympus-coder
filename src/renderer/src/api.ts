@@ -43,6 +43,8 @@ import type {
   Settings,
   Thread,
   ThreadMeta,
+  UiMode,
+  MaxEffortSettings,
   WorktreeMergeResult,
   WorktreeStatusView,
 } from '@shared/types';
@@ -160,6 +162,7 @@ export const api = {
 
   files: {
     list: (pid: string, rel: string) => call<FileEntry[]>('files.list', pid, rel),
+    search: (pid: string, query = '', limit = 50) => call<FileEntry[]>('files.search', pid, query, limit),
     read: (pid: string, rel: string) => call<FileContent>('files.read', pid, rel),
     write: (pid: string, rel: string, text: string, mtime?: number) => call<{ mtime: number; conflict?: boolean }>('files.write', pid, rel, text, mtime),
     create: (pid: string, rel: string, dir: boolean) => call<FileEntry>('files.create', pid, rel, dir),
@@ -208,8 +211,13 @@ export const api = {
 
   threads: (projectId: string) => call<ThreadMeta[]>('threads.list', projectId),
   thread: (id: string) => call<{ thread: Thread; session: SessionView } | null>('threads.get', id),
-  createThread: (projectId: string, agentId: string, mode?: 'chat' | 'code', opts?: { worktree?: boolean }) =>
+  createThread: (projectId: string, agentId: string, mode?: UiMode, opts?: { worktree?: boolean }) =>
     opts ? call<Thread>('threads.create', projectId, agentId, mode, opts) : call<Thread>('threads.create', projectId, agentId, mode),
+  maxEffort: {
+    getConfig: (threadId: string) => call<(MaxEffortSettings & { criticAgentId: string }) | null>('maxEffort.getConfig', threadId),
+    setConfig: (threadId: string, patch: Partial<MaxEffortSettings>) =>
+      call<MaxEffortSettings & { criticAgentId: string }>('maxEffort.setConfig', threadId, patch),
+  },
   /** Git worktree chats (src/shared/worktree.ts): status, merge back into the base branch, remove. */
   worktree: {
     status: (threadId: string) => call<WorktreeStatusView | null>('worktree.status', threadId),

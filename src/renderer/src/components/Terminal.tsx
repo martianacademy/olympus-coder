@@ -9,6 +9,7 @@ import { fileRefs, useOpenFile } from '../fileLinks';
 import { getThemeSettings } from '../theme';
 import { isLocalUrl, openWebPreview } from './WebPreview';
 import { copyText } from '../clipboard';
+import { collectWrappedRows, extractWrappedUrls } from '../terminalLinks';
 
 /** Live terminals by pty id, so the panel's toolbar (Clear, Copy) can act on the one in front. */
 const live = new Map<string, XTerm>();
@@ -276,16 +277,16 @@ export function Terminal({
     });
     term.registerLinkProvider({
       provideLinks(line, cb) {
-        const text = term.buffer.active.getLine(line - 1)?.translateToString(true) ?? '';
-        const out: any[] = [];
-        const urls: [number, number][] = [];
-        for (const m of text.matchAll(/https?:\/\/[^\s'"]+/g)) {
-          const start = (m.index ?? 0) + 1;
-          urls.push([m.index ?? 0, (m.index ?? 0) + m[0].length]);
-          // A local dev server opens in the app's Web tab; anything else in the browser.
-          const url = m[0].replace(/[.,;)]+$/, '');
-          out.push({ range: { start: { x: start, y: line }, end: { x: start + url.length - 1, y: line } }, text: url, activate: () => (isLocalUrl(url) ? openWebPreview(url) : void api.openExternal(url)) });
-        }
+        const buf = term.buffer.active;
+        const rows = collectWrappedRows((idx) => buf.getLine(idx), line - 1);
+        const urlLinks = extractWrappedUrls(rows, line);
+        const out: any[] = urlLinks.map((u) => ({
+          range: u.range,
+          text: u.url,
+          activate: () => (isLocalUrl(u.url) ? openWebPreview(u.url) : void api.openExternal(u.url)),
+        }));
+        const urls: [number, number][] = urlLinks.map((u) => u.targetSpan);
+        const text = buf.getLine(line - 1)?.translateToString(true) ?? '';
         // File paths with a line number (stack traces, compiler errors): open the file at that line.
         for (const f of fileRefs(text)) {
           if (urls.some(([a, b]) => f.index < b && f.index + f.length > a)) continue;

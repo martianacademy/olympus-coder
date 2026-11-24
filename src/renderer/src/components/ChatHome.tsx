@@ -7,6 +7,9 @@ import { useOpenFile } from '../fileLinks';
 import { AgentLogo } from '../logos';
 import { AttachButton, AttachmentChips, useAttachments } from './Attachments';
 import { HomeSessionOptions } from './HomeSessionOptions';
+import { useSlashMenu } from './SlashMenu';
+import { useMentionMenu } from './MentionMenu';
+import { useSkillCommands } from '../skillCommands';
 import type { AttachmentView } from '@shared/types';
 import { enterSends } from '../platform';
 
@@ -40,6 +43,8 @@ export function ChatHome(props: {
   const ta = useRef<HTMLTextAreaElement>(null);
   const att = useAttachments(HOME_DRAFT_KEY);
   const wrap = useRef<HTMLDivElement>(null);
+  const skillCommands = useSkillCommands();
+  const slash = useSlashMenu({ text, setText, commands: skillCommands, ta });
   useEffect(() => {
     const el = ta.current;
     if (!el) return;
@@ -57,6 +62,7 @@ export function ChatHome(props: {
   const allProjects = useMemo(() => [...(props.general ? [props.general] : []), ...props.projects], [props.general, props.projects]);
   const project = allProjects.find((p) => p.id === props.projectId) ?? allProjects[0];
   const agent: AgentDef | undefined = props.agents.defs.find((d) => d.id === props.agentId) ?? props.agents.defs[0];
+  const mention = useMentionMenu({ text, setText, attachments: att.files, projectId: project?.id, ta, disabled: Boolean(slash.menu) });
   const canSend = Boolean(text.trim() || att.files.length);
   const send = () => {
     if (!canSend) return;
@@ -73,6 +79,8 @@ export function ChatHome(props: {
           <Sparkles size={30} color="var(--accent)" /> {greeting(props.profile.name)}
         </h1>
         <div className={`home-composer ${att.dragging ? 'dragging' : ''}`}>
+          {slash.menu}
+          {mention.menu}
           <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a, el) => att.open(a, el, openFile)} />
           <div className="growable-textarea" data-replicated-value={text}>
             <textarea
@@ -81,9 +89,23 @@ export function ChatHome(props: {
               rows={2}
               spellCheck={false}
               value={text}
-              placeholder="Ask anything or describe a task…"
+              placeholder="Ask anything, type / for skills or @ to reference files…"
               onChange={(e) => setText(e.target.value)}
+              {...slash.textareaProps}
+              onFocus={() => {
+                slash.textareaProps.onFocus();
+                mention.onFocus();
+              }}
+              onBlur={() => {
+                slash.textareaProps.onBlur();
+                mention.onBlur();
+              }}
+              onSelect={() => {
+                slash.textareaProps.onSelect();
+                mention.onSelect();
+              }}
               onKeyDown={(e) => {
+                if (slash.onKeyDown(e) || mention.onKeyDown(e)) return;
                 if (enterSends(e)) {
                   e.preventDefault();
                   send();
@@ -91,6 +113,7 @@ export function ChatHome(props: {
               }}
               data-testid="home-composer"
             />
+            {slash.ghost}
           </div>
           <div className="composer-bar">
             <AttachButton onClick={() => void att.pick()} onFiles={att.addRawFiles} />

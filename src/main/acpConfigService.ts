@@ -1,5 +1,15 @@
 import type { AcpConfigEvents, AgentProvidersView, AuthDetailsView, AuthInfoView, McpChatStatus, ProviderInput } from '@shared/acpConfig';
-import { authenticateParams, authVarKey, effectiveAuthMethods, LoginLinks, missingVars, parseAuthStatus, type AgentAuthMeta } from './acpAuth';
+import {
+  authenticateParams,
+  authVarKey,
+  cliLogoutArgsFor,
+  cliSwitchArgsFor,
+  effectiveAuthMethods,
+  LoginLinks,
+  missingVars,
+  parseAuthStatus,
+  type AgentAuthMeta,
+} from './acpAuth';
 import { AcpMcpServing, McpStatusStore } from './acpMcp';
 import { ProviderService, type ProviderRequester, type ProviderSecrets } from './acpProviders';
 
@@ -94,7 +104,8 @@ export const authInfoFor = (agentId: string): AuthInfoView | undefined => authIn
 export async function authDetails(agentId: string): Promise<AuthDetailsView> {
   const { deps, host } = need();
   const c = await host.connection(agentId, true).catch(() => null);
-  const methods = effectiveAuthMethods(agentId, host.rawAuthMethods(agentId), host.agentMeta?.(agentId));
+  const meta = host.agentMeta?.(agentId);
+  const methods = effectiveAuthMethods(agentId, host.rawAuthMethods(agentId), meta);
   const fromMethods = methods.flatMap((m) => m.vars.map((v) => v.name)).filter((n) => Boolean(deps.secrets.getSecret(authVarKey(agentId, n))));
   const savedVars = [...new Set([...fromMethods, ...(host.savedVarNames?.(agentId) ?? [])])];
   if (c?.caps?.auth?.status && !authInfo.has(agentId)) {
@@ -106,16 +117,21 @@ export async function authDetails(agentId: string): Promise<AuthDetailsView> {
   }
   const info = authInfo.get(agentId);
   const link = loginLinks.current(agentId);
+  const nativeLogout = Boolean(c?.caps?.auth?.logout);
+  const hasCliLogout = Boolean(cliLogoutArgsFor(agentId, meta));
+  const hasCliSwitch = Boolean(cliSwitchArgsFor(agentId, meta));
   return {
     agentId,
-    methods: methods.map(({ keyInMeta: _k, synthetic: _s, terminalArgs: _ta, terminalEnv: _te, replaceAgentArgs: _r, flow, ...m }) => ({
+    methods: methods.map(({ keyInMeta: _k, synthetic: _s, terminalCommand: _tc, terminalArgs: _ta, terminalEnv: _te, replaceAgentArgs: _r, flow, ...m }) => ({
       ...m,
       flow: flow as AuthDetailsView['methods'][number]['flow'],
     })),
     savedVars,
     ...(info ? { info } : {}),
     ...(link ? { link } : {}),
-    canLogout: Boolean(c?.caps?.auth?.logout) || savedVars.length > 0,
+    canLogout: nativeLogout || savedVars.length > 0 || hasCliLogout,
+    ...(hasCliLogout && !nativeLogout ? { terminalLogout: true } : {}),
+    ...(hasCliSwitch ? { terminalSwitch: true } : {}),
     canCheckStatus: Boolean(c?.caps?.auth?.status),
   };
 }

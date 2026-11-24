@@ -20,7 +20,13 @@
 
 .slash-name {
   flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-flex; align-items: baseline; gap: 6px;
   font-family: var(--code-font); font-size: 12.5px; font-weight: 600; color: var(--text);
+}
+.slash-badge {
+  font-family: var(--font-sans, inherit); font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 1px 5px; border-radius: 999px; line-height: 1.35;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .slash-hint { font-weight: 400; color: color-mix(in srgb, var(--muted) 85%, transparent); }
 .slash-desc {
@@ -30,7 +36,7 @@
 .slash-item.active .slash-desc { color: color-mix(in srgb, var(--text) 72%, transparent); }
 
 /* Input hint shown after `/name ` until the user types the argument. */
-.composer .growable-textarea { position: relative; }
+.composer .growable-textarea, .home-composer .growable-textarea { position: relative; }
 .slash-ghost {
   position: absolute; inset: 0; pointer-events: none; overflow: hidden;
   white-space: pre-wrap; overflow-wrap: break-word;
@@ -41,4 +47,21 @@
 @media (max-width: 560px) {
   .slash-item { flex-direction: column; align-items: stretch; gap: 1px; }
   .slash-name { max-width: 100%; }
+  .mention-item { flex-direction: row; align-items: center; gap: 8px; }
 }
+
+/* `@` file & attachment mention menu (components/MentionMenu.tsx). */
+.mention-section {
+  padding: 5px 10px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted); user-select: none;
+}
+.mention-item { align-items: center; gap: 9px; }
+.mention-icon {
+  flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted);
+}
+.mention-thumb {
+  width: 20px; height: 20px; object-fit: cover; border-radius: 5px;
+  border: 1px solid var(--hairline);
+}
+.mention-name { max-width: 54%; align-items: center; }
