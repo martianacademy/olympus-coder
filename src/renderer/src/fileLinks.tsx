@@ -10,8 +10,12 @@ export const useOpenFile = () => useContext(OpenFileContext);
 const EXT =
   'js|mjs|cjs|jsx|ts|tsx|mts|cts|json|jsonc|md|mdx|markdown|txt|css|scss|sass|less|html|htm|xml|svg|yml|yaml|toml|ini|cfg|conf|env|lock|log|csv|tsv|' +
   'py|rb|go|rs|java|kt|kts|swift|m|mm|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|fish|ps1|bat|sql|graphql|gql|proto|vue|svelte|astro|lua|dart|ex|exs|erl|' +
-  'scala|clj|r|jl|pl|tf|hcl|gradle|plist|pbxproj|xcconfig|dockerfile|makefile|png|jpg|jpeg|gif|webp|bmp|ico|avif|pdf|ipynb|patch|diff';
-const PATH_RE = new RegExp(`^(~|\\.{1,2})?/?([\\w@.+-]+/)*[\\w@.+-]*\\.(${EXT})(:\\d+(:\\d+)?|#L\\d+(-L?\\d+)?)?$`, 'i');
+  'scala|clj|r|jl|pl|tf|hcl|gradle|plist|pbxproj|xcconfig|dockerfile|makefile|png|jpg|jpeg|gif|webp|bmp|ico|avif|heic|heif|tif|tiff|pdf|ipynb|patch|diff|' +
+  // Media and documents MediaViewer opens (kept in step with mediaViewerApi.ts), so `~/out/demo.mp4` in inline code is clickable too.
+  'mp4|mov|m4v|webm|ogv|mkv|mp3|wav|m4a|aac|ogg|flac|opus|doc|docx|rtf|odt|xlsx|pptx';
+// Archives, installers and packages an agent hands over (`dist/app.zip`): clicking shows the file with Show in Finder.
+const PACKAGE_EXT = 'zip|tgz|gz|bz2|xz|7z|rar|tar|dmg|pkg|exe|msi|appimage|deb|rpm|apk|ipa|crx|xpi|vsix|whl|jar|wasm|bin|sqlite|db';
+const PATH_RE = new RegExp(`^(~|\\.{1,2})?/?([\\w@.+-]+/)*[\\w@.+-]*\\.(${EXT}|${PACKAGE_EXT})(:\\d+(:\\d+)?|#L\\d+(-L?\\d+)?)?$`, 'i');
 const BARE = /^(Dockerfile|Makefile|README|LICENSE|CHANGELOG|AGENTS|CLAUDE|GEMINI)(\.\w+)?$/;
 
 /** Text in inline code that reads as a file path: has a known extension (or is a well-known file name), no spaces. */

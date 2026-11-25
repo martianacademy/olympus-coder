@@ -277,5 +277,7 @@ export function openInDefaultApp(path: string) {
 }
 
 export function revealInFinder(path: string) {
-  if (existsSync(path)) shell.showItemInFolder(path);
+  // Same resolution as opening (`~/…`, `file://`, `src/a.ts:12`), so a chat file link can be revealed too.
+  const abs = existsSync(path) ? path : resolveRef(path).path;
+  if (existsSync(abs)) shell.showItemInFolder(abs);
 }

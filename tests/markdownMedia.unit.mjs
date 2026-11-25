@@ -138,5 +138,26 @@ test('displayMediaLabel prefers clean labels and falls back to basename for raw 
   assert.equal(displayMediaLabel('', 'file:///a/b/shot.png', 'shot.png'), 'shot.png');
 });
 
+test('inline code naming an absolute or ~/ local media file previews like a link', () => {
+  const code = (value) => el('code', [txt(value)]);
+  // "Demo ready: **`~/Downloads/demo.mp4`** (1080p)" — prose stays, preview attaches below.
+  const prose = extractBlockMediaLinks(el('p', [txt('Demo ready: '), el('strong', [code('~/Downloads/demo.mp4')]), txt(' (1080p)')]));
+  assert.deepEqual(prose.links, [{ href: '~/Downloads/demo.mp4', label: '', kind: 'video' }]);
+  assert.equal(prose.standalone, false);
+  // A paragraph that is only the path upgrades in place.
+  const alone = extractBlockMediaLinks(el('p', [code('/tmp/shot.png')]));
+  assert.deepEqual(alone.links, [{ href: '/tmp/shot.png', label: '', kind: 'image' }]);
+  assert.equal(alone.standalone, true);
+  assert.equal(extractBlockMediaLinks(el('li', [code('file:///tmp/voice.m4a')])).links[0].kind, 'audio');
+  // Relative names, non-media files, line anchors and paths with spaces stay plain code.
+  for (const v of ['assets/logo.png', 'src/app.ts', '/tmp/a.png:12', '/tmp/my shot.png', 'npm run build']) {
+    const res = extractBlockMediaLinks(el('p', [txt('see '), code(v)]));
+    assert.equal(res.links.length, 0, v);
+  }
+  // The same path as a link and as code is one preview.
+  const both = extractBlockMediaLinks(el('p', [link('/tmp/shot.png', 'shot'), txt(' or '), code('/tmp/shot.png')]));
+  assert.equal(both.links.length, 1);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

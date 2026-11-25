@@ -35,6 +35,8 @@ const LINE_ANCHOR_RE = /(?::\d+(?::\d+)?|#L?\d+(?:-L?\d+)?)$/i;
 const EXTERNAL_OR_NON_FILE_SCHEME_RE = /^(?:https?:|mailto:|tel:|data:|blob:|javascript:|vbscript:|about:|chrome:|#)/i;
 const GENERIC_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const WINDOWS_DRIVE_RE = /^[a-z]:[\\/]/i;
+/** Paths that name one file on this machine without a base folder: `/abs`, `~/home`, `file://`, `C:\`. */
+const ABSOLUTE_PATH_RE = /^(?:file:\/\/|\/|~\/|[a-z]:[\\/])/i;
 
 const BLOCK_TAGS = new Set([
   'p',
@@ -174,7 +176,22 @@ export function extractBlockMediaLinks(node: HastNode | undefined): ExtractedBlo
         hasNonMediaContent = true;
         continue;
       }
-      if (tag === 'img' || tag === 'code') {
+      if (tag === 'code') {
+        // Agents often name a file in inline code (`~/Downloads/demo.mp4`) instead of a link. Preview it when it is an
+        // unambiguous local path (absolute, `~/`, `file://`); relative names stay plain clickable code.
+        const path = textOf(child).trim();
+        if (path && !/\s/.test(path) && ABSOLUTE_PATH_RE.test(path) && mediaKindFromHref(path)) {
+          const kind = mediaKindFromHref(path)!;
+          if (!seen.has(path) && links.length < MAX_BLOCK_MEDIA_LINKS) {
+            seen.add(path);
+            links.push({ href: path, label: '', kind });
+          }
+          continue;
+        }
+        hasNonMediaContent = true;
+        continue;
+      }
+      if (tag === 'img') {
         hasNonMediaContent = true;
         continue;
       }

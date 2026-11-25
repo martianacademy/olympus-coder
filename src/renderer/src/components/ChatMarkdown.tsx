@@ -4,6 +4,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { Check, Copy, Play } from 'lucide-react';
 import { api } from '../api';
+import { isRemoteBrowser } from '../responsive';
 import { isExternalUrl, LinkedText, looksLikePath, RefBaseContext, RunCommandContext, useOpenFile, withBase } from '../fileLinks';
 import { copyText } from '../clipboard';
 import { HighlightedCode } from '../codeHighlight';
@@ -52,7 +53,16 @@ function MdCode({ className, children }: { className?: string; children?: React.
         : null;
   if (!className && text && !text.includes('\n') && looksLikePath(text)) {
     return (
-      <code className="file-ref" title={`Open ${text}`} onClick={(e) => openRefSmart(withBase(text, base), e.currentTarget, open)}>
+      <code
+        className="file-ref"
+        title={isRemoteBrowser() ? `Open ${text}` : `Open ${text} · right-click: Show in Finder`}
+        onClick={(e) => openRefSmart(withBase(text, base), e.currentTarget, open)}
+        onContextMenu={(e) => {
+          if (isRemoteBrowser()) return; // a phone can't reveal files on the Mac
+          e.preventDefault();
+          void api.previewReveal(withBase(text, base));
+        }}
+      >
         {children}
       </code>
     );
