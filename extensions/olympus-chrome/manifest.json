@@ -1,16 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Olympus Coder Browser",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "description": "Lets your Olympus Coder AI agents see and use your Chrome, with a live cursor and a Stop button. Talks only to the app on your PC.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0g+6ly4jncCWd3LqcGhlNqDzj9SgHW84seRLhb2We7kSRXn5zoz3StpMqabVl/t10iuj+wbsQ+sF+cPqpE+eagatCjWunHCRUnATxft5oOQSzInwQEYKAntuu0tpgluT37ulJjFHIIvg3OJb8/5N5YrY8OUcXtVkGgDot1w5uJDihEkxqhD19XnGnNOt2JzRTrLTODeWOb6zIEFj3I4yFcqfHPpdYX0hvgT8H1WLHKcuGTKWpos7/D2tUzOl76WRrJXbsZ3M3zjEeNbbgSBfKboi/A/iac+o3lH+B9/JYYJPi+fPwbS6TQjL/6kOz5D08kB8N9NRcLFTjMM8mwzlNQIDAQAB",
-  "description": "Auto-connects your real Chrome browser to Olympus Coder agents with live visual cursor, smooth scrolling, and CDP debugging.",
+  "minimum_chrome_version": "116",
+  "homepage_url": "https://olympus.marsnext.in",
   "permissions": [
     "tabs",
     "tabGroups",
     "scripting",
     "storage",
     "alarms",
-    "activeTab",
     "debugger"
   ],
   "host_permissions": [
@@ -23,10 +24,23 @@
   "action": {
     "default_title": "Olympus Coder Browser",
     "default_icon": {
-      "128": "icon.png"
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "commands": {
+    "stop-agent": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Stop the AI agent using this browser"
     }
   },
   "icons": {
-    "128": "icon.png"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   }
 }

@@ -202,9 +202,25 @@ try {
     assert.ok(manifest.permissions.includes('debugger'));
     assert.equal(manifest.action?.default_popup, undefined, 'clicking the toolbar icon opens nothing');
     assert.ok(existsSync(join(extDir, 'icon.png')));
+    // Chrome Web Store readiness
+    assert.equal(manifest.permissions.includes('activeTab'), false, 'no unused permissions');
+    assert.ok(Number(manifest.minimum_chrome_version) >= 116, 'WebSocket keeps the MV3 worker alive from Chrome 116');
+    assert.ok(manifest.description.length <= 132, 'Store description limit');
+    for (const size of ['16', '32', '48', '128']) assert.ok(existsSync(join(extDir, manifest.icons[size])), `icon ${size}`);
+    assert.equal(manifest.commands?.['stop-agent']?.suggested_key?.default, 'Alt+Shift+S');
     for (const file of ['background.js', 'overlay.js', 'cdp.js', 'pageHelpers.js']) {
       execFileSync(process.execPath, ['--check', join(extDir, file)]);
     }
+  });
+
+  await test('Store package: zip manifest has no "key" and every file the worker loads', () => {
+    const out = execFileSync(process.execPath, [join(APP, 'scripts', 'package-chrome-extension.mjs')], { encoding: 'utf8' });
+    const zip = out.match(/✓ (.+\.zip)/)?.[1];
+    assert.ok(zip && existsSync(zip), out);
+    const zipped = JSON.parse(execFileSync('unzip', ['-p', zip, 'manifest.json'], { encoding: 'utf8' }));
+    assert.equal(zipped.key, undefined);
+    const list = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' });
+    for (const f of ['background.js', 'cdp.js', 'overlay.js', 'pageHelpers.js', 'icon.png', 'icons/icon-128.png']) assert.ok(list.includes(f), f);
   });
 
   await test('no extension: agent gets setup steps, window gets one browser:needed per 10 min', async () => {

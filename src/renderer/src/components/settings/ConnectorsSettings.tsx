@@ -136,7 +136,7 @@ export function ConnectorsSettings({ agentDefs }: { agentDefs: AgentDef[] }) {
                 </span>
               </div>
               <div className="small muted">
-                Lets agents use your real Chrome, with your logins, in their own orange “Olympus Coder” tab group. You watch every step live and can press Stop on the page at any time.
+                Lets agents use your real Chrome, with your logins, in their own orange “Olympus Coder” tab group. You watch every step live and can press Stop on the page (or Alt+Shift+S) at any time.
               </div>
             </div>
           </div>

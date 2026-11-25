@@ -7,6 +7,9 @@
 export function readPageDom() {
   const sel =
     'a[href], button, input, textarea, select, [role="button"], [role="link"], [role="textbox"], [role="tab"], [role="menuitem"], [contenteditable="true"]';
+  // Refs from an earlier read must not survive: a stale `data-oly-ref="5"` earlier in the page would win over
+  // the new element 5 and the agent would click the wrong thing.
+  for (const old of document.querySelectorAll('[data-oly-ref]')) old.removeAttribute('data-oly-ref');
   const nodes = [...document.querySelectorAll(sel)];
   const elements = [];
   let ref = 0;
@@ -19,7 +22,15 @@ export function readPageDom() {
     ref++;
     el.setAttribute('data-oly-ref', String(ref));
     const inputType = (el.getAttribute('type') || '').toLowerCase();
-    const isPassword = inputType === 'password';
+    const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
+    const nameAttr = (el.getAttribute('name') || el.id || '').toLowerCase();
+    // Never send what the user typed into secret fields (passwords, card data, one-time codes) to the agent.
+    const isPassword =
+      inputType === 'password' ||
+      ac.includes('password') ||
+      ac.startsWith('cc-') ||
+      ac === 'one-time-code' ||
+      /\b(cvv|cvc|card.?number|credit.?card|otp)\b/.test(nameAttr);
     const label = (
       el.getAttribute('aria-label') ||
       el.getAttribute('placeholder') ||
@@ -194,4 +205,38 @@ export async function waitInPage(opts) {
     await new Promise((r) => setTimeout(r, 150));
   }
   throw new Error(`Timed out after ${timeoutMs}ms waiting for ${opts.selector || opts.text}.`);
+}
+
+/**
+ * Blurs secret fields (passwords, card data, one-time codes) for the instant of a screenshot, or removes the
+ * blur again (`on: false`), so a screenshot never shows what the text read already leaves out.
+ */
+export function maskSensitiveFields(on) {
+  const STYLE_ID = 'olympus-coder-mask-style';
+  document.getElementById(STYLE_ID)?.remove();
+  for (const el of document.querySelectorAll('[data-oly-mask]')) el.removeAttribute('data-oly-mask');
+  if (!on) return 0;
+  let n = 0;
+  for (const el of document.querySelectorAll('input, textarea')) {
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
+    const name = (el.getAttribute('name') || el.id || '').toLowerCase();
+    if (
+      type === 'password' ||
+      ac.includes('password') ||
+      ac.startsWith('cc-') ||
+      ac === 'one-time-code' ||
+      /\b(cvv|cvc|card.?number|credit.?card|otp)\b/.test(name)
+    ) {
+      el.setAttribute('data-oly-mask', '');
+      n++;
+    }
+  }
+  if (n) {
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = '[data-oly-mask]{filter:blur(7px)!important;color:transparent!important;text-shadow:0 0 8px rgba(0,0,0,.6)!important}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+  return n;
 }

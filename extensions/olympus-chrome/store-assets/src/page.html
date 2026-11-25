@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;background:#f7f7f8;color:#1b1b1f}
+nav{display:flex;align-items:center;gap:28px;padding:18px 40px;background:#fff;border-bottom:1px solid #ececf0}
+nav b{font-size:17px} nav span{color:#6b6b76}
+.wrap{padding:40px;display:grid;grid-template-columns:1.2fr 1fr;gap:28px}
+.card{background:#fff;border:1px solid #ececf0;border-radius:14px;padding:22px}
+h1{font-size:30px;margin:0 0 8px} .muted{color:#6b6b76}
+label{display:block;font-size:13px;color:#6b6b76;margin:14px 0 6px}
+input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #dcdce2;border-radius:9px;font:inherit}
+button{margin-top:18px;padding:11px 18px;border:0;border-radius:9px;background:#1b1b1f;color:#fff;font:600 14px inherit;font-family:inherit}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f3}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:#e8f6ee;color:#1f8a4c}
+.badge.r{background:#fdecec;color:#c23b3b}
+</style></head><body>
+<nav><b>Acme Cloud</b><span>Dashboard</span><span>Billing</span><span>Team</span><span>Settings</span></nav>
+<div class="wrap">
+ <div class="card"><h1>Create a project</h1><div class="muted">Spin up a new environment in seconds.</div>
+  <label>Project name</label><input value="checkout-v2">
+  <label>Region</label><input value="Mumbai (ap-south-1)">
+  <button id="go">Create project</button></div>
+ <div class="card"><b>Recent deploys</b>
+  <div class="row"><span>web-app</span><span class="badge">Live</span></div>
+  <div class="row"><span>api-gateway</span><span class="badge">Live</span></div>
+  <div class="row"><span>billing-worker</span><span class="badge r">Failed</span></div>
+  <div class="row"><span>docs-site</span><span class="badge">Live</span></div></div>
+</div>
+<script>window.chrome={runtime:{id:'x',sendMessage(){}}};</script>
+<script src="../../overlay.js"></script>
+<script>
+const o=window.__olympusOverlay; o.show('Clicking "Create project"');
+const r=document.getElementById('go').getBoundingClientRect();
+o.moveTo(r.left+r.width*0.62,r.top+r.height*0.6,null,{left:r.left,top:r.top,width:r.width,height:r.height});
+</script></body></html>

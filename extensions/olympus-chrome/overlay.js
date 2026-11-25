@@ -5,9 +5,17 @@
  * and a floating bottom status pill with an instant Stop button.
  */
 (() => {
-  if (window.__olympusOverlay) return;
-
+  const VERSION = 3;
   const HOST_ID = 'olympus-coder-overlay-host';
+  const existing = window.__olympusOverlay;
+  // Keep a live overlay of this version. One left by an older or reloaded extension is replaced: its
+  // chrome.runtime is dead, so its Stop button could no longer reach the extension.
+  if (existing?.version === VERSION && chrome.runtime?.id) return;
+  try {
+    existing?.destroy?.();
+  } catch {}
+  document.getElementById(HOST_ID)?.remove();
+
   const POS_KEY = '__olympus_cursor_pos';
 
   let host = null;
@@ -18,9 +26,6 @@
   let pillEl = null;
   let pillTextEl = null;
   let rippleHostEl = null;
-  let pillDotEl = null;
-  let pillLogoEl = null;
-  let logoUrl = null;
 
   let curX = Math.round(window.innerWidth * 0.5);
   let curY = Math.round(window.innerHeight * 0.45);
@@ -39,31 +44,43 @@
       inset: 0;
       z-index: 2147483647;
       pointer-events: none;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
       opacity: 0;
-      transition: opacity 200ms ease;
+      transition: opacity 260ms ease;
+      -webkit-font-smoothing: antialiased;
     }
     .oly-root.visible { opacity: 1; }
-    .oly-border {
+
+    /* Edge glow: soft light breathing in from the window edges, like the app's working state. */
+    .oly-edge, .oly-edge-wide {
       position: fixed;
       inset: 0;
       pointer-events: none;
-      box-shadow: inset 0 0 0 3px rgba(249, 115, 22, 0.85), inset 0 0 26px rgba(249, 115, 22, 0.28);
-      animation: olyGlow 2.4s ease-in-out infinite;
+      animation: olyBreathe 3.4s ease-in-out infinite;
     }
-    @keyframes olyGlow {
-      0%, 100% { box-shadow: inset 0 0 0 3px rgba(249, 115, 22, 0.85), inset 0 0 24px rgba(249, 115, 22, 0.24); }
-      50% { box-shadow: inset 0 0 0 3px rgba(251, 146, 60, 0.98), inset 0 0 36px rgba(249, 115, 22, 0.42); }
+    .oly-edge {
+      box-shadow:
+        inset 0 0 0 1.5px rgba(232, 135, 102, 0.85),
+        inset 0 0 12px rgba(232, 135, 102, 0.55);
     }
+    .oly-edge-wide {
+      box-shadow:
+        inset 0 0 40px rgba(232, 135, 102, 0.42),
+        inset 0 0 120px rgba(232, 135, 102, 0.2);
+      animation-name: olyBreatheWide;
+    }
+    @keyframes olyBreathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+    @keyframes olyBreatheWide { 0%, 100% { opacity: 0.15; } 50% { opacity: 1; } }
+
     .oly-highlight {
       position: fixed;
       pointer-events: none;
-      border: 2px solid rgba(249, 115, 22, 0.95);
-      background: rgba(249, 115, 22, 0.12);
-      border-radius: 6px;
-      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+      border: 1.5px solid rgba(217, 119, 87, 0.95);
+      background: rgba(217, 119, 87, 0.08);
+      border-radius: 8px;
+      box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.16), 0 0 18px rgba(217, 119, 87, 0.35);
       opacity: 0;
-      transition: opacity 150ms ease, left 140ms ease, top 140ms ease, width 140ms ease, height 140ms ease;
+      transition: opacity 150ms ease, left 160ms ease, top 160ms ease, width 160ms ease, height 160ms ease;
     }
     .oly-highlight.show { opacity: 1; }
     .oly-cursor {
@@ -74,20 +91,12 @@
       height: 26px;
       pointer-events: none;
       transform: translate3d(-100px, -100px, 0);
-      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 8px rgba(249, 115, 22, 0.55));
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 10px rgba(217, 119, 87, 0.55));
       transition: opacity 160ms ease;
       will-change: transform;
     }
-    .oly-cursor.clicking svg {
-      transform: scale(0.82);
-    }
-    .oly-cursor svg {
-      display: block;
-      width: 24px;
-      height: 24px;
-      transform-origin: 2px 2px;
-      transition: transform 90ms ease;
-    }
+    .oly-cursor.clicking svg { transform: scale(0.82); }
+    .oly-cursor svg { display: block; width: 24px; height: 24px; transform-origin: 2px 2px; transition: transform 90ms ease; }
     .oly-ripple {
       position: fixed;
       width: 14px;
@@ -95,82 +104,108 @@
       margin-left: -7px;
       margin-top: -7px;
       border-radius: 999px;
-      border: 2.5px solid #f97316;
-      background: rgba(249, 115, 22, 0.25);
+      border: 2px solid #d97757;
+      background: rgba(217, 119, 87, 0.22);
       pointer-events: none;
       animation: olyRipple 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    @keyframes olyRipple {
-      0% { transform: scale(0.4); opacity: 1; }
-      100% { transform: scale(3.4); opacity: 0; }
-    }
+    @keyframes olyRipple { 0% { transform: scale(0.4); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
+
+    /* Status card */
     .oly-pill {
       position: fixed;
       left: 50%;
-      bottom: 16px;
-      transform: translateX(-50%);
-      display: inline-flex;
+      bottom: 22px;
+      transform: translate(-50%, 12px);
+      opacity: 0;
+      display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 7px 10px 7px 14px;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.92);
-      color: #f8fafc;
-      border: 1px solid rgba(249, 115, 22, 0.45);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      gap: 12px;
+      padding: 8px 8px 8px 10px;
+      border-radius: 16px;
+      background: rgba(17, 17, 20, 0.88);
+      color: #fafafa;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, 0.32),
+        0 2px 8px rgba(0, 0, 0, 0.18),
+        0 0 0 1px rgba(217, 119, 87, 0.18),
+        0 0 28px rgba(217, 119, 87, 0.18);
+      backdrop-filter: blur(18px) saturate(170%);
+      -webkit-backdrop-filter: blur(18px) saturate(170%);
       pointer-events: auto;
-      font-size: 12px;
-      line-height: 1.2;
-      max-width: min(520px, calc(100vw - 32px));
+      max-width: min(460px, calc(100vw - 32px));
+      transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease;
     }
-    .oly-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: #f97316;
-      box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
-      animation: olyPulse 1.5s ease-out infinite;
-      flex: none;
-    }
-    @keyframes olyPulse {
-      0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.75); }
-      70% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
-    }
-    .oly-logo {
-      width: 18px;
-      height: 18px;
-      border-radius: 5px;
-      display: none;
-      flex: none;
-      animation: olyPulse 1.5s ease-out infinite;
-    }
-    .oly-logo.show { display: block; }
-    .oly-dot.hidden { display: none; }
+    .oly-root.visible .oly-pill { transform: translate(-50%, 0); opacity: 1; }
+    /* Same mark and motion as the app's BrandWorkingMark (styles.css .wb-*): volcano, drawn cloud, erupting ball. */
+    .oly-mark { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 7px; background: rgba(255, 255, 255, 0.07); }
+    .oly-mark svg { overflow: visible; display: block; }
+    .wb-volcano { fill: #d97757; }
+    .wb-cloud { fill: none; stroke: #f5f5f5; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; animation: sp-draw 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
+    .wb-ball { fill: #f5f5f5; transform-origin: 50px 40px; animation: sp-erupt 1.2s ease-in-out infinite; }
+    .wb-glow { fill: #d97757; opacity: 0; transform-origin: 50px 40px; animation: sp-glow 1.2s ease-out infinite; }
+    .wb-code { display: inline-flex; gap: 4px; flex: none; align-items: center; }
+    .wb-code i { display: block; height: 5px; border-radius: 3px; transform-origin: left center; transform: scaleX(0); opacity: 0; animation: sp-tok 2.4s ease-out infinite; }
+    .wb-code i.k { background: #d97757; }
+    .wb-code i.s { background: color-mix(in srgb, #d97757 55%, #ffd8b8); }
+    .wb-code i.t { background: #f5f5f5; animation-name: sp-tok-ink; }
+    @keyframes sp-draw { 0% { stroke-dashoffset: 100; } 45%, 60% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
+    @keyframes sp-erupt { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-3.2px); } }
+    @keyframes sp-glow { 0% { opacity: .45; transform: scale(.6); } 80%, 100% { opacity: 0; transform: scale(2.6); } }
+    @keyframes sp-tok { 0% { transform: scaleX(0); opacity: 0; } 8% { transform: scaleX(1); opacity: 1; } 78% { transform: scaleX(1); opacity: 1; } 92%, 100% { transform: scaleX(1); opacity: 0; } }
+    @keyframes sp-tok-ink { 0% { transform: scaleX(0); opacity: 0; } 8% { transform: scaleX(1); opacity: .5; } 78% { transform: scaleX(1); opacity: .5; } 92%, 100% { transform: scaleX(1); opacity: 0; } }
+    .oly-titlerow { display: flex; align-items: center; gap: 8px; }
+    .oly-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+    .oly-title { font-size: 12px; font-weight: 650; letter-spacing: 0.01em; color: #fff; line-height: 1.25; }
     .oly-label {
+      font-size: 12px;
+      line-height: 1.3;
+      color: rgba(255, 255, 255, 0.68);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      font-weight: 500;
-      letter-spacing: 0.01em;
+      max-width: 300px;
     }
+    .oly-label.swap { animation: olyFadeIn 220ms ease; }
+    @keyframes olyFadeIn { from { opacity: 0.45; transform: translateY(2px); } to { opacity: 1; transform: none; } } /* never blank in a screenshot */
     .oly-stop {
       appearance: none;
-      border: 0;
-      border-radius: 999px;
-      padding: 4px 10px;
-      background: rgba(239, 68, 68, 0.9);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-left: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 6px 8px 6px 10px;
+      background: rgba(255, 255, 255, 0.08);
       color: #fff;
-      font-size: 11px;
+      font-family: inherit;
+      font-size: 12px;
       font-weight: 600;
+      line-height: 1;
       cursor: pointer;
       flex: none;
-      transition: background 120ms ease, transform 90ms ease;
+      transition: background 140ms ease, border-color 140ms ease, transform 90ms ease;
     }
-    .oly-stop:hover { background: #dc2626; }
-    .oly-stop:active { transform: scale(0.95); }
+    .oly-stop:hover { background: rgba(239, 68, 68, 0.92); border-color: rgba(239, 68, 68, 1); }
+    .oly-stop:active { transform: scale(0.96); }
+    .oly-stop i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; display: block; }
+    .oly-stop kbd {
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 500;
+      line-height: 1;
+      padding: 3px 5px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.7);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .oly-edge, .oly-edge-wide, .wb-cloud, .wb-ball, .wb-glow, .wb-code i { animation: none; }
+      .oly-edge-wide { opacity: 0.6; }
+      .wb-code i { transform: none; opacity: 1; }
+    }
   `;
 
   function ensureMounted() {
@@ -188,8 +223,13 @@
     const root = document.createElement('div');
     root.className = 'oly-root';
 
+    // Edge glow: a tight edge light and a wide soft one, both breathing.
     borderEl = document.createElement('div');
-    borderEl.className = 'oly-border';
+    for (const cls of ['oly-edge-wide', 'oly-edge']) {
+      const layer = document.createElement('div');
+      layer.className = cls;
+      borderEl.appendChild(layer);
+    }
 
     highlightEl = document.createElement('div');
     highlightEl.className = 'oly-highlight';
@@ -199,26 +239,43 @@
     cursorEl = document.createElement('div');
     cursorEl.className = 'oly-cursor';
     cursorEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 2.5L20 11.2L12.6 13.4L9.2 20.5L4 2.5Z" fill="#f97316" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M4 2.5L20 11.2L12.6 13.4L9.2 20.5L4 2.5Z" fill="#d97757" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
     </svg>`;
     cursorEl.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
 
     pillEl = document.createElement('div');
     pillEl.className = 'oly-pill';
-    const dot = document.createElement('span');
-    dot.className = 'oly-dot';
-    pillDotEl = dot;
-    pillLogoEl = document.createElement('img');
-    pillLogoEl.className = 'oly-logo';
-    pillLogoEl.alt = '';
-    if (logoUrl) showPillLogo();
+    const mark = document.createElement('span');
+    mark.className = 'oly-mark';
+    mark.innerHTML = `<svg width="16" height="13" viewBox="4 12 92 74" aria-hidden="true">
+      <path class="wb-volcano" d="M 7 83 C 18.4 78.55 32.65 48.29 35.5 38.5 L 41.8 38.5 L 41.8 39.7 A 8.2 8.2 0 0 0 58.2 39.7 L 58.2 38.5 L 64.5 38.5 C 67.35 48.29 81.6 78.55 93 83 Z"/>
+      <circle class="wb-glow" cx="50" cy="39.7" r="5.8"/>
+      <path class="wb-cloud" pathLength="100" d="M 25 27 C 25 21.5 25 21.5 33 21.5 L 42 21.5 C 48.5 21.5 50 16 50 16 C 50 16 51.5 21.5 58 21.5 L 67 21.5 C 75 21.5 75 21.5 75 27"/>
+      <circle class="wb-ball" cx="50" cy="39.7" r="5.8"/>
+    </svg>`;
+    const textBox = document.createElement('span');
+    textBox.className = 'oly-text';
+    const title = document.createElement('span');
+    title.className = 'oly-title';
+    title.textContent = 'Olympus Coder';
+    const titleRow = document.createElement('span');
+    titleRow.className = 'oly-titlerow';
+    const code = document.createElement('span');
+    code.className = 'wb-code';
+    code.innerHTML = '<i class="k" style="width:10px;animation-delay:0s"></i><i class="t" style="width:15px;animation-delay:.12s"></i><i class="s" style="width:8px;animation-delay:.24s"></i>';
+    titleRow.append(title, code);
     pillTextEl = document.createElement('span');
     pillTextEl.className = 'oly-label';
-    pillTextEl.textContent = 'Olympus Coder · Active';
+    pillTextEl.textContent = 'Agent is working…';
+    textBox.append(titleRow, pillTextEl);
     const stopBtn = document.createElement('button');
     stopBtn.className = 'oly-stop';
     stopBtn.type = 'button';
-    stopBtn.textContent = 'Stop';
+    stopBtn.title = 'Stop the agent (Alt+Shift+S)';
+    const stopIcon = document.createElement('i');
+    const stopKbd = document.createElement('kbd');
+    stopKbd.textContent = /Mac/i.test(navigator.platform) ? '\u2325\u21e7S' : 'Alt+Shift+S'; // ⌥⇧S
+    stopBtn.append(stopIcon, document.createTextNode('Stop'), stopKbd);
     stopBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -227,7 +284,7 @@
         chrome.runtime.sendMessage({ type: 'pause-from-page' });
       } catch {}
     });
-    pillEl.append(dot, pillLogoEl, pillTextEl, stopBtn);
+    pillEl.append(mark, textBox, stopBtn);
 
     root.append(borderEl, highlightEl, rippleHostEl, cursorEl, pillEl);
     shadow.appendChild(root);
@@ -235,24 +292,18 @@
     requestAnimationFrame(() => root.classList.add('visible'));
   }
 
-  function showPillLogo() {
-    if (!pillLogoEl || !logoUrl) return;
-    pillLogoEl.src = logoUrl;
-    pillLogoEl.classList.add('show');
-    pillDotEl?.classList.add('hidden');
-  }
-
-  function brand(logo) {
+  /** Kept for the service worker's call; the card draws the app's own animated mark instead of the PNG logo. */
+  function brand() {
     ensureMounted();
-    if (logo) {
-      logoUrl = logo;
-      showPillLogo();
-    }
   }
 
   function setStatus(text) {
     ensureMounted();
-    if (pillTextEl && text) pillTextEl.textContent = `Olympus Coder · ${text}`;
+    if (!pillTextEl || !text || pillTextEl.textContent === text) return;
+    pillTextEl.textContent = text;
+    pillTextEl.classList.remove('swap');
+    void pillTextEl.offsetWidth; // restart the fade-in
+    pillTextEl.classList.add('swap');
   }
 
   function setHighlight(rect) {
@@ -399,6 +450,12 @@
   }
 
   window.__olympusOverlay = {
+    version: VERSION,
+    destroy: () => {
+      host?.remove();
+      host = null;
+      shadow = null;
+    },
     show: (label) => {
       ensureMounted();
       if (label) setStatus(label);

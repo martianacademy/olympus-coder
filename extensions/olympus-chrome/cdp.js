@@ -56,6 +56,7 @@ export async function ensureCdpAttached(tabId) {
       sendCommand(tabId, 'Runtime.enable'),
       sendCommand(tabId, 'Log.enable'),
       sendCommand(tabId, 'Network.enable', { maxPostDataSize: 0 }),
+      sendCommand(tabId, 'Page.enable'),
     ]);
     return true;
   } catch (e) {
@@ -89,6 +90,20 @@ export function getTabDiagnostics(tabId, opts = {}) {
     console: opts.console ? st.console.slice(-30) : [],
     network: opts.network ? st.network.slice(-30) : [],
   };
+}
+
+/**
+ * Screenshot through CDP: renders a fresh frame even when the tab is in the background or its window is covered
+ * (captureVisibleTab then returns the last frame Chrome happened to paint, which can be stale). Null on failure.
+ */
+export async function cdpScreenshot(tabId) {
+  if (!(await ensureCdpAttached(tabId))) return null;
+  try {
+    const res = await sendCommand(tabId, 'Page.captureScreenshot', { format: 'jpeg', quality: 75, fromSurface: true });
+    return res?.data ? `data:image/jpeg;base64,${res.data}` : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function cdpMove(tabId, x, y) {
@@ -142,25 +157,40 @@ export async function cdpType(tabId, text) {
   return true;
 }
 
+const MODIFIERS = { alt: 1, option: 1, control: 2, ctrl: 2, meta: 4, cmd: 4, command: 4, shift: 8 };
+
+/** Splits "Control+Shift+A" / "Meta+Enter" into a CDP modifier bitmask and the main key. */
+export function parseKeyCombo(combo) {
+  const parts = String(combo || 'Enter').split('+').map((p) => p.trim());
+  let modifiers = 0;
+  while (parts.length > 1 && MODIFIERS[parts[0].toLowerCase()] !== undefined) modifiers |= MODIFIERS[parts.shift().toLowerCase()];
+  return { modifiers, key: parts.join('+') || '+' };
+}
+
 export async function cdpPress(tabId, keyName) {
   if (!(await ensureCdpAttached(tabId))) return false;
-  const spec = SPECIAL_KEYS[keyName] || {
-    key: keyName,
-    code: keyName.length === 1 ? `Key${keyName.toUpperCase()}` : keyName,
-    keyCode: keyName.length === 1 ? keyName.toUpperCase().charCodeAt(0) : 0,
-    text: keyName.length === 1 ? keyName : undefined,
+  const { modifiers, key } = parseKeyCombo(keyName);
+  const spec = SPECIAL_KEYS[key] || {
+    key,
+    code: key.length === 1 ? (/[a-z]/i.test(key) ? `Key${key.toUpperCase()}` : /\d/.test(key) ? `Digit${key}` : key) : key,
+    keyCode: key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0,
+    text: key.length === 1 ? key : undefined,
   };
+  // With Ctrl/Alt/Meta held the key is a shortcut, not typed text.
+  const text = spec.text && !(modifiers & 7) ? spec.text : undefined;
   await sendCommand(tabId, 'Input.dispatchKeyEvent', {
-    type: spec.text ? 'keyDown' : 'rawKeyDown',
+    type: text ? 'keyDown' : 'rawKeyDown',
+    modifiers,
     key: spec.key,
     code: spec.code,
     windowsVirtualKeyCode: spec.keyCode,
     nativeVirtualKeyCode: spec.keyCode,
-    ...(spec.text ? { text: spec.text, unmodifiedText: spec.text } : {}),
+    ...(text ? { text, unmodifiedText: text } : {}),
   });
   await new Promise((r) => setTimeout(r, 25));
   await sendCommand(tabId, 'Input.dispatchKeyEvent', {
     type: 'keyUp',
+    modifiers,
     key: spec.key,
     code: spec.code,
     windowsVirtualKeyCode: spec.keyCode,
@@ -191,6 +221,12 @@ if (chrome.debugger) {
     } else if (method === 'Log.entryAdded') {
       const entry = params?.entry;
       if (entry?.text) pushBounded(st.console, `[${entry.level || 'log'}] ${String(entry.text).slice(0, 260)}`);
+    } else if (method === 'Page.javascriptDialogOpening') {
+      // A JS dialog freezes the page (every later step would time out). An alert is just acknowledged; confirm,
+      // prompt and "leave page?" are answered No, so the agent never confirms something on the user's behalf.
+      const accept = params?.type === 'alert';
+      void sendCommand(tabId, 'Page.handleJavaScriptDialog', { accept }).catch(() => {});
+      pushBounded(st.console, `[dialog] ${params?.type || 'dialog'}: "${String(params?.message || '').slice(0, 200)}" → ${accept ? 'OK' : 'dismissed (Cancel)'}`);
     } else if (method === 'Network.requestWillBeSent') {
       if (params?.requestId && params?.request?.url) {
         st.requests.set(params.requestId, {

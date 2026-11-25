@@ -11,6 +11,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:server": "electron-vite build && node scripts/build-server.mjs",
+    "package:chrome-ext": "node scripts/package-chrome-extension.mjs",
     "package:server": "npm run build:server && node scripts/package-server.mjs",
     "serve": "node out/server/index.mjs serve",
     "start": "electron-vite preview",

@@ -3,8 +3,8 @@
  * Zero-token loopback WebSocket bridge (`ws://127.0.0.1:47819/`) with live in-page visual cursor,
  * glowing active-tab border, smooth scrolling, instant Stop button, and `chrome.debugger` CDP input + logs.
  */
-import { cdpClick, cdpMove, cdpPress, cdpType, detachAllCdp, detachCdpTab, ensureCdpAttached, getTabDiagnostics } from './cdp.js';
-import { domFallbackAct, locateTarget, prepareInputFocus, readPageDom, waitInPage } from './pageHelpers.js';
+import { cdpClick, cdpMove, cdpPress, cdpScreenshot, cdpType, detachAllCdp, detachCdpTab, ensureCdpAttached, getTabDiagnostics } from './cdp.js';
+import { domFallbackAct, locateTarget, maskSensitiveFields, prepareInputFocus, readPageDom, waitInPage } from './pageHelpers.js';
 
 const DEFAULT_PORT = 47819;
 const KEEPALIVE_ALARM = 'olympus-bridge-keepalive';
@@ -16,6 +16,12 @@ let idleTimer = null; // non-null while an agent is actively using the browser
 let connected = false;
 let cfg = { port: DEFAULT_PORT };
 const STOP_HOLD_MS = 15_000;
+// MV3 ends an idle service worker after ~30s; a WebSocket message resets that timer (Chrome 116+), so the
+// connection — and the toolbar dot — stays up instead of dropping and reconnecting every half minute.
+const HEARTBEAT_MS = 20_000;
+let heartbeatTimer = null;
+/** Tabs opened from a tab the agent is working in (link with target=_blank, window.open). */
+const recentlyOpened = [];
 let stoppedUntil = 0;
 const activeOverlayTabs = new Set();
 
@@ -109,46 +115,11 @@ function endActivity() {
   void updateBadge();
 }
 
-// ── Olympus branding: logo in the in-page status pill ──
-let logoDataUrlPromise = null;
-
-async function blobToDataUrl(blob) {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return `data:${blob.type || 'image/png'};base64,${btoa(bin)}`;
-}
-
-/** 64px PNG data URL of the Olympus logo (pages can't load chrome-extension:// images directly). */
-function logoDataUrl() {
-  logoDataUrlPromise ??= (async () => {
-    const bitmap = await createImageBitmap(await (await fetch(chrome.runtime.getURL('icon.png'))).blob());
-    const c = new OffscreenCanvas(64, 64);
-    c.getContext('2d').drawImage(bitmap, 0, 0, 64, 64);
-    return blobToDataUrl(await c.convertToBlob({ type: 'image/png' }));
-  })();
-  return logoDataUrlPromise;
-}
-
-async function applyOverlayBranding(tabId) {
-  try {
-    const logo = await logoDataUrl();
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      args: [logo],
-      func: (l) => window.__olympusOverlay?.brand?.(l),
-    });
-  } catch {
-    /* restricted page or tab closed */
-  }
-}
-
 async function ensureOverlay(tabId, statusText) {
   activeOverlayTabs.add(tabId);
   touchActivity();
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['overlay.js'] });
-    void applyOverlayBranding(tabId);
     if (statusText) {
       await chrome.scripting.executeScript({
         target: { tabId },
@@ -197,6 +168,10 @@ async function connect() {
       if (ws !== sock) return;
       connected = true;
       void updateBadge();
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(() => {
+        if (sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: 'ping' }));
+      }, HEARTBEAT_MS);
       sock.send(JSON.stringify({ type: 'hello', version: chrome.runtime.getManifest().version, paused: false }));
     });
     sock.addEventListener('message', (ev) => void onBridgeMessage(sock, String(ev.data)));
@@ -204,6 +179,8 @@ async function connect() {
       if (ws === sock) {
         ws = null;
         connected = false;
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
         void updateBadge();
         void hideAllOverlays();
         void detachAllCdp();
@@ -337,9 +314,20 @@ async function handleRead({ tabId, screenshot, console: wantConsole, network: wa
   const diag = getTabDiagnostics(tab.id, { console: Boolean(wantConsole), network: Boolean(wantNetwork) });
 
   let screenshotDataUrl;
-  if (screenshot && tab.windowId != null) {
-    await chrome.tabs.update(tab.id, { active: true });
-    screenshotDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 75 });
+  if (screenshot) {
+    const mask = (on) => chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [on], func: maskSensitiveFields }).catch(() => null);
+    const masked = (await mask(true))?.[0]?.result > 0;
+    try {
+      // CDP renders a fresh frame (with the blur) without switching tabs; captureVisibleTab is only the fallback.
+      screenshotDataUrl = await cdpScreenshot(tab.id);
+      if (!screenshotDataUrl && tab.windowId != null) {
+        if (!tab.active) await chrome.tabs.update(tab.id, { active: true });
+        await new Promise((r) => setTimeout(r, 250)); // let the tab paint, or the capture shows an older frame
+        screenshotDataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 75 });
+      }
+    } finally {
+      if (masked) await mask(false);
+    }
   }
   return {
     id: tab.id,
@@ -395,8 +383,10 @@ async function handleAct(params) {
       return { ok: true, detail: `Hovered at (${x}, ${y})`, url: tab.url };
     }
     await overlayCall(tab.id, 'clickAt', x, y, `Clicking (${x}, ${y})`, null);
+    const since = Date.now();
     await cdpClick(tab.id, x, y);
-    return { ok: true, detail: `Clicked at (${x}, ${y})`, url: tab.url };
+    await new Promise((r) => setTimeout(r, 300));
+    return { ok: true, detail: `Clicked at (${x}, ${y})${newTabsNote(tab.id, since)}`, url: tab.url };
   }
 
   const [{ result: target }] = await chrome.scripting.executeScript({
@@ -418,13 +408,14 @@ async function handleAct(params) {
 
   if (action === 'click') {
     await overlayCall(tab.id, 'clickAt', target.x, target.y, `Clicking "${target.label}"`, target.rect);
+    const since = Date.now();
     const usedCdp = await cdpClick(tab.id, target.x, target.y);
     if (!usedCdp) {
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [{ action: 'click', ref, selector }], func: domFallbackAct });
     }
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 300));
     const latest = await chrome.tabs.get(tab.id).catch(() => tab);
-    return { ok: true, detail: `Clicked <${target.tag}> "${target.label}"`, url: latest.url };
+    return { ok: true, detail: `Clicked <${target.tag}> "${target.label}"${newTabsNote(tab.id, since)}`, url: latest.url };
   }
 
   if (action === 'select') {
@@ -461,6 +452,12 @@ async function handleAct(params) {
   }
 
   throw new Error(`Unsupported action "${action}".`);
+}
+
+/** " · opened new tab [id]" when the action opened tabs, so the agent can follow them. */
+function newTabsNote(openerId, since) {
+  const ids = recentlyOpened.filter((t) => t.opener === openerId && t.at >= since).map((t) => t.id);
+  return ids.length ? ` · opened new tab ${ids.map((id) => `[${id}]`).join(', ')}` : '';
 }
 
 async function handleClose({ tabId }) {
@@ -513,6 +510,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   activeOverlayTabs.delete(tabId);
+});
+
+// A tab opened while the agent works in its opener (target=_blank link, window.open) joins the Olympus group,
+// so every tab the agent caused stays together and is easy to find and close.
+chrome.tabs.onCreated.addListener((tab) => {
+  if (tab.id == null || tab.openerTabId == null || !idleTimer || !activeOverlayTabs.has(tab.openerTabId)) return;
+  recentlyOpened.push({ id: tab.id, opener: tab.openerTabId, at: Date.now() });
+  if (recentlyOpened.length > 20) recentlyOpened.shift();
+  if (tab.windowId != null) void ensureOlympusGroup(tab.id, tab.windowId);
+});
+
+// Keyboard Stop (default Alt+Shift+S), for when the page pill is out of reach.
+chrome.commands?.onCommand.addListener((command) => {
+  if (command === 'stop-agent') void stopFromPage();
 });
 
 chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
