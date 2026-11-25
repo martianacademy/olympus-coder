@@ -75,7 +75,8 @@ jobs:
     permissions:
       contents: write
     # Runs even if one platform failed, so the installers that did build are still published.
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    # Only for a pushed tag: a manual run (even on a tag) must never overwrite release assets uploaded by hand.
+    if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

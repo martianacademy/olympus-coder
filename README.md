@@ -208,6 +208,20 @@ OLYMPUS_TEST_HIDDEN=1 npx electron . --user-data-dir=/tmp/olympus-e2e --remote-d
 
 ---
 
+## Code signing policy
+
+- **Status:** macOS builds are ad-hoc signed. Windows installers are not code-signed yet. We are applying for the open-source program of SignPath Foundation (not approved yet). If approved, Windows releases will carry: *Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).*
+- **What gets signed:** only Windows installers built by GitHub Actions ([`build.yml`](.github/workflows/build.yml)) from a tagged commit of this public repository, after the packaged-app smoke test ([`smoke.yml`](.github/workflows/smoke.yml)) passes. Binaries built anywhere else are never signed.
+- **Open-source contents only:** installers ship only open-source components. Anthropic's proprietary Claude Agent SDK is not included. Olympus Coder downloads it from the public npm registry, and verifies its sha512 checksum, the first time you start Claude Code.
+- **Team roles:**
+  - Committers and reviewers: [Martian Academy](https://github.com/martianacademy) (maintainer). Outside contributions arrive as pull requests and are reviewed by a maintainer before merge.
+  - Approvers: [Martian Academy](https://github.com/martianacademy) approves every signing request.
+- **Privacy:** this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. The only automatic requests are:
+  - the update check against GitHub Releases, which can be turned off in **Settings → General → Updates**;
+  - the one-time Claude Agent SDK download, made when you choose Claude Code.
+
+  Details: [PRIVACY.md](PRIVACY.md).
+
 ## Security, Contributing & License
 
 - **Local-first & zero-knowledge relay:** State lives on disk under `~/.olympus`; provider API keys use OS `safeStorage`; Cloudflare Relay only ever sees `AES-256-GCM` ciphertext. See [PRIVACY.md](PRIVACY.md).
