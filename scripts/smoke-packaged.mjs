@@ -5,7 +5,7 @@
 // Usage: node smoke.mjs --bin <app executable> --out <dir> [-- extra electron args]
 // Needs Node 22+ (global WebSocket/fetch). No npm deps.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -173,6 +173,13 @@ try {
   check('installed app version', false, String(e.message));
 }
 
+// Installers are fully open source: Anthropic's proprietary Claude Agent SDK is downloaded on first use instead.
+{
+  const nm = join(resDir, 'app', 'node_modules', '@anthropic-ai');
+  const left = existsSync(nm) ? readdirSync(nm).filter((n) => n.startsWith('claude-agent-sdk')) : [];
+  check('no proprietary Claude Agent SDK in the installer', left.length === 0, left.join(', '));
+}
+
 // 1. First run, fresh profile.
 try {
   const app = await launch('firstrun', {});
@@ -224,6 +231,10 @@ try {
     check('terminal: shell ran a command (node-pty works)', !!hit, hit ? `matched ${hit}` : JSON.stringify(buf.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim().slice(-160)));
   }
   console.log(`      screenshot: ${await shot(app.page, 'main-after-terminal')}`);
+  // Claude Code: ready where it is installed (SDK downloaded on demand), else "not installed" with the install command.
+  const claude = await app.page.evaluate(`window.desk.invoke('agents.check', 'claude').then((s) => ({ state: s.state, detail: s.detail || '' }), (e) => ({ state: 'threw', detail: e.message }))`);
+  const claudeOk = claude.state === 'not-installed' ? /claude\.ai\/install/.test(claude.detail) : !['error', 'threw'].includes(claude.state);
+  check('Claude Code status is usable (ready, or not installed + install command)', claudeOk, `${claude.state}: ${claude.detail.slice(0, 140)}`);
   const errs = errorsOf(app.page);
   check('main UI: no uncaught renderer exceptions', !errs.some((e) => e.startsWith('exception')), errs.slice(0, 5).join(' | '));
   check('main UI: main process still alive', app.child.exitCode === null);

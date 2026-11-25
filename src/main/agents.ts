@@ -57,6 +57,7 @@ import {
   stopAsyncTasks,
   unwrapSessionUpdate,
 } from './agentInitiated';
+import { ensureBootScript, ensureClaudeSdk, sdkBundled, sdkRoot, sdkVersionFor } from './claudeSdk';
 import { findThread, getProject, getSecret, getSettings, saveThread, secretVarNamesForAgent, setSecret, sharedRoot, threadMeta, updateSettings } from './store';
 import { steerOutcome, steerParams, steeringSupported, type SteerOutcome } from '@shared/promptQueue';
 import { enqueue as enqueuePrompt } from './promptQueue';
@@ -133,14 +134,20 @@ const adapter = (pkg: string) => join(app.getAppPath(), 'node_modules', '@agentc
 
 /**
  * Claude Code and Codex adapters drive the real CLI. Use the one the user installed (so the installer can leave
- * out ~700 MB of CLI binaries); fall back to a copy bundled with the app (dev builds, Windows installers).
+ * out ~700 MB of CLI binaries); fall back to a copy bundled with the app (dev builds; Codex on Windows/macOS).
+ * Installers never ship Claude's binary or Anthropic's SDK (proprietary): see claudeSdk.ts.
  */
-const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; install: string }> = {
+const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; install: string; dirs?: string[] }> = {
   claude: {
     bin: 'claude',
     envVar: 'CLAUDE_CODE_EXECUTABLE',
     bundled: ['@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude'],
-    install: 'Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code  (or see https://docs.claude.com/en/docs/claude-code)',
+    install:
+      process.platform === 'win32'
+        ? 'Claude Code is not installed. Install it in PowerShell: irm https://claude.ai/install.ps1 | iex  (docs: https://docs.claude.com/en/docs/claude-code)'
+        : 'Claude Code is not installed. Install it: curl -fsSL https://claude.ai/install.sh | bash  (or: npm install -g @anthropic-ai/claude-code; docs: https://docs.claude.com/en/docs/claude-code)',
+    // Where Anthropic's native installer puts `claude`: found right after installing, before PATH reaches the app.
+    dirs: [join(homedir(), '.local', 'bin'), join(homedir(), '.claude', 'local')],
   },
   codex: {
     bin: 'codex',
@@ -153,12 +160,29 @@ const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; inst
 /** The installed CLI to hand to the adapter, if usable. Windows .cmd shims can't be spawned by the adapters, so only .exe counts there. */
 function installedCli(id: string): string | null {
   const c = CLI[id];
-  const p = c ? which(c.bin) : null;
-  if (!p) return null;
-  if (process.platform === 'win32' && !/\.exe$/i.test(p)) return null;
-  return p;
+  if (!c) return null;
+  const exe = process.platform === 'win32' ? `${c.bin}.exe` : c.bin;
+  const candidates = [which(c.bin), ...(c.dirs ?? []).map((d) => join(d, exe))];
+  for (const p of candidates) {
+    if (!p || !existsSync(p)) continue;
+    if (process.platform === 'win32' && !/\.exe$/i.test(p)) continue;
+    return p;
+  }
+  return null;
 }
 const bundledCli = (id: string) => Boolean(CLI[id]) && existsSync(join(app.getAppPath(), 'node_modules', ...CLI[id].bundled));
+
+/**
+ * Claude's adapter imports Anthropic's SDK, which installers leave out (claudeSdk.ts): the boot script + downloaded
+ * SDK root to start it with, or null when the SDK ships with the app (dev runs, npm-installed headless servers).
+ */
+function claudeSdkBoot(def: AgentDef): { boot: string; root: string } | null {
+  if (def.id !== 'claude' || !def.builtin || process.env.OLYMPUS_CLAUDE_ADAPTER) return null;
+  const appPath = app.getAppPath();
+  if (sdkBundled(appPath)) return null;
+  const userData = app.getPath('userData');
+  return { boot: ensureBootScript(userData), root: sdkRoot(userData, sdkVersionFor(appPath)) };
+}
 
 /** `command: "@node"` means: run the script with Electron's own Node, so no separate Node install is needed. */
 export function builtinAgents(): AgentDef[] {
@@ -278,7 +302,9 @@ class AgentConn {
     if (cli) base[CLI[this.def.id].envVar] = cli;
     const activeArgs = this.def.args.filter((a) => !this.droppedArgs.has(a));
     if (this.def.command === '@node') {
-      return { command: process.execPath, args: [...activeArgs, ...extraArgs], env: agentEnv({ ...base, ELECTRON_RUN_AS_NODE: '1' }) };
+      const sdk = claudeSdkBoot(this.def);
+      const args = sdk ? [sdk.boot, sdk.root, ...activeArgs, ...extraArgs] : [...activeArgs, ...extraArgs];
+      return { command: process.execPath, args, env: agentEnv({ ...base, ELECTRON_RUN_AS_NODE: '1' }) };
     }
     return { ...spawnable(which(this.def.command) ?? this.def.command, [...activeArgs, ...extraArgs]), env: agentEnv(base) };
   }
@@ -299,6 +325,14 @@ class AgentConn {
     }
     this.init = undefined;
     this.setStatus({ state: 'starting', detail: undefined });
+    if (claudeSdkBoot(this.def)) {
+      try {
+        await ensureClaudeSdk({ appPath: app.getAppPath(), userData: app.getPath('userData'), onProgress: (detail) => this.setStatus({ state: 'starting', detail }) });
+      } catch (e: any) {
+        this.setStatus({ state: 'error', detail: `Could not download the Claude Agent SDK: ${e?.message ?? e}` });
+        throw e;
+      }
+    }
     const spec = this.spawnSpec();
     const proc = spawn(spec.command, spec.args, { env: spec.env, cwd: homedir(), stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc = proc;
