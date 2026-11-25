@@ -149,13 +149,13 @@ async function quit(app, tag) {
 }
 
 /** Waits until the React root has rendered real text. */
-async function waitRendered(page, ms = 90_000) {
+async function waitRendered(page, ms = 90_000, want = '') {
   const t0 = Date.now();
   let text = '';
   while (Date.now() - t0 < ms) {
     try {
       text = await page.evaluate(`document.readyState === 'complete' ? (document.getElementById('root')?.innerText || '') : ''`);
-      if (text.trim().length > 20) return text;
+      if (text.trim().length > 20 && (!want || text.includes(want))) return text;
     } catch {
       /* navigating */
     }
@@ -197,7 +197,7 @@ try {
     settings: { onboarded: true },
     projects: [{ id: projectId, name: 'smoke-project', path: projDir, createdAt: Date.now() }],
   });
-  const text = await waitRendered(app.page);
+  const text = await waitRendered(app.page, 90_000, 'smoke-project'); // projects load a moment after the shell
   check('main UI: renders with the seeded project', text.includes('smoke-project'), JSON.stringify(text.trim().slice(0, 160)));
   await sleep(3000); // let the splash fade so the screenshot shows the real UI
   console.log(`      screenshot: ${await shot(app.page, 'main')}`);
@@ -220,7 +220,8 @@ try {
       const b = await app.page.evaluate(`window.desk.invoke('pty.buffer', ${JSON.stringify(ptyId)})`);
       buf = b?.data || '';
     }
-    check('terminal: shell ran a command (node-pty works)', want.test(buf), JSON.stringify(buf.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim().slice(-160)));
+    const hit = buf.match(want)?.[0];
+    check('terminal: shell ran a command (node-pty works)', !!hit, hit ? `matched ${hit}` : JSON.stringify(buf.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim().slice(-160)));
   }
   console.log(`      screenshot: ${await shot(app.page, 'main-after-terminal')}`);
   const errs = errorsOf(app.page);

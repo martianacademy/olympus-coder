@@ -25,14 +25,29 @@
 
 ## Install
 
-### macOS Desktop (Apple Silicon)
+### Desktop App (macOS · Windows · Linux)
+
+macOS via Homebrew (Apple Silicon):
 
 ```sh
 brew trust martianacademy/tap
 brew install --cask martianacademy/tap/olympus-coder
 ```
 
-Or download [`Olympus.Coder-0.3.7-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.7-arm64.dmg) from **[Releases](https://github.com/martianacademy/olympus-coder/releases/latest)** (`SHA256SUMS.txt` included; Windows & Linux desktop installers coming soon). Builds are ad-hoc signed — if Gatekeeper warns, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once.
+Or download an installer from **[Releases](https://github.com/martianacademy/olympus-coder/releases/latest)** (`SHA256SUMS.txt` included):
+
+| Platform | Installer |
+| --- | --- |
+| macOS · Apple Silicon | [`Olympus.Coder-0.3.7-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.7-arm64.dmg) |
+| macOS · Intel | [`Olympus.Coder-0.3.7.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.7.dmg) |
+| Windows 10/11 · x64 | [`Olympus.Coder.Setup.0.3.7.exe`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder.Setup.0.3.7.exe) |
+| Linux · x64 (Debian/Ubuntu) | [`olympus-coder_0.3.7_amd64.deb`](https://github.com/martianacademy/olympus-coder/releases/latest/download/olympus-coder_0.3.7_amd64.deb) |
+| Linux · x64 (any distro) | [`Olympus.Coder-0.3.7.AppImage`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.7.AppImage) |
+
+Builds are not code-signed yet:
+- **macOS:** if Gatekeeper warns, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once.
+- **Windows:** on the SmartScreen prompt choose **More info → Run anyway**.
+- **Linux:** install the `.deb` with `sudo apt install ./olympus-coder_0.3.7_amd64.deb`. The AppImage needs `chmod +x` and FUSE 2 (`libfuse2`; on Ubuntu 24.04 the package is `libfuse2t64`). If the AppImage exits with a sandbox error on Ubuntu 24.04+, use the `.deb` or start it with `--no-sandbox`.
 
 ### Headless Linux / macOS VPS Server (Zero Electron, Control from Phone or Browser)
 
