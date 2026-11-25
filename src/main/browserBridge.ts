@@ -26,7 +26,9 @@ const MAX_FRAME_BYTES = 12 * 1024 * 1024; // 12 MB ceiling (screenshots)
 
 /** Deterministic MV3 Extension ID computed from the public SPKI key in `extensions/olympus-chrome/manifest.json`. */
 export const OLYMPUS_EXTENSION_ID = 'mblgbbfnfhiaphmdkigkkhadealbpkig';
-const ALLOWED_EXTENSION_IDS = new Set([OLYMPUS_EXTENSION_ID]);
+/** ID the Chrome Web Store assigned to "Olympus Coder Browser" (the Store build has no `key`, so its ID differs). */
+export const OLYMPUS_STORE_EXTENSION_ID = 'pnnfodplajfpoicpheoalahclkfoopnl';
+const ALLOWED_EXTENSION_IDS = new Set([OLYMPUS_EXTENSION_ID, OLYMPUS_STORE_EXTENSION_ID]);
 
 type Emit = <K extends keyof DeskEvents>(channel: K, payload: DeskEvents[K]) => void;
 

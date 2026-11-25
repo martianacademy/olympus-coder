@@ -117,6 +117,15 @@ try {
     assert.equal((await rawWsUpgrade(status.port, 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).status, 403);
   });
 
+  await test('the Chrome Web Store build (its own ID) is accepted too; a look-alike ID is not', async () => {
+    const store = await rawWsUpgrade(status.port, `chrome-extension://${B.OLYMPUS_STORE_EXTENSION_ID}`);
+    assert.equal(store.status, 101);
+    store.socket.destroy();
+    await new Promise((r) => setTimeout(r, 30));
+    const lookAlike = B.OLYMPUS_STORE_EXTENSION_ID.slice(0, -1) + 'a';
+    assert.equal((await rawWsUpgrade(status.port, `chrome-extension://${lookAlike}`)).status, 403);
+  });
+
   await test('pinned Olympus extension connects with zero token, runs all 5 browser_* tools, and honors Pause', async () => {
     const conn = await rawWsUpgrade(status.port, `chrome-extension://${B.OLYMPUS_EXTENSION_ID}`);
     assert.equal(conn.status, 101);
