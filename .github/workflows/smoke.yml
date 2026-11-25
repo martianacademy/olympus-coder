@@ -1,0 +1,103 @@
+# Installs the installers from a "Build installers" run on real Windows / Linux / Intel-Mac runners, launches the
+# app with a scratch profile and checks it over CDP (UI renders, no uncaught errors, a node-pty terminal runs).
+# Screenshots + results are uploaded as artifacts. Run: gh workflow run smoke.yml -f run_id=<build run id>
+name: Smoke test installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run id of the "Build installers" workflow whose artifacts to test'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: olympus-coder-windows-latest
+          path: art
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install silently (NSIS /S, per-user)
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem art -Filter *.exe | Select-Object -First 1
+          Write-Host "installer: $($exe.Name)"
+          Start-Process -Wait -FilePath $exe.FullName -ArgumentList '/S'
+          $app = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'Olympus Coder.exe' | Select-Object -First 1
+          if (-not $app) { throw 'installed Olympus Coder.exe not found' }
+          Write-Host "installed: $($app.FullName)"
+          "APP_BIN=$($app.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Smoke test
+        run: node scripts/smoke-packaged.mjs --bin "${{ env.APP_BIN }}" --out smoke-out --label windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-windows
+          path: smoke-out
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: olympus-coder-ubuntu-latest
+          path: art
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Smoke test AppImage
+        run: |
+          cp art/*.AppImage /tmp/app.AppImage && chmod +x /tmp/app.AppImage
+          (cd /tmp && ./app.AppImage --appimage-extract >/dev/null)
+          xvfb-run -a -s "-screen 0 1440x900x24" node scripts/smoke-packaged.mjs --bin /tmp/squashfs-root/olympus-coder --out smoke-out --label linux-appimage -- --no-sandbox --disable-gpu
+      - name: Smoke test .deb
+        if: always()
+        run: |
+          sudo apt-get install -y ./art/*.deb
+          BIN=$(dpkg -L olympus-coder | grep -E '/olympus-coder$' | grep -v /usr/share | head -1)
+          echo "deb binary: $BIN"
+          xvfb-run -a -s "-screen 0 1440x900x24" node scripts/smoke-packaged.mjs --bin "$BIN" --out smoke-out --label linux-deb -- --no-sandbox --disable-gpu
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-linux
+          path: smoke-out
+
+  mac-intel:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: olympus-coder-macos-15-intel
+          path: art
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Smoke test x64 app from the zip
+        run: |
+          ls art
+          ditto -x -k art/*-mac.zip /tmp/app
+          node scripts/smoke-packaged.mjs --bin "/tmp/app/Olympus Coder.app/Contents/MacOS/Olympus Coder" --out smoke-out --label mac-intel
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-mac-intel
+          path: smoke-out
