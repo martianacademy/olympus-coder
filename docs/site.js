@@ -76,16 +76,16 @@
       note: 'Pure Node.js headless server for Linux VPS & remote Macs — zero Electron or X11 required.',
     },
     win: {
-      code: 'iwr https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder.Setup.0.3.9.exe -OutFile OlympusCoderSetup.exe\n.\\OlympusCoderSetup.exe',
+      code: 'iwr https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder.Setup.0.3.10.exe -OutFile OlympusCoderSetup.exe\n.\\OlympusCoderSetup.exe',
       note: 'Windows 10/11 x64 (PowerShell). Not code-signed yet: on the SmartScreen prompt choose "More info" → "Run anyway".',
     },
     linux: {
-      code: 'curl -LO https://github.com/martianacademy/olympus-coder/releases/latest/download/olympus-coder_0.3.9_amd64.deb\nsudo apt install ./olympus-coder_0.3.9_amd64.deb',
-      note: 'Debian/Ubuntu x64. Other distros: Olympus.Coder-0.3.9.AppImage from Releases (chmod +x; needs libfuse2).',
+      code: 'curl -LO https://github.com/martianacademy/olympus-coder/releases/latest/download/olympus-coder_0.3.10_amd64.deb\nsudo apt install ./olympus-coder_0.3.10_amd64.deb',
+      note: 'Debian/Ubuntu x64. Other distros: Olympus.Coder-0.3.10.AppImage from Releases (chmod +x; needs libfuse2).',
     },
     dmg: {
       code: 'xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"',
-      note: 'Download Olympus.Coder-0.3.9-arm64.dmg from Releases, drag to Applications, then run once (ad-hoc signed).',
+      note: 'Download Olympus.Coder-0.3.10-arm64.dmg from Releases, drag to Applications, then run once (ad-hoc signed).',
     },
   };
 
@@ -182,13 +182,13 @@
   const ua = navigator.userAgent;
   const base = 'https://github.com/martianacademy/olympus-coder/releases/latest/download/';
   const pick = /Windows/i.test(ua)
-    ? ['Olympus.Coder.Setup.0.3.9.exe', 'Windows']
+    ? ['Olympus.Coder.Setup.0.3.10.exe', 'Windows']
     : /Linux/i.test(ua) && !/Android/i.test(ua)
-      ? ['olympus-coder_0.3.9_amd64.deb', 'Linux']
+      ? ['olympus-coder_0.3.10_amd64.deb', 'Linux']
       : null;
   if (!pick) return;
   document.querySelectorAll('[data-download]').forEach((a) => {
     a.href = base + pick[0];
-    a.textContent = `Download for ${pick[1]} (v0.3.9)`;
+    a.textContent = `Download for ${pick[1]} (v0.3.10)`;
   });
 })();

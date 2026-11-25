@@ -3,14 +3,14 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — shared <code>~/.olympus</code> memory, parallel orchestration, built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.3.9</code> · <code>Apache-2.0</code> · <code>macOS · Linux VPS · Windows</code> · <code>ACP 2.6 + MCP</code> · <code>100% Free · Zero Login Wall</code>
+    <code>v0.3.10</code> · <code>Apache-2.0</code> · <code>macOS · Linux VPS · Windows</code> · <code>ACP 2.6 + MCP</code> · <code>100% Free · Zero Login Wall</code>
   </p>
   <p>
     <a href="https://www.producthunt.com/products/olympus-coder?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-olympus-coder" target="_blank" rel="noopener noreferrer"><img alt="Olympus Coder - Open-source desktop &amp; VPS workbench for 18+ AI coding agents | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;theme=light&amp;t=1795331946472" /></a>
   </p>
   <p>
     <a href="https://olympus.marsnext.in/"><strong>Website</strong></a> ·
-    <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.9</strong></a> ·
+    <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.10</strong></a> ·
     <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> ·
     <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
   </p>
@@ -38,16 +38,16 @@ Or download an installer from **[Releases](https://github.com/martianacademy/oly
 
 | Platform | Installer |
 | --- | --- |
-| macOS · Apple Silicon | [`Olympus.Coder-0.3.9-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.9-arm64.dmg) |
-| macOS · Intel | [`Olympus.Coder-0.3.9.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.9.dmg) |
-| Windows 10/11 · x64 | [`Olympus.Coder.Setup.0.3.9.exe`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder.Setup.0.3.9.exe) |
-| Linux · x64 (Debian/Ubuntu) | [`olympus-coder_0.3.9_amd64.deb`](https://github.com/martianacademy/olympus-coder/releases/latest/download/olympus-coder_0.3.9_amd64.deb) |
-| Linux · x64 (any distro) | [`Olympus.Coder-0.3.9.AppImage`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.9.AppImage) |
+| macOS · Apple Silicon | [`Olympus.Coder-0.3.10-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.10-arm64.dmg) |
+| macOS · Intel | [`Olympus.Coder-0.3.10.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.10.dmg) |
+| Windows 10/11 · x64 | [`Olympus.Coder.Setup.0.3.10.exe`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder.Setup.0.3.10.exe) |
+| Linux · x64 (Debian/Ubuntu) | [`olympus-coder_0.3.10_amd64.deb`](https://github.com/martianacademy/olympus-coder/releases/latest/download/olympus-coder_0.3.10_amd64.deb) |
+| Linux · x64 (any distro) | [`Olympus.Coder-0.3.10.AppImage`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.10.AppImage) |
 
 Builds are not code-signed yet:
 - **macOS:** if Gatekeeper warns, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once.
 - **Windows:** on the SmartScreen prompt choose **More info → Run anyway**.
-- **Linux:** install the `.deb` with `sudo apt install ./olympus-coder_0.3.9_amd64.deb`. The AppImage needs `chmod +x` and FUSE 2 (`libfuse2`; on Ubuntu 24.04 the package is `libfuse2t64`). If the AppImage exits with a sandbox error on Ubuntu 24.04+, use the `.deb` or start it with `--no-sandbox`.
+- **Linux:** install the `.deb` with `sudo apt install ./olympus-coder_0.3.10_amd64.deb`. The AppImage needs `chmod +x` and FUSE 2 (`libfuse2`; on Ubuntu 24.04 the package is `libfuse2t64`). If the AppImage exits with a sandbox error on Ubuntu 24.04+, use the `.deb` or start it with `--no-sandbox`.
 
 ### Headless Linux / macOS VPS Server (Zero Electron, Control from Phone or Browser)
 
