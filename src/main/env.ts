@@ -74,6 +74,14 @@ export function loadLoginShellPath(): void {
     } catch {
       /* keep the current PATH */
     }
+  } else {
+    // A running Windows app never sees PATH changes made by installers after it started. Add the folders Claude
+    // Code's native installer and npm's global shims use, so a CLI installed later is found by Settings → Check.
+    const home = process.env.USERPROFILE || '';
+    const extra = [join(home, '.local', 'bin'), process.env.APPDATA ? join(process.env.APPDATA, 'npm') : '', join(home, '.olympus', 'bin')].filter(Boolean);
+    const current = (process.env.PATH || '').split(delimiter).filter(Boolean);
+    const seen = new Set(current.map((p) => p.toLowerCase()));
+    process.env.PATH = [...current, ...extra.filter((p) => !seen.has(p.toLowerCase()))].join(delimiter);
   }
   ensureHealthyNodeShim();
 }

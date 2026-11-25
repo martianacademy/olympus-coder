@@ -38,7 +38,11 @@ jobs:
           if (-not $app) { throw 'installed Olympus Coder.exe not found' }
           Write-Host "installed: $($app.FullName)"
           "APP_BIN=$($app.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Install Claude Code with npm (the app must detect it behind npm's .cmd shim)
+        run: npm install -g @anthropic-ai/claude-code
       - name: Smoke test
+        env:
+          OLY_SMOKE_EXPECT_CLAUDE: installed
         run: node scripts/smoke-packaged.mjs --bin "${{ env.APP_BIN }}" --out smoke-out --label windows
       - uses: actions/upload-artifact@v4
         if: always()
@@ -60,13 +64,19 @@ jobs:
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Install Claude Code with npm
+        run: npm install -g @anthropic-ai/claude-code
       - name: Smoke test AppImage
+        env:
+          OLY_SMOKE_EXPECT_CLAUDE: installed
         run: |
           cp art/*.AppImage /tmp/app.AppImage && chmod +x /tmp/app.AppImage
           (cd /tmp && ./app.AppImage --appimage-extract >/dev/null)
           xvfb-run -a -s "-screen 0 1440x900x24" node scripts/smoke-packaged.mjs --bin /tmp/squashfs-root/olympus-coder --out smoke-out --label linux-appimage -- --no-sandbox --disable-gpu
       - name: Smoke test .deb
         if: always()
+        env:
+          OLY_SMOKE_EXPECT_CLAUDE: installed
         run: |
           sudo apt-get install -y ./art/*.deb
           BIN=$(dpkg -L olympus-coder | grep -E '/olympus-coder$' | grep -v /usr/share | head -1)

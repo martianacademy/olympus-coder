@@ -58,6 +58,7 @@ import {
   unwrapSessionUpdate,
 } from './agentInitiated';
 import { ensureBootScript, ensureClaudeSdk, sdkBundled, sdkRoot, sdkVersionFor } from './claudeSdk';
+import { cliCandidates, pickCli, type CliSpec } from './cliLocate';
 import { findThread, getProject, getSecret, getSettings, saveThread, secretVarNamesForAgent, setSecret, sharedRoot, threadMeta, updateSettings } from './store';
 import { steerOutcome, steerParams, steeringSupported, type SteerOutcome } from '@shared/promptQueue';
 import { enqueue as enqueuePrompt } from './promptQueue';
@@ -137,7 +138,7 @@ const adapter = (pkg: string) => join(app.getAppPath(), 'node_modules', '@agentc
  * out ~700 MB of CLI binaries); fall back to a copy bundled with the app (dev builds; Codex on Windows/macOS).
  * Installers never ship Claude's binary or Anthropic's SDK (proprietary): see claudeSdk.ts.
  */
-const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; install: string; dirs?: string[] }> = {
+const CLI: Record<string, CliSpec & { envVar: string; bundled: string[]; install: string }> = {
   claude: {
     bin: 'claude',
     envVar: 'CLAUDE_CODE_EXECUTABLE',
@@ -148,6 +149,8 @@ const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; inst
         : 'Claude Code is not installed. Install it: curl -fsSL https://claude.ai/install.sh | bash  (or: npm install -g @anthropic-ai/claude-code; docs: https://docs.claude.com/en/docs/claude-code)',
     // Where Anthropic's native installer puts `claude`: found right after installing, before PATH reaches the app.
     dirs: [join(homedir(), '.local', 'bin'), join(homedir(), '.claude', 'local')],
+    // npm's Windows shim (`claude`/`claude.cmd`) cannot be spawned by the adapter; the package's real binary can.
+    npmExe: ['@anthropic-ai', 'claude-code', 'bin', 'claude.exe'],
   },
   codex: {
     bin: 'codex',
@@ -161,14 +164,7 @@ const CLI: Record<string, { bin: string; envVar: string; bundled: string[]; inst
 function installedCli(id: string): string | null {
   const c = CLI[id];
   if (!c) return null;
-  const exe = process.platform === 'win32' ? `${c.bin}.exe` : c.bin;
-  const candidates = [which(c.bin), ...(c.dirs ?? []).map((d) => join(d, exe))];
-  for (const p of candidates) {
-    if (!p || !existsSync(p)) continue;
-    if (process.platform === 'win32' && !/\.exe$/i.test(p)) continue;
-    return p;
-  }
-  return null;
+  return pickCli(cliCandidates(c, which(c.bin), process.platform, { APPDATA: process.env.APPDATA }), process.platform);
 }
 const bundledCli = (id: string) => Boolean(CLI[id]) && existsSync(join(app.getAppPath(), 'node_modules', ...CLI[id].bundled));
 

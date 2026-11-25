@@ -235,6 +235,11 @@ try {
   const claude = await app.page.evaluate(`window.desk.invoke('agents.check', 'claude').then((s) => ({ state: s.state, detail: s.detail || '' }), (e) => ({ state: 'threw', detail: e.message }))`);
   const claudeOk = claude.state === 'not-installed' ? /claude\.ai\/install/.test(claude.detail) : !['error', 'threw'].includes(claude.state);
   check('Claude Code status is usable (ready, or not installed + install command)', claudeOk, `${claude.state}: ${claude.detail.slice(0, 140)}`);
+  // OLY_SMOKE_EXPECT_CLAUDE=installed (CI installs Claude Code with npm first): it must be detected, the SDK downloaded
+  // on demand and the adapter started — "ready" or "needs-login" (no account on CI), never "not-installed"/"error".
+  if (process.env.OLY_SMOKE_EXPECT_CLAUDE === 'installed') {
+    check('Claude Code installed by the user is detected and its adapter starts (SDK on demand)', ['ready', 'needs-login'].includes(claude.state), `${claude.state}: ${claude.detail.slice(0, 160)}`);
+  }
   const errs = errorsOf(app.page);
   check('main UI: no uncaught renderer exceptions', !errs.some((e) => e.startsWith('exception')), errs.slice(0, 5).join(' | '));
   check('main UI: main process still alive', app.child.exitCode === null);
