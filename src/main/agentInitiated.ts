@@ -29,6 +29,8 @@ interface ActiveTurn {
   startedAtIndex: number;
   hasTaskLifecycle: boolean;
   settleTimer?: NodeJS.Timeout;
+  /** Last update seen for this turn: the settle wait is measured from here. */
+  lastActivityAt: number;
   ended: boolean;
 }
 
@@ -117,9 +119,12 @@ function rewriteSessionUpdateLine(line: string): string {
 }
 
 const IDLE_TURN_SETTLE_MS = Number(process.env.OLYMPUS_IDLE_SETTLE_MS) || 2_500;
-// Antigravity streams `agent_thought_chunk`, then stays silent for 10–65s while generating tool-call JSON arguments
-// before sending the first `tool_call`. Hold the autonomous turn open across that silent generation gap.
+// Antigravity sends no end-of-turn: after a thought it stays silent 10–65s generating tool-call JSON, and after a
+// tool result it thinks silently 10–30s before its next step. Hold the autonomous turn open across those gaps; only
+// a reply (`agent` item) settles fast. (2026-11-25: every step had become its own "Agent-initiated work" turn.)
 const THOUGHT_TOOL_GEN_SETTLE_MS = Number(process.env.OLYMPUS_THOUGHT_SETTLE_MS) || 90_000;
+/** A wake message the app already shows (agy's own SYSTEM_MESSAGE) heads the turn it caused when this recent. */
+const WAKE_HEADER_MAX_AGE_MS = 120_000;
 
 /** Starts a distinct, checkpointed turn for work initiated by the agent. */
 export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: string, hasTaskLifecycle = false): void {
@@ -130,11 +135,15 @@ export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: strin
       existing.hasTaskLifecycle = true;
       clearSettleTimer(existing);
     } else {
+      existing.lastActivityAt = Date.now();
       scheduleIdleSettle(rt, existing);
     }
     return;
   }
-  const userItem: Extract<ThreadItem, { kind: 'user' }> = {
+  // agy woke itself and the transcript mirror already shows why ("Task … finished", "Background command …"):
+  // that message heads this turn instead of a second "Agent-initiated work" bubble right under it.
+  const header = cause?.trim() ? undefined : wakeHeader(rt);
+  const userItem: Extract<ThreadItem, { kind: 'user' }> = header ?? {
     kind: 'user',
     id: randomUUID(),
     agentId: rt.agentId,
@@ -148,6 +157,7 @@ export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: strin
     before: host.snapshotBefore(rt, userItem.text),
     startedAtIndex: rt.thread.items.length,
     hasTaskLifecycle,
+    lastActivityAt: Date.now(),
     ended: false,
   };
   activeTurns.set(rt.thread.id, active);
@@ -156,9 +166,16 @@ export function beginAgentInitiatedTurn(rt: AgentInitiatedRuntime, cause?: strin
   rt.running = true;
   rt.turn = {};
   host.onAgentTurn?.(rt, true);
-  host.addItem(rt, userItem);
+  if (!header) host.addItem(rt, userItem);
   host.pushSession(rt);
   if (!hasTaskLifecycle) scheduleIdleSettle(rt, active);
+}
+
+/** The newest item, when it is an unanswered wake message the app added (not the user's, not a previous turn's). */
+function wakeHeader(rt: AgentInitiatedRuntime): Extract<ThreadItem, { kind: 'user' }> | undefined {
+  const last = rt.thread.items[rt.thread.items.length - 1];
+  if (last?.kind !== 'user' || !last.fromApp || last.agentInitiated) return undefined;
+  return Date.now() - (last.ts ?? 0) <= WAKE_HEADER_MAX_AGE_MS ? last : undefined;
 }
 
 /** Refreshes idle settle tracking and handles explicit end-of-turn notifications. */
@@ -169,7 +186,10 @@ export function noteAgentInitiatedUpdate(rt: AgentInitiatedRuntime, update: any)
     return true;
   }
   const active = activeTurns.get(rt.thread.id);
-  if (active && !active.hasTaskLifecycle) scheduleIdleSettle(rt, active);
+  if (active && !active.hasTaskLifecycle) {
+    active.lastActivityAt = Date.now();
+    scheduleIdleSettle(rt, active);
+  }
   return false;
 }
 
@@ -337,13 +357,17 @@ function hasOpenTurnWork(rt: AgentInitiatedRuntime, active: ActiveTurn): boolean
   return false;
 }
 
+/** How long the turn must be quiet before it ends: short only once the agent has replied. */
 function settleDelayMs(rt: AgentInitiatedRuntime, active: ActiveTurn): number {
   const last = rt.thread.items.length > active.startedAtIndex ? rt.thread.items[rt.thread.items.length - 1] : undefined;
-  if (!last || last.kind === 'thought') return THOUGHT_TOOL_GEN_SETTLE_MS;
-  return IDLE_TURN_SETTLE_MS;
+  return last?.kind === 'agent' ? IDLE_TURN_SETTLE_MS : THOUGHT_TOOL_GEN_SETTLE_MS;
 }
 
-function scheduleIdleSettle(rt: AgentInitiatedRuntime, active: ActiveTurn): void {
+/**
+ * Re-checks after the short wait and judges the thread as it is THEN: the update that starts a turn is applied
+ * after `beginAgentInitiatedTurn`, so a delay chosen up front saw only the turn's own header.
+ */
+function scheduleIdleSettle(rt: AgentInitiatedRuntime, active: ActiveTurn, delay = IDLE_TURN_SETTLE_MS): void {
   clearSettleTimer(active);
   active.settleTimer = setTimeout(() => {
     if (active.ended || active.hasTaskLifecycle) return;
@@ -351,8 +375,13 @@ function scheduleIdleSettle(rt: AgentInitiatedRuntime, active: ActiveTurn): void
       scheduleIdleSettle(rt, active);
       return;
     }
+    const left = active.lastActivityAt + settleDelayMs(rt, active) - Date.now();
+    if (left > 0) {
+      scheduleIdleSettle(rt, active, left);
+      return;
+    }
     endAgentInitiatedTurn(rt);
-  }, settleDelayMs(rt, active));
+  }, delay);
   active.settleTimer.unref?.();
 }
 

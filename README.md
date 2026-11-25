@@ -3,14 +3,14 @@
   <h1>Olympus Coder</h1>
   <p><strong>One native workspace for every ACP coding agent — shared <code>~/.olympus</code> memory, parallel orchestration, built-in code workbench, and end-to-end encrypted phone access.</strong></p>
   <p>
-    <code>v0.3.6</code> · <code>Apache-2.0</code> · <code>macOS · Linux VPS · Windows</code> · <code>ACP 2.6 + MCP</code> · <code>100% Free · Zero Login Wall</code>
+    <code>v0.3.7</code> · <code>Apache-2.0</code> · <code>macOS · Linux VPS · Windows</code> · <code>ACP 2.6 + MCP</code> · <code>100% Free · Zero Login Wall</code>
   </p>
   <p>
     <a href="https://www.producthunt.com/products/olympus-coder?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-olympus-coder" target="_blank" rel="noopener noreferrer"><img alt="Olympus Coder - Open-source desktop &amp; VPS workbench for 18+ AI coding agents | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1325960&amp;theme=light&amp;t=1795331946472" /></a>
   </p>
   <p>
     <a href="https://olympus.marsnext.in/"><strong>Website</strong></a> ·
-    <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.6</strong></a> ·
+    <a href="https://github.com/martianacademy/olympus-coder/releases/latest"><strong>Download v0.3.7</strong></a> ·
     <a href="https://github.com/martianacademy/homebrew-tap"><strong>Homebrew Tap</strong></a> ·
     <a href="PRIVACY.md"><strong>Privacy Policy</strong></a>
   </p>
@@ -32,7 +32,7 @@ brew trust martianacademy/tap
 brew install --cask martianacademy/tap/olympus-coder
 ```
 
-Or download [`Olympus.Coder-0.3.6-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.6-arm64.dmg) from **[Releases](https://github.com/martianacademy/olympus-coder/releases/latest)** (`SHA256SUMS.txt` included; Windows & Linux desktop installers coming soon). Builds are ad-hoc signed — if Gatekeeper warns, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once.
+Or download [`Olympus.Coder-0.3.7-arm64.dmg`](https://github.com/martianacademy/olympus-coder/releases/latest/download/Olympus.Coder-0.3.7-arm64.dmg) from **[Releases](https://github.com/martianacademy/olympus-coder/releases/latest)** (`SHA256SUMS.txt` included; Windows & Linux desktop installers coming soon). Builds are ad-hoc signed — if Gatekeeper warns, run `xattr -dr com.apple.quarantine "/Applications/Olympus Coder.app"` once.
 
 ### Headless Linux / macOS VPS Server (Zero Electron, Control from Phone or Browser)
 
