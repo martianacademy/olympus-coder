@@ -53,19 +53,20 @@ export function browserToolDefs(readOnlyOnly = false) {
     {
       name: 'browser_act',
       title: 'Interact with Chrome tab',
-      description:
-        'Act visibly in Chrome (moving cursor & smooth scroll): click, hover, type, press, select, scroll, wait, back, forward, reload.',
+      // No enums and short texts: Antigravity disables any tool declaration over ~650 bytes (see tests/mcpTools.unit.mjs).
+      // `action` is validated in handleBrowserTool.
+      description: 'Act in a Chrome tab. action: click|hover|type|press|select|scroll|wait|back|forward|reload.',
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['click', 'hover', 'type', 'press', 'select', 'scroll', 'wait', 'back', 'forward', 'reload'] },
+          action: { type: 'string' },
           tabId: { type: 'number' },
-          ref: { type: 'number', description: 'Element ref from browser_read.' },
-          selector: { type: 'string', description: 'CSS selector fallback.' },
-          text: { type: 'string', description: 'Text, key or combo (Meta+A), option, or wait text.' },
-          direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
-          x: { type: 'number', description: 'Viewport X (or wait ms).' },
-          y: { type: 'number', description: 'Viewport Y.' },
+          ref: { type: 'number', description: 'Ref from browser_read.' },
+          selector: { type: 'string' },
+          text: { type: 'string', description: 'Text, key (Meta+A), option or wait text.' },
+          direction: { type: 'string', description: 'up|down|top|bottom' },
+          x: { type: 'number', description: 'Viewport X or wait ms.' },
+          y: { type: 'number' },
         },
         required: ['action'],
         additionalProperties: false,
@@ -167,14 +168,18 @@ export async function handleBrowserTool(
   if (name === 'browser_act') {
     const action = String(args?.action ?? '');
     const allowed = ['click', 'hover', 'type', 'press', 'select', 'scroll', 'wait', 'back', 'forward', 'reload'];
-    if (!allowed.includes(action)) throw new Error(`Invalid action "${action}".`);
+    if (!allowed.includes(action)) throw new Error(`Invalid action "${action}". Use one of: ${allowed.join(', ')}.`);
+    const direction = typeof args?.direction === 'string' ? args.direction : undefined;
+    if (direction !== undefined && !['up', 'down', 'top', 'bottom'].includes(direction)) {
+      throw new Error(`Invalid direction "${direction}". Use up, down, top or bottom.`);
+    }
     const res = await callBrowserExtension<{ ok: boolean; detail: string; url?: string }>('act', {
       action,
       tabId: typeof args?.tabId === 'number' ? args.tabId : undefined,
       ref: typeof args?.ref === 'number' ? args.ref : undefined,
       selector: typeof args?.selector === 'string' ? args.selector : undefined,
       text: typeof args?.text === 'string' ? args.text : undefined,
-      direction: typeof args?.direction === 'string' ? args.direction : undefined,
+      direction,
       x: typeof args?.x === 'number' ? args.x : undefined,
       y: typeof args?.y === 'number' ? args.y : undefined,
     });

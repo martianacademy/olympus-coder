@@ -675,7 +675,7 @@ export function toolsFor(t: Thread) {
             type: 'object',
             properties: {
               section: { type: 'string', enum: Object.keys(NOTE_SECTIONS) },
-              note: { type: 'string', description: 'One sentence (<240 chars), e.g. "Writes in Hinglish; prefers short answers."' },
+              note: { type: 'string', description: 'One sentence, under 240 chars.' },
             },
             required: ['section', 'note'],
             additionalProperties: false,
@@ -684,20 +684,19 @@ export function toolsFor(t: Thread) {
         },
       ]
     : [];
-  const schedules = canManageSchedules(t) ? scheduleToolDefs(t.agentId) : [];
+  const schedules = canManageSchedules(t) ? scheduleToolDefs() : [];
   const agentMgmt = canManageAgents(t) ? agentToolDefs() : [];
   const projectMgmt = canManageProjects(t) ? projectToolDefs() : [];
   const browser = browserToolDefs(Boolean(t.secondOpinion));
   if (!canOrchestrate(t)) return [info, setTimerToolDef, ...term, ...browser, ...learn, ...schedules, ...agentMgmt, ...projectMgmt];
-  // Keep these schemas small: Antigravity (agy 1.5.8) silently disables MCP tools whose declaration is too large
-  // ("tool … is not enabled for server …"; seen at ≥1144 chars, fine at ≤840). Agent ids are validated server-side
-  // (assertAgentQuotaAvailable) instead of a long `enum`; list_agents shows the ids, models, modes and efforts.
-  const agent = (what: string) => ({ type: 'string', description: `${what} (an id from list_agents).` });
+  // Keep every declaration under ~620 bytes: Antigravity disables MCP tools over ~650 bytes ("tool … is not enabled
+  // for server …"; agy 1.5.11 enabled ≤642, disabled ≥679, see tests/mcpTools.unit.mjs). Agent ids are validated
+  // server-side (assertAgentQuotaAvailable) instead of an `enum`; list_agents shows the ids, models, modes and efforts.
   const configProps = {
-    model: { type: 'string', description: 'Optional model (see list_agents).' },
-    mode: { type: 'string', description: 'Optional mode, e.g. code, plan, auto.' },
-    effort: { type: 'string', description: 'Optional effort, e.g. low, medium, high, max.' },
-    config: { type: 'object', description: 'Optional configOption id → value map.' },
+    model: { type: 'string' },
+    mode: { type: 'string' },
+    effort: { type: 'string' },
+    config: { type: 'object' },
   };
   return [
     info,
@@ -723,14 +722,14 @@ export function toolsFor(t: Thread) {
       inputSchema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Short task title.' },
-          task: { type: 'string', description: 'Full task brief.' },
-          agent: { type: 'string', description: `Agent id (default ${t.agentId}).` },
+          title: { type: 'string' },
+          task: { type: 'string' },
+          agent: { type: 'string', description: `Default ${t.agentId}.` },
           model: { type: 'string' },
           mode: { type: 'string' },
           effort: { type: 'string' },
           config: { type: 'object' },
-          keep: { type: 'boolean', description: 'Keep after report (default false).' },
+          keep: { type: 'boolean', description: 'Keep after report.' },
           worktree: { type: 'boolean', description: 'Own git worktree.' },
         },
         required: ['title', 'task'],
@@ -742,14 +741,14 @@ export function toolsFor(t: Thread) {
       name: 'configure_subsession',
       title: 'Configure or switch sub-session',
       description:
-        'Switch an idle or stopped sub-session to another agent/model/mode/effort, keeping history. Optional `prompt` resumes it.',
+        'Switch an idle or stopped sub-session to another agent, model, mode or effort (see list_agents), keeping history. Optional prompt resumes it.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Sub-session id.' },
-          agent: agent('New CLI agent'),
+          id: { type: 'string' },
+          agent: { type: 'string' },
           ...configProps,
-          prompt: { type: 'string', description: 'Optional follow-up after switching.' },
+          prompt: { type: 'string' },
         },
         required: ['id'],
         additionalProperties: false,
@@ -782,13 +781,13 @@ export function toolsFor(t: Thread) {
       name: 'message_subsession',
       title: 'Message sub-session',
       description:
-        'Send a follow-up to a finished or quota-stopped sub-session; optionally switch its agent or model in the same step.',
+        'Send a follow-up to a finished or quota-stopped sub-session; optionally switch its agent, model, mode or effort (see list_agents).',
       inputSchema: {
         type: 'object',
         properties: {
           id: { type: 'string' },
           text: { type: 'string' },
-          agent: agent('Optional CLI agent'),
+          agent: { type: 'string' },
           ...configProps,
         },
         required: ['id', 'text'],

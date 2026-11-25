@@ -141,7 +141,7 @@ await test('store.updateProjectVerifyGate persists config on project record', ()
   assert.equal(S.getProject(p.id)?.verifyGate?.command, 'npm run typecheck');
 });
 
-await test('every orchestrator MCP tool schema fits under Antigravity 900-byte enablement cap', () => {
+await test('every orchestrator MCP tool schema fits under the Antigravity 620-byte cap', () => {
   const dir = join(TMP, 'proj-mcp');
   mkdirSync(dir, { recursive: true });
   const p = S.addProject(dir);
@@ -151,9 +151,10 @@ await test('every orchestrator MCP tool schema fits under Antigravity 900-byte e
   assert.ok(tools.some((x) => x.name === 'save_schedule'), 'save_schedule included');
   for (const tool of tools) {
     const serialized = JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.inputSchema });
+    // Same cap as tests/mcpTools.unit.mjs (agy 1.5.11 disables declarations >= 679 bytes; 642 was the largest enabled).
     assert.ok(
-      Buffer.byteLength(serialized, 'utf8') <= 910,
-      `MCP tool "${tool.name}" is ${Buffer.byteLength(serialized, 'utf8')} bytes (> 910B risks silent disable in Antigravity)`,
+      Buffer.byteLength(serialized, 'utf8') <= 620,
+      `MCP tool "${tool.name}" is ${Buffer.byteLength(serialized, 'utf8')} bytes (> 620B: Antigravity disables it)`,
     );
   }
 });

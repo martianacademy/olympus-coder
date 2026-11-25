@@ -70,7 +70,7 @@ function resolveProjectId(rawProject: unknown, fallbackProjectId: string): strin
   throw new ToolError(`Unknown project "${wanted}". Available projects: ${projects.map((p) => `${p.name} (${p.id})`).join(', ') || 'none'}.`);
 }
 
-export function scheduleToolDefs(currentAgentId: string) {
+export function scheduleToolDefs() {
   // Kept small on purpose: agy silently disables MCP tools with large declarations (see toolsFor in orchestrator.ts).
   return [
     {
@@ -90,21 +90,23 @@ export function scheduleToolDefs(currentAgentId: string) {
     {
       name: 'save_schedule',
       title: 'Save scheduled task',
-      description: 'Create or update (`id`) a scheduled prompt that opens a project chat when due.',
+      // Under ~620 bytes or Antigravity disables the tool (see orchestrator.ts toolsFor); values are validated below.
+      description:
+        'Create or update (id) a prompt that opens a project chat when due. kind once: at (ISO) or inMinutes; interval: everyMinutes; daily/weekly: time HH:MM, weekday 0-6.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Update id; omit to create.' },
+          id: { type: 'string' },
           name: { type: 'string' },
           prompt: { type: 'string' },
-          kind: { type: 'string', enum: ['once', 'interval', 'daily', 'weekly'] },
-          agent: { type: 'string', description: `Default ${currentAgentId}.` },
-          projectId: { type: 'string', description: 'Default this project.' },
-          at: { type: 'string', description: 'ISO-8601 (once).' },
-          inMinutes: { type: 'number', minimum: 1 },
-          everyMinutes: { type: 'number', minimum: 1 },
-          time: { type: 'string', description: '"HH:MM" (daily/weekly).' },
-          weekday: { type: 'string', description: '0-6 or day name.' },
+          kind: { type: 'string' },
+          agent: { type: 'string' },
+          projectId: { type: 'string' },
+          at: { type: 'string' },
+          inMinutes: { type: 'number' },
+          everyMinutes: { type: 'number' },
+          time: { type: 'string' },
+          weekday: { type: 'string' },
           enabled: { type: 'boolean' },
         },
         additionalProperties: false,

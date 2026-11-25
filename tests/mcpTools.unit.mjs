@@ -107,7 +107,22 @@ const proj = S.addProject(projDir);
 const mainThread = S.createThread(proj.id, 'antigravity', { title: 'Main orchestrator' });
 const allTools = ORCH.toolsFor(mainThread);
 
-await test('all 29 MCP tools declare complete boolean 4-hint annotations, strict schemas, and fit <= 910 bytes', () => {
+// Antigravity (agy) silently disables every MCP tool whose declaration is too big; a call then fails with
+// "tool X is not enabled for server olympus_<code>". Measured 2026-11-26 on agy 1.5.11 across olympus, chrome-devtools
+// and product-hunt (declarations cached in ~/.gemini/antigravity-cli/mcp/<server>/<tool>.json): every tool <= 642 bytes
+// was enabled, every tool >= 679 bytes was disabled. Measure the way agy stores it (Go encoding/json: name, description,
+// parameters; & < > escaped as \u00XX) and keep a margin below 642.
+const AGY_TOOL_BYTES_CAP = 620;
+const agyDeclarationBytes = (tool) =>
+  Buffer.byteLength(
+    JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.inputSchema }).replace(
+      /[&<>]/g,
+      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    ),
+    'utf8',
+  );
+
+await test(`all 29 MCP tools declare complete boolean 4-hint annotations, strict schemas, and fit <= ${AGY_TOOL_BYTES_CAP} bytes (Antigravity)`, () => {
   const names = allTools.map((t) => t.name).sort();
   assert.deepEqual(names, Object.keys(EXPECTED_ANNOTATIONS).sort(), 'exact 29 MCP tools registered');
   for (const tool of allTools) {
@@ -116,11 +131,8 @@ await test('all 29 MCP tools declare complete boolean 4-hint annotations, strict
       assert.equal(typeof tool.annotations[k], 'boolean', `${tool.name}.${k} must be boolean`);
     }
     assert.equal(tool.inputSchema.additionalProperties, false, `${tool.name} closes extra args`);
-    const serialized = JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.inputSchema });
-    assert.ok(
-      Buffer.byteLength(serialized, 'utf8') <= 910,
-      `MCP tool "${tool.name}" is ${Buffer.byteLength(serialized, 'utf8')} bytes (> 910B cap)`,
-    );
+    const bytes = agyDeclarationBytes(tool);
+    assert.ok(bytes <= AGY_TOOL_BYTES_CAP, `MCP tool "${tool.name}" is ${bytes} bytes (> ${AGY_TOOL_BYTES_CAP}B; Antigravity disables it)`);
   }
 });
 
