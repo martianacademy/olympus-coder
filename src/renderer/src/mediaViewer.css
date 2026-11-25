@@ -86,6 +86,14 @@
 .mv-zoom-stage.is-zoomed .mv-video { cursor: grab; border-radius: 0; }
 .mv-zoom-stage.is-zoomed .mv-video:active { cursor: grabbing; }
 .mv-btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+/* A video's marks (`VideoMarks`): a clear layer over the video, same place and size. Idle (playing / paused) it lets
+   clicks through to the video and its controls; hidden while the video is zoomed. */
+.mv-layer-over { position: absolute; inset: 0; display: flex; }
+.mv-layer-over.is-idle { pointer-events: none; }
+.mv-layer-over.is-hidden { visibility: hidden; }
+/* The Edit toggle stays pressed while drawing. */
+.mv-btn.on { background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--text); }
+.mv-save-error { margin-left: 8px; font-size: 12px; color: var(--danger, #e5484d); }
 /* A zoomed video's play / seek bar (its native controls would be scaled off screen). */
 .mv-vbar {
   position: absolute;
@@ -176,37 +184,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
 }
-
-/* Players inside sent attachment cards. */
-.attach-player {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #000;
-  cursor: default;
-}
-.attach-player video { width: 100%; height: 100%; object-fit: contain; }
-.attach-player.is-audio { background: color-mix(in srgb, var(--text) 5%, var(--surface)); padding: 0 6px; }
-.attach-player.is-audio audio { width: 100%; height: 32px; }
-.attach-expand {
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  cursor: pointer;
-}
-.attach-expand:hover { background: rgba(0, 0, 0, 0.75); }
 
 /* "Add to message" on sent attachment cards: next to Download; on hover with a mouse, always shown on touch. */
 .attach-dl.attach-add { right: 32px; }

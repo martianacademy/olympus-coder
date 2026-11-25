@@ -10,8 +10,6 @@ import {
   FileSpreadsheet,
   FileText,
   FileVideo,
-  Loader2,
-  Maximize2,
   Paperclip,
   PenLine,
   Play,
@@ -24,7 +22,7 @@ import { addDraftFiles, removeDraftFile, setDraftText, updateDraftFilePreview, u
 import { downloadFileRef } from './InlineFilePreviews';
 import { openViewer, viewerAttrs, viewerKindOf } from '../mediaViewerApi';
 import { AddToMessageButton, useComposerTarget } from './AddToMessage';
-import { canAnnotate, openAnnotator } from '../annotateApi';
+import { canAnnotate } from '../annotateApi';
 
 const fmtSize = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -184,12 +182,11 @@ export function useAttachments(draftKey: string) {
     error,
     dragging,
     remove: (path: string) => removeDraftFile(draftKey, path),
-    /** "Mark up" on an image / video card: the marked copy joins this draft next to the original. */
-    annotate: (a: AttachmentView) => openAnnotator({ path: a.path, name: a.name, mime: a.mime }, { draftKey }),
-    /** A click on a draft card: images and videos open in the media sheet like sent ones (its Mark up adds the copy to
-     *  this draft); other files open in the side panel. */
-    open: (a: AttachmentView, el: HTMLElement, openInPanel: (ref: string) => void) =>
-      canAnnotate(a.mime) ? openViewer({ ref: a.path, from: el, name: a.name, mime: a.mime, draftKey, openInPanel }) : openInPanel(a.path),
+    /** The pen on an image / video card: the same media sheet, opened with Edit on (marks are saved into this draft). */
+    annotate: (a: AttachmentView, el: HTMLElement, openInPanel: (ref: string) => void) => openAttachment(a, el, openInPanel, draftKey, true),
+    /** A click on a draft card opens it exactly like a sent card (`openAttachment`); Mark up there adds the copy to
+     *  this draft. */
+    open: (a: AttachmentView, el: HTMLElement, openInPanel: (ref: string) => void) => openAttachment(a, el, openInPanel, draftKey),
     addRawFiles: (list: File[]) => void addFiles(draftKey, list),
     pick: async () => {
       const targetKey = draftKey;
@@ -281,50 +278,14 @@ export function AttachButton({ onClick, onFiles }: { onClick: () => void; onFile
   );
 }
 
-/** A sent video or audio attachment playing inside its card (`api.preview` data URL, so it also works on the phone). */
-function CardPlayer({ a, onExpand }: { a: AttachmentView; onExpand?: (el: HTMLElement) => void }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const audio = a.mime.startsWith('audio/');
-  useEffect(() => {
-    let alive = true;
-    api
-      .preview(a.path)
-      .then((d) => {
-        if (!alive) return;
-        if (d.dataUrl) setSrc(d.dataUrl);
-        else setFailed(true);
-      })
-      .catch(() => alive && setFailed(true));
-    return () => {
-      alive = false;
-    };
-  }, [a.path]);
-  return (
-    <div className={`attach-player ${audio ? 'is-audio' : ''}`} data-testid="attach-player" onClick={(e) => e.stopPropagation()}>
-      {failed ? (
-        <span className="small muted">Can't play this file here</span>
-      ) : !src ? (
-        <Loader2 size={16} className="spin muted" />
-      ) : audio ? (
-        <audio src={src} controls autoPlay />
-      ) : (
-        <video src={src} poster={a.preview} controls autoPlay playsInline />
-      )}
-      {!audio && onExpand && (
-        <button
-          type="button"
-          className="attach-expand"
-          title="Open full size"
-          aria-label={`Open ${a.name} full size`}
-          data-testid="attach-expand"
-          onClick={(e) => onExpand(e.currentTarget)}
-        >
-          <Maximize2 size={12} aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  );
+/**
+ * The one way an attachment card opens, in sent messages and in every composer (chat, home, Max): the shared media
+ * sheet (`MediaViewer` inside `Sheet`) — images, videos and audio play there, documents preview there, and "Open in
+ * panel" stays a button in its bar. `el` is the clicked card: the sheet's ←/→ gallery is the chat around it, or the
+ * other cards of the same draft. `draftKey` = a composer draft card (no "Add to message"; Mark up adds the copy there).
+ */
+export function openAttachment(a: AttachmentView, el: HTMLElement, openInPanel: (ref: string) => void, draftKey?: string, edit?: boolean): void {
+  openViewer({ ref: a.path, from: el, name: a.name, mime: a.mime, draftKey, openInPanel, edit });
 }
 
 /**
@@ -335,23 +296,20 @@ export function AttachmentChips({
   files,
   onRemove,
   onOpen,
-  inlinePlay,
   addable,
   onAnnotate,
 }: {
   files: AttachmentView[];
   onRemove?: (path: string) => void;
-  /** `el` is the clicked card (the in-chat viewer collects the chat's gallery around it). */
+  /** Usually `openAttachment` (the same sheet everywhere). `el` is the clicked card; the sheet's gallery is collected
+   *  around it. */
   onOpen?: (a: AttachmentView, el: HTMLElement) => void;
-  /** Sent messages: videos and audio play inside their card instead of calling `onOpen`. */
-  inlinePlay?: boolean;
   /** Sent messages: an "Add to message" action puts the same file into the composer's draft. */
   addable?: boolean;
-  /** Draft cards: a "Mark up" action on images and videos (`Annotator.tsx`). */
-  onAnnotate?: (a: AttachmentView) => void;
+  /** Draft cards: a pen on images and videos that opens the media sheet with Edit on. `el` is the card. */
+  onAnnotate?: (a: AttachmentView, el: HTMLElement) => void;
 }) {
   const [savedPath, setSavedPath] = useState<string | null>(null);
-  const [playing, setPlaying] = useState<ReadonlySet<string>>(new Set());
   if (!files.length) return null;
   return (
     <div className="attach-list">
@@ -359,24 +317,17 @@ export function AttachmentChips({
         const isVid = a.mime.startsWith('video/');
         const badge = extBadge(a.name, a.mime);
         const justSaved = savedPath === a.path;
-        const playable = Boolean(inlinePlay && (isVid || a.mime.startsWith('audio/')));
-        const isPlaying = playable && playing.has(a.path);
         return (
           <div
             key={a.path}
             className={`attach-chip ${a.preview ? 'has-preview' : 'no-preview'} ${isVid ? 'is-video' : ''} ${onOpen ? 'is-clickable' : ''}`}
-            title={isPlaying ? undefined : `${a.name} (${fmtSize(a.size)})\n${playable ? 'Click to play' : 'Click to preview'} · ${a.path}${a.note ? `\n\n${a.note}` : ''}`}
-            onClick={(e) => {
-              if (playable) setPlaying((s) => new Set(s).add(a.path));
-              else onOpen?.(a, e.currentTarget);
-            }}
+            title={`${a.name} (${fmtSize(a.size)})\n${onOpen ? 'Click to open · ' : ''}${a.path}${a.note ? `\n\n${a.note}` : ''}`}
+            onClick={(e) => onOpen?.(a, e.currentTarget)}
             data-testid="attach-chip"
-            {...(inlinePlay ? viewerAttrs(a.path, viewerKindOf(a.path, a.mime), a.name) : {})}
+            {...(onOpen ? viewerAttrs(a.path, viewerKindOf(a.path, a.mime), a.name) : {})}
           >
             <div className="attach-stage">
-              {isPlaying ? (
-                <CardPlayer a={a} onExpand={onOpen ? (el) => onOpen(a, el) : undefined} />
-              ) : a.preview ? (
+              {a.preview ? (
                 <img src={a.preview} alt={a.name} className="attach-thumb" />
               ) : (
                 <div className="attach-placeholder">
@@ -386,12 +337,12 @@ export function AttachmentChips({
                   <span className="attach-badge">{badge}</span>
                 </div>
               )}
-              {isVid && !isPlaying && (
+              {isVid && (
                 <span className="attach-play" aria-hidden="true">
                   <Play size={13} fill="currentColor" />
                 </span>
               )}
-              {a.preview && !isPlaying && <span className="attach-corner-badge">{badge}</span>}
+              {a.preview && <span className="attach-corner-badge">{badge}</span>}
               <button
                 type="button"
                 className={`attach-dl ${onRemove ? 'with-x' : ''}`}
@@ -420,7 +371,7 @@ export function AttachmentChips({
                   data-testid="attach-annotate"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onAnnotate(a);
+                    onAnnotate(a, e.currentTarget.closest<HTMLElement>('.attach-chip') ?? e.currentTarget);
                   }}
                 >
                   <PenLine size={12} aria-hidden="true" />

@@ -1,6 +1,6 @@
 /**
- * Lightweight Annotator facade so Attachments and MediaViewer don't pull the 1,155-line
- * canvas/video markup editor into the initial renderer bundle.
+ * Mark-up types shared without loading the editor (`components/Annotator.tsx`, lazy). Mark-up happens in the media
+ * viewer only: its Edit toggle, or a draft card's pen, which opens the viewer with Edit on.
  */
 
 export interface AnnotateSource {
@@ -13,8 +13,3 @@ export interface AnnotateSource {
 export type AnnotateTarget = { draftKey: string } | { composer: true };
 
 export const canAnnotate = (mime: string): boolean => mime.startsWith('image/') || mime.startsWith('video/');
-
-/** Lazily loads the markup editor on first click. */
-export function openAnnotator(src: AnnotateSource, target: AnnotateTarget): void {
-  void import('./components/Annotator').then((m) => m.openAnnotator(src, target));
-}

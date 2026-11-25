@@ -308,3 +308,12 @@
   .composer-resize { top: -9px; height: 18px; width: 96px; }
   .composer-resize::after { top: 7px; opacity: 1; }
 }
+
+/* The pen on draft attachment cards, left of Download (opens the media viewer with Edit on). It lives here, with the
+   cards, not in the lazy mark-up CSS: before that loaded, the pen sat on top of Remove and a click removed the file. */
+.attach-dl.attach-mark { right: 58px; }
+@media (hover: hover) {
+  .attach-dl.attach-mark { opacity: 0; }
+  .attach-chip:hover .attach-dl.attach-mark, .attach-dl.attach-mark:focus-visible { opacity: 1; }
+}
+.attach-marked { display: inline-flex; align-items: center; gap: 3px; }

@@ -1,37 +1,31 @@
-/* Mark up images and video frames (`components/Annotator.tsx`). The frame — a centered sheet over a blurred
-   backdrop — is the shared media sheet (`components/Sheet.tsx`, `sheet.css`); this file styles what is inside it. */
+/* Mark-up: the drawing layer inside the media viewer (`components/Annotator.tsx`, `MediaViewer.tsx`). */
 
-/* Above the viewer, which can open mark-up from its own bar. */
-.sheet-root.an-root { z-index: 9100; }
 
-.an-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 6px;
+
+/* Marks as a layer of the viewer (MediaViewer's Edit toggle): the picture keeps the viewer's place and size (same
+   padding as `.mv-root.is-media .mv-center`, never above 100%), no bar of its own, tools float over the stage. */
+.an-layer { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; outline: none; }
+.an-layer-stage { padding: 8px 60px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.an-layer .an-canvas-box { box-shadow: none; border-radius: 4px; overflow: hidden; }
+.an-layer:not(.is-active) .an-marks { pointer-events: none; cursor: default; }
+/* Over a live video: no picture of its own, the video shows through. */
+.an-layer-stage.is-clear { background: transparent; }
+.an-tools.an-tools-float {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow-md);
 }
-.an-name { font-size: 13px; font-weight: 500; min-width: 0; }
-.an-hint { font-size: 12px; color: var(--muted); min-width: 0; }
-.an-done { margin-left: 8px; gap: 6px; min-width: 64px; justify-content: center; }
-
-.an-icon {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
+@media (max-width: 600px) {
+  .an-layer-stage { padding: 0 0 env(safe-area-inset-bottom, 0px); }
+  .an-layer .an-canvas-box { border-radius: 0; }
 }
-.an-icon:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.an-icon:disabled { opacity: 0.35; cursor: default; }
 
 .an-stage {
   position: relative;
@@ -43,8 +37,6 @@
   overflow: hidden;
   background: color-mix(in srgb, var(--text) 3.5%, var(--bg));
 }
-.an-center { flex-direction: column; gap: 10px; }
-.an-error { font-size: 13px; color: var(--muted); padding: 24px; text-align: center; }
 
 .an-canvas-box {
   position: relative;
@@ -56,12 +48,7 @@
 /* Zoom (pinch / ctrl+wheel / − + buttons) scales the box; marks map through the canvas's on-screen rect. */
 .an-canvas-box { transform-origin: center center; will-change: transform; }
 .an-stage { touch-action: none; }
-.an-zoom-pct { width: auto; padding: 0 7px; font-size: 11.5px; }
-.an-bar-sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--hairline); }
-@media (max-width: 600px) {
-  /* Room for the title: − only once zoomed (pinch works anyway). */
-  .an-zoom-out:disabled { display: none; }
-}
+
 .an-marks {
   touch-action: none;
   cursor: crosshair;
@@ -147,116 +134,16 @@
 .an-swatch:hover span { transform: scale(1.1); }
 .an-swatch.on span { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text); }
 
-.an-foot {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 36px;
-  padding: 0 14px calc(6px + env(safe-area-inset-bottom, 0px));
-  flex-wrap: wrap;
-}
-.an-check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; user-select: none; }
-.an-check input { margin: 0; accent-color: var(--text); width: 14px; height: 14px; }
-.an-check:hover { color: var(--text); }
-
-/* Video: scrubber, range and the list of images made so far. */
-.an-player {
-  width: calc(100% - 56px);
-  height: calc(100% - 40px);
-  object-fit: contain;
-  background: transparent;
-}
-.an-scrub {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 0;
-  border-top: 1px solid var(--hairline);
-}
-.an-track { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; height: 28px; }
-/* Drawn track + range band under a transparent native slider (keeps keyboard and pointer behaviour). */
-.an-track::before, .an-range-band {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 4px;
-  transform: translateY(-50%);
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--text) 14%, transparent);
-  pointer-events: none;
-}
-.an-range-band { right: auto; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--text) 42%, transparent); }
-.an-track input {
-  -webkit-appearance: none;
-  appearance: none;
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 28px;
-  margin: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.an-track input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
-.an-track input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  border-radius: 50%;
-  background: var(--text);
-  box-shadow: 0 0 0 3px var(--bg);
-}
-.an-track input:disabled { cursor: default; opacity: 0.5; }
-.an-time { flex: none; font-size: 12px; min-width: 112px; text-align: right; }
-.an-video-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  flex-wrap: wrap;
-}
-.an-video-actions .btn { gap: 6px; }
-.an-range-set { display: flex; align-items: center; gap: 6px; }
-.an-range-set .btn { font-variant-numeric: tabular-nums; }
-.an-outputs { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.an-output {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 260px;
-  height: 24px;
-  padding: 0 4px 0 9px;
-  border-radius: 6px;
-  background: var(--hover);
-  font-size: 12px;
-}
-.an-output button { display: inline-flex; border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 3px; border-radius: 4px; }
-.an-output button:hover { color: var(--text); background: var(--hover); }
-
-/* "Mark up" on composer attachment cards: left of Download. */
-.attach-dl.attach-mark { right: 58px; }
-@media (hover: hover) {
-  .attach-dl.attach-mark { opacity: 0; }
-  .attach-chip:hover .attach-dl.attach-mark, .attach-dl.attach-mark:focus-visible { opacity: 1; }
-}
-.attach-marked { display: inline-flex; align-items: center; gap: 3px; }
 
 @media (max-width: 600px) {
-  .an-hint { display: none; }
   /* Two rows on a phone: tools, then colours + sizes — nothing hides off-screen. */
   .an-tools { flex-wrap: wrap; justify-content: center; gap: 2px 8px; padding: 6px 6px 2px; overflow: visible; }
   .an-tools .an-sep:first-of-type { display: none; }
   .an-tool { width: 38px; height: 38px; }
   .an-swatch { width: 28px; height: 38px; }
   .an-swatch span { width: 20px; height: 20px; }
-  .an-player { width: 100%; height: 100%; }
-  .an-time { min-width: 0; font-size: 11.5px; }
-  .an-video-actions { padding: 8px; }
-  .an-video-actions .spacer { display: none; }
+  
+  
+  
+  
 }

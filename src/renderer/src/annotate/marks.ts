@@ -1,6 +1,5 @@
 /**
- * Image markup model shared by the annotation editor (`components/Annotator.tsx`), the PNG bake and the video
- * contact sheet. Pure: no React and no DOM beyond the 2D canvas drawing calls, so `tests/annotate.unit.mjs` runs it
+ * Image markup model shared by the viewer's drawing layer (`components/Annotator.tsx`) and the PNG bake. Pure: no React and no DOM beyond the 2D canvas drawing calls, so `tests/annotate.unit.mjs` runs it
  * in Node with a recording context.
  *
  * Marks are stored in IMAGE pixels (the original's natural size), never in screen pixels: the editor maps pointer
@@ -379,57 +378,10 @@ export function fmtTime(t: number): string {
   return `${h ? `${h}:${p2(m)}` : p2(m)}:${p2(s)}.${d}`;
 }
 
-/** How many frames a contact sheet for a range of `span` seconds shows: 4 up to 8 s, 5 up to 20 s, else 6. */
-export const sheetFrameCount = (span: number) => (span <= 8 ? 4 : span <= 20 ? 5 : 6);
-
-/**
- * Evenly spaced frame times from `start` to `end` inclusive (swapped if reversed), clamped inside the video so the
- * last one can still be decoded (`duration - 0.05`).
- */
-export function frameTimes(start: number, end: number, duration: number, n = sheetFrameCount(Math.abs(end - start))): number[] {
-  const lo = Math.max(0, Math.min(start, end));
-  const last = Math.max(0, duration - 0.05);
-  const hi = Math.min(Math.max(start, end), last);
-  if (n <= 1 || hi <= lo) return [Math.min(lo, last)];
-  return Array.from({ length: n }, (_, i) => Math.round((lo + ((hi - lo) * i) / (n - 1)) * 1000) / 1000);
-}
-
-export interface SheetLayout {
-  cols: number;
-  rows: number;
-  /** Frame size in the sheet. */
-  cellW: number;
-  cellH: number;
-  /** Strip under each frame for its timestamp. */
-  labelH: number;
-  gap: number;
-  width: number;
-  height: number;
-  /** Top-left of each frame and the scale from video pixels to sheet pixels. */
-  cells: { x: number; y: number; scale: number }[];
-}
-
-/** Grid for `n` frames of `frameW × frameH`: 2 columns up to 4 frames, else 3; each frame at most `maxCell` wide. */
-export function sheetLayout(n: number, frameW: number, frameH: number, maxCell = 640): SheetLayout {
-  const cols = n <= 4 ? 2 : 3;
-  const rows = Math.ceil(n / cols);
-  const cellW = Math.round(Math.min(frameW, maxCell));
-  const scale = cellW / frameW;
-  const cellH = Math.round(frameH * scale);
-  const labelH = Math.round(Math.max(28, cellW * 0.065));
-  const gap = Math.round(Math.max(8, cellW * 0.02));
-  const width = cols * cellW + (cols + 1) * gap;
-  const height = rows * (cellH + labelH) + (rows + 1) * gap;
-  const cells = Array.from({ length: n }, (_, i) => ({
-    x: gap + (i % cols) * (cellW + gap),
-    y: gap + Math.floor(i / cols) * (cellH + labelH + gap),
-    scale,
-  }));
-  return { cols, rows, cellW, cellH, labelH, gap, width, height, cells };
-}
-
 /** File name for a marked copy: `shot.png` → `shot marked.png`; frames: `clip frame 00:12.4.png`. */
 export function markedName(original: string, suffix = 'marked'): string {
   const stem = original.replace(/(?<=[^/\\])\.[^./\\]+$/, '') || 'image';
+  // Marking a marked copy again keeps one "marked" (not "shot marked marked.png").
+  if (stem.endsWith(` ${suffix}`)) return `${stem}.png`;
   return `${stem} ${suffix}.png`;
 }

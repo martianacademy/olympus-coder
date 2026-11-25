@@ -203,45 +203,9 @@ test('fmtTime: mm:ss.d, hours when needed', () => {
   assert.equal(M.fmtTime(59.96), '01:00.0');
 });
 
-test('contact sheet frame times: evenly spaced, inclusive, 4–6 frames by span', () => {
-  assert.deepEqual(M.frameTimes(5, 30, 60), [5, 10, 15, 20, 25, 30]);
-  assert.deepEqual(M.frameTimes(2, 8, 60), [2, 4, 6, 8]);
-  assert.deepEqual(M.frameTimes(0, 20, 60), [0, 5, 10, 15, 20]);
-  assert.equal(M.sheetFrameCount(8), 4);
-  assert.equal(M.sheetFrameCount(8.1), 5);
-  assert.equal(M.sheetFrameCount(21), 6);
-});
-
-test('contact sheet frame times: reversed range, clamped to the video end, zero span', () => {
-  assert.deepEqual(M.frameTimes(30, 5, 60), [5, 10, 15, 20, 25, 30]);
-  const t = M.frameTimes(0, 10, 6);
-  assert.equal(t[0], 0);
-  assert.equal(t[t.length - 1], 5.95);
-  assert.ok(t.every((v, i) => i === 0 || v > t[i - 1]), 'strictly increasing');
-  assert.deepEqual(M.frameTimes(3, 3, 10), [3]);
-});
-
-test('contact sheet layout: grid, label strips, frames scaled to fit', () => {
-  const L = M.sheetLayout(6, 1280, 720);
-  assert.equal(L.cols, 3);
-  assert.equal(L.rows, 2);
-  assert.equal(L.cellW, 640);
-  assert.equal(L.cellH, 360);
-  assert.equal(L.cells[0].scale, 0.5);
-  assert.deepEqual([L.cells[4].x, L.cells[4].y], [L.gap * 2 + 640, L.gap * 2 + 360 + L.labelH]);
-  assert.equal(L.width, 3 * 640 + 4 * L.gap);
-  assert.equal(L.height, 2 * (360 + L.labelH) + 3 * L.gap);
-  const S = M.sheetLayout(4, 320, 240);
-  assert.equal(S.cols, 2);
-  assert.equal(S.cellW, 320);
-  assert.equal(S.cells[0].scale, 1);
-  // A mark at video pixel (640, 360) lands at the cell origin + 320, 180 in a 6-frame sheet.
-  const c = L.cells[5];
-  assert.deepEqual([c.x + 640 * c.scale, c.y + 360 * c.scale], [L.gap * 3 + 1280 + 320, L.gap * 2 + 360 + L.labelH + 180]);
-});
-
 test('markedName', () => {
   assert.equal(M.markedName('shot.png'), 'shot marked.png');
+  assert.equal(M.markedName('shot marked.png'), 'shot marked.png');
   assert.equal(M.markedName('clip.mp4', 'frame 00:12.4'), 'clip frame 00:12.4.png');
   assert.equal(M.markedName('.env'), '.env marked.png');
 });

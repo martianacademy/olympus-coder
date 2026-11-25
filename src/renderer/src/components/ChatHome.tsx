@@ -81,7 +81,7 @@ export function ChatHome(props: {
         <div className={`home-composer ${att.dragging ? 'dragging' : ''}`}>
           {slash.menu}
           {mention.menu}
-          <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={att.annotate} onOpen={(a, el) => att.open(a, el, openFile)} />
+          <AttachmentChips files={att.files} onRemove={att.remove} onAnnotate={(a, el) => att.annotate(a, el, openFile)} onOpen={(a, el) => att.open(a, el, openFile)} />
           <div className="growable-textarea" data-replicated-value={text}>
             <textarea
               onPaste={att.onPaste}

@@ -23,13 +23,12 @@ import { AgentLogo } from '../logos';
 import { useExpandSteps, useStepChoice } from '../prefs';
 import { isQuotaMessage } from '../quota';
 import type { WorkStepItem } from '../workStepSummary';
-import { attachFileListToDraft, AttachmentChips } from './Attachments';
+import { attachFileListToDraft, AttachmentChips, openAttachment } from './Attachments';
 import { ChatComposer } from './ChatComposer';
 import { isCompacting } from './CompactButton';
 import { ContextResetRow } from './FreshContextButton';
 import { Markdown, normalizeMath } from './ChatMarkdown';
 import { MessageParts } from './RichContent';
-import { openViewer } from '../mediaViewerApi';
 import { MsgActions } from './MsgActions';
 import { PromptChip, ReplyChip, SessionStatsButton } from './TokenStats';
 import { TurnBar } from './TurnChanges';
@@ -383,7 +382,7 @@ const Item = memo(function Item({
               {from && <AgentLogo def={from} size={14} />} Task from {from?.name ?? item.fromAgent} · orchestrator
             </span>
           )}
-          {item.attachments?.length ? <AttachmentChips files={item.attachments} inlinePlay addable onOpen={(a, el) => openViewer({ ref: a.path, from: el, name: a.name, mime: a.mime, openInPanel: openFile })} /> : null}
+          {item.attachments?.length ? <AttachmentChips files={item.attachments} addable onOpen={(a, el) => openAttachment(a, el, openFile)} /> : null}
           {item.text &&
             (compact && item.text.length > 600 ? (
               <Collapsible

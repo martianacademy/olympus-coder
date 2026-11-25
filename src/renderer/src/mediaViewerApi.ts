@@ -22,6 +22,8 @@ export interface OpenViewerOptions {
   draftKey?: string;
   /** Additional gallery items (e.g. images behind a collapsed `+N` badge) to splice into the chat gallery in order. */
   extraItems?: ViewerItem[];
+  /** Open with the Edit toggle on (a draft card's pen). */
+  edit?: boolean;
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|heic|heif|tiff?)$/i;

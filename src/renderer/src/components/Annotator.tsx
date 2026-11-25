@@ -1,25 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { Sheet } from './Sheet';
 import {
   ArrowUpRight,
   Circle,
-  Film,
   Highlighter,
   Lasso,
-  Loader2,
   MapPin,
-  Pause,
   Pen,
-  Play,
-  Redo2,
   Square,
-  Trash2,
   Type,
-  Undo2,
-  X,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import type { AttachmentView } from '@shared/types';
 import { api } from '../api';
@@ -31,11 +19,9 @@ import {
   fitSize,
   fmtTime,
   fontSize,
-  frameTimes,
   isMeaningful,
   markedName,
   nextPinNumber,
-  sheetLayout,
   toImagePoint,
   toScreenPoint,
   unitFor,
@@ -49,12 +35,12 @@ import { addFilesToMessage, addToMessage } from './AddToMessage';
 import '../annotate.css';
 
 /**
- * Mark up an image (or frames of a video) before sending it to an agent: pen, highlighter, rectangle, circle, arrow,
- * freehand shape, text and numbered pins. "Done" bakes the marks into a new PNG at the original's resolution, saves
- * it like any attachment and puts it in the draft with a legend (`AttachmentView.note`) that the agent receives as
- * text right before the image (`attachments.ts` → `toBlocks`). Videos: mark one frame (PNG named with its time) or
- * one area over a time range (a contact sheet of 4–6 frames with the marks and timestamps). Rendered in its own root
- * on `document.body`, like the media viewer. Geometry and legend live in `annotate/marks.ts`.
+ * Mark-up inside the media viewer (`MediaViewer.tsx`): its Edit toggle (or a draft card's pen, which opens the viewer
+ * with Edit on) lays a drawing layer over the picture — pen, highlighter, rectangle, circle, arrow, freehand shape,
+ * text and numbered pins. Images: `MarkLayer`, saved as a PNG at the original's resolution. Videos: `VideoMarks`, marks
+ * tied to moments of the video, saved as the video plus one marked frame per moment. Each PNG carries a legend
+ * (`AttachmentView.note`) that the agent receives as text right before it (`attachments.ts` → `toBlocks`). There is no
+ * Done: the viewer saves on close / step / add. Geometry and legend live in `annotate/marks.ts`.
  */
 
 export interface AnnotateSource {
@@ -67,26 +53,169 @@ export type AnnotateTarget = { draftKey: string } | { composer: true };
 
 export const canAnnotate = (mime: string) => mime.startsWith('image/') || mime.startsWith('video/');
 
-let root: Root | null = null;
-function render(node: React.ReactNode) {
-  if (!root) {
-    const host = document.createElement('div');
-    host.className = 'an-host';
-    document.body.appendChild(host);
-    root = createRoot(host);
-  }
-  root.render(node);
+/**
+ * An image's marks drawn as a layer of the media viewer (its Edit toggle). The viewer keeps it mounted after the
+ * toggle goes off, so the marks stay on the picture; it saves them with `saveMarked` when it closes or steps on.
+ */
+export function MarkLayer({ base, name, active, onExit, onState, handle }: { base: HTMLImageElement; name: string } & Pick<EditorLayer, 'active' | 'onExit' | 'onState' | 'handle'>) {
+  const w = base.naturalWidth || 1;
+  const h = base.naturalHeight || 1;
+  return (
+    <ErrorBoundary label="Mark up" onClose={onExit}>
+      <MarkEditor base={base} w={w} h={h} title={name} layer={{ active, onExit, onState, handle }} />
+    </ErrorBoundary>
+  );
 }
 
-export function closeAnnotator() {
-  render(null);
+/** Saves an image's mark layer: a draft's file is replaced by the marked copy; from the chat the copy joins the message. */
+export async function saveMarked(src: AnnotateSource, target: AnnotateTarget, out: { blob: Blob; note: string }): Promise<void> {
+  await deliver([{ name: markedName(src.name), note: out.note, blob: out.blob }], src, target, false);
 }
 
-export function openAnnotator(src: AnnotateSource, target: AnnotateTarget) {
-  render(
-    <ErrorBoundary label="Mark up" onClose={closeAnnotator}>
-      <Annotator key={Date.now()} src={src} target={target} />
-    </ErrorBoundary>,
+/** How long a moment's marks stay on screen while the video plays (seconds). */
+const MOMENT_HOLD = 2.5;
+/** A marked moment of a video: its time, the frame there (for the image the agent gets) and the marks. */
+interface Moment {
+  id: number;
+  t: number;
+  frame: HTMLCanvasElement;
+  marks: Mark[];
+}
+/** What the viewer needs from a video's marks: how many moments are marked, and saving them. */
+export interface VideoMarksSaver {
+  count: () => number;
+  save: (src: AnnotateSource, target: AnnotateTarget) => Promise<void>;
+}
+
+/**
+ * Drawing on a video (the media viewer's Edit toggle). The video stays a video: Edit pauses it and opens a clear
+ * layer over it at that moment; the marks belong to that time and show again for `MOMENT_HOLD` s whenever the video
+ * plays past it. Several moments per video. Saved (`saver`) as the video itself plus one marked frame image per
+ * moment, each with a legend that names the time — agents get images, not video.
+ */
+export function VideoMarks({
+  video,
+  name,
+  active,
+  onExit,
+  onState,
+  handle,
+  saver,
+  onCount,
+}: {
+  video: () => HTMLVideoElement | null;
+  name: string;
+  saver: React.MutableRefObject<VideoMarksSaver | null>;
+  onCount: (n: number) => void;
+} & Pick<EditorLayer, 'active' | 'onExit' | 'onState' | 'handle'>) {
+  const [moments, setMoments] = useState<Moment[]>([]);
+  const [current, setCurrent] = useState<number | null>(null);
+  const [shown, setShown] = useState<number | null>(null);
+  const momentsNow = useRef(moments);
+  momentsNow.current = moments;
+  const nextId = useRef(1);
+
+  // Edit on: pause, and open the moment at this time (one within 0.05 s, else a new one with its frame).
+  useEffect(() => {
+    if (!active) return setCurrent(null);
+    const v = video();
+    if (!v || !v.videoWidth) return;
+    v.pause();
+    const t = v.currentTime;
+    const hit = momentsNow.current.find((m) => Math.abs(m.t - t) < 0.05);
+    if (hit) return setCurrent(hit.id);
+    const m: Moment = { id: nextId.current++, t, frame: grabFrame(v), marks: [] };
+    setMoments((l) => [...l, m]);
+    setCurrent(m.id);
+  }, [active, video]);
+
+  // Playing / seeking: show the latest marked moment whose hold covers the current time.
+  useEffect(() => {
+    const v = video();
+    if (!v) return;
+    let raf = 0;
+    const pick = () => {
+      const t = v.currentTime;
+      let best: Moment | null = null;
+      for (const m of momentsNow.current) if (m.marks.length && t >= m.t - 0.02 && t < m.t + MOMENT_HOLD && (!best || m.t > best.t)) best = m;
+      setShown(best?.id ?? null);
+    };
+    const loop = () => {
+      pick();
+      if (!v.paused) raf = requestAnimationFrame(loop);
+    };
+    const onPlay = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(loop);
+    };
+    pick();
+    v.addEventListener('play', onPlay);
+    v.addEventListener('seeked', pick);
+    v.addEventListener('pause', pick);
+    return () => {
+      cancelAnimationFrame(raf);
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('seeked', pick);
+      v.removeEventListener('pause', pick);
+    };
+  }, [video, moments]);
+
+  const marked = moments.filter((m) => m.marks.length).length;
+  useEffect(() => onCount(marked), [marked, onCount]);
+
+  const setMarks = useCallback((id: number, marks: Mark[]) => {
+    setMoments((l) => (l.some((m) => m.id === id && m.marks !== marks) ? l.map((m) => (m.id === id ? { ...m, marks } : m)) : l));
+  }, []);
+
+  saver.current = {
+    count: () => momentsNow.current.filter((m) => m.marks.length).length,
+    save: async (src, target) => {
+      const list = momentsNow.current.filter((m) => m.marks.length).sort((a, b) => a.t - b.t);
+      if (!list.length) return;
+      const outputs: Output[] = [];
+      for (const m of list) {
+        const at = fmtTime(m.t);
+        outputs.push({
+          name: markedName(src.name, `frame ${at}`),
+          note: buildLegend(m.marks, {
+            source: `${src.name} at ${at}`,
+            width: m.frame.width,
+            height: m.frame.height,
+            extra: `A frame of the attached video ${src.name} at ${at}, marked by the user; the marked frame is the image that follows`,
+          }),
+          blob: await bakePng(m.frame, m.frame.width, m.frame.height, m.marks),
+        });
+      }
+      // The video goes along too: the frames say where and when, the video is the thing itself.
+      await deliver(outputs, src, target, true);
+    },
+  };
+
+  const m = moments.find((x) => x.id === (active ? current : shown));
+  if (!m) return null;
+  return <MomentEditor key={m.id} m={m} name={name} active={active} onExit={onExit} onState={onState} handle={handle} setMarks={setMarks} />;
+}
+
+function MomentEditor({
+  m,
+  name,
+  active,
+  onExit,
+  onState,
+  handle,
+  setMarks,
+}: { m: Moment; name: string; setMarks: (id: number, marks: Mark[]) => void } & Pick<EditorLayer, 'active' | 'onExit' | 'onState' | 'handle'>) {
+  const onMarks = useCallback((marks: Mark[]) => setMarks(m.id, marks), [m.id, setMarks]);
+  return (
+    <ErrorBoundary label="Mark up" onClose={onExit}>
+      <MarkEditor
+        base={m.frame}
+        w={m.frame.width}
+        h={m.frame.height}
+        title={`${name} at ${fmtTime(m.t)}`}
+        layer={{ active, onExit, onState, handle, clear: true, initialMarks: m.marks, onMarks }}
+      />
+    </ErrorBoundary>
   );
 }
 
@@ -122,61 +251,12 @@ export async function bakePng(base: CanvasImageSource, w: number, h: number, mar
 }
 
 /** Seeks `v` to `t` and resolves once the frame is decoded (or after 4 s). */
-function seek(v: HTMLVideoElement, t: number): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      v.removeEventListener('seeked', done);
-      clearTimeout(timer);
-      // One more frame so the decoded picture is the one drawn.
-      requestAnimationFrame(() => resolve());
-    };
-    const timer = setTimeout(done, 4000);
-    v.addEventListener('seeked', done);
-    v.currentTime = t;
-  });
-}
-
 function grabFrame(v: HTMLVideoElement): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = v.videoWidth;
   c.height = v.videoHeight;
   c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height);
   return c;
-}
-
-/** 4–6 frames from the range in a grid, the marks drawn on each and its timestamp printed under it. */
-async function bakeSheet(v: HTMLVideoElement, times: number[], marks: readonly Mark[]): Promise<Blob> {
-  const vw = v.videoWidth;
-  const vh = v.videoHeight;
-  const L = sheetLayout(times.length, vw, vh);
-  const c = document.createElement('canvas');
-  c.width = L.width;
-  c.height = L.height;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#16161a';
-  ctx.fillRect(0, 0, L.width, L.height);
-  const unit = unitFor(vw, vh);
-  const was = v.currentTime;
-  for (let i = 0; i < times.length; i++) {
-    const cell = L.cells[i];
-    await seek(v, times[i]);
-    ctx.drawImage(v, cell.x, cell.y, L.cellW, L.cellH);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(cell.x, cell.y, L.cellW, L.cellH);
-    ctx.clip();
-    ctx.translate(cell.x, cell.y);
-    ctx.scale(cell.scale, cell.scale);
-    drawMarks(ctx, marks, unit);
-    ctx.restore();
-    ctx.fillStyle = '#ececf1';
-    ctx.font = `600 ${Math.round(L.labelH * 0.5)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${i + 1}  ·  ${fmtTime(times[i])}`, cell.x + L.cellW / 2, cell.y + L.cellH + L.labelH / 2);
-  }
-  await seek(v, was);
-  return canvasBlob(c);
 }
 
 // ---------- the editor ----------
@@ -196,11 +276,10 @@ const WIDTHS: { id: WidthId; label: string }[] = [
   { id: 1, label: 'Medium' },
   { id: 2, label: 'Thick' },
 ];
-const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+');
 
 /** Undo/redo history of the whole mark list. */
-function useHistory() {
-  const [h, setH] = useState<{ stack: Mark[][]; i: number }>({ stack: [[]], i: 0 });
+function useHistory(initial: Mark[] = []) {
+  const [h, setH] = useState<{ stack: Mark[][]; i: number }>(() => ({ stack: [initial], i: 0 }));
   const marks = h.stack[h.i];
   /** Adds a state; `next` gets the current marks (an updater, so two pushes in one tick both land). */
   const push = useCallback(
@@ -222,32 +301,58 @@ interface EditorProps {
   base: HTMLImageElement | HTMLCanvasElement;
   w: number;
   h: number;
+  /** Names the picture in the legend. */
   title: string;
-  /** Muted line under the title (e.g. what a range sheet will contain). */
-  hint?: string;
-  doneLabel: string;
-  /** Video frames may go out without marks. */
-  allowEmpty?: boolean;
-  /** Below the tools (e.g. "Also send the original"). */
-  footer?: React.ReactNode;
-  onCancel: () => void;
-  onDone: (marks: Mark[]) => Promise<void>;
+  /** Always a layer of the media viewer (its Edit toggle): no bar and no Done — the viewer's bar holds Undo / Redo /
+   *  Close, and the viewer saves the marks when it closes or steps on. */
+  layer: EditorLayer;
+}
+
+/** What the viewer's bar needs from a mark layer. */
+export interface EditorState {
+  canUndo: boolean;
+  canRedo: boolean;
+  marks: number;
+  zoom: number;
+}
+/** Controls the viewer's bar drives on a mark layer; `bake` = the picture with its marks, or null when unmarked. */
+export interface EditorHandle {
+  undo: () => void;
+  redo: () => void;
+  zoomBy: (k: number) => void;
+  resetZoom: () => void;
+  bake: () => Promise<{ blob: Blob; note: string } | null>;
+}
+interface EditorLayer {
+  /** The Edit toggle: on = tools and drawing; off = the marks stay on the picture, drawing stops. */
+  active: boolean;
+  onExit: () => void;
+  onState: (s: EditorState) => void;
+  handle: React.MutableRefObject<EditorHandle | null>;
+  /** Added to the legend (e.g. "The marked video frame is the image that follows"). */
+  legendExtra?: string;
+  /** Marks to start from (a video moment opened again); `onMarks` hears every change. */
+  initialMarks?: Mark[];
+  onMarks?: (marks: Mark[]) => void;
+  /** Over a live video: the picture is not drawn (the video shows through) and the layer never zooms. */
+  clear?: boolean;
 }
 
 const ZOOM_MAX = 8;
 /** One press of − / + (or the keys) zooms by this much. */
 const ZOOM_STEP = 1.5;
 
-function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, onCancel, onDone }: EditorProps) {
-  const hist = useHistory();
+/** The drawing layer the media viewer puts over a picture or a video (see `MarkLayer`, `VideoMarks`). */
+function MarkEditor({ base, w, h, title, layer }: EditorProps) {
+  const active = layer.active;
+  const hist = useHistory(layer.initialMarks);
   const { marks } = hist;
+  const clear = Boolean(layer.clear);
   const [tool, setTool] = useState<ToolId>('ellipse');
   const [color, setColor] = useState(COLORS[0].hex);
   const [width, setWidth] = useState<WidthId>(1);
   const [box, setBox] = useState<{ w: number; h: number; scale: number } | null>(null);
   const [text, setText] = useState<{ at: Pt; value: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const stage = useRef<HTMLDivElement>(null);
   const baseCanvas = useRef<HTMLCanvasElement>(null);
   const markCanvas = useRef<HTMLCanvasElement>(null);
@@ -271,8 +376,11 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
     if (!el) return;
     const measure = () => {
       const r = el.getBoundingClientRect();
-      const pad = r.width < 600 ? 8 : 28;
-      setBox(fitSize(w, h, Math.max(40, r.width - pad * 2), Math.max(40, r.height - pad * 2)));
+      // Same place and size as the viewer's picture: its padding (CSS), never larger than the picture itself.
+      const cs = getComputedStyle(el);
+      const aw = r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const ah = r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      setBox(fitSize(w, h, Math.max(40, aw), Math.max(40, ah), 1));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -302,10 +410,10 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
 
   useEffect(() => {
     const ctx = sizeCanvas(baseCanvas.current);
-    if (!ctx) return;
+    if (!ctx || clear) return;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(base, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  }, [base, sizeCanvas]);
+  }, [base, sizeCanvas, clear]);
 
   const redraw = useCallback(() => {
     const ctx = sizeCanvas(markCanvas.current);
@@ -333,7 +441,8 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   /** Sets the zoom, keeping the picture over the stage (pan only as far as the zoomed picture is bigger). */
   const applyZoom = useCallback(
     (next: { s: number; x: number; y: number }) => {
-      const s = Math.min(ZOOM_MAX, Math.max(1, next.s));
+      // Over a live video the marks must stay on the video's pixels, so that layer never zooms.
+      const s = clear ? 1 : Math.min(ZOOM_MAX, Math.max(1, next.s));
       let { x, y } = next;
       const st = stage.current;
       if (s === 1 || !st || !box) {
@@ -348,7 +457,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       zoomNow.current = { s, x, y };
       setZoomState(zoomNow.current);
     },
-    [box],
+    [box, clear],
   );
   /** Zoom to `s` keeping the screen point (cx, cy) still. */
   const zoomAt = useCallback(
@@ -406,7 +515,7 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   }, [push, color, width]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0 || busy) return;
+    if (e.button !== 0 || !active) return;
     if (e.pointerType === 'touch') {
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touches.current.size === 2) {
@@ -524,33 +633,43 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
   }, [text]);
 
   useLayoutEffect(() => {
-    rootRef.current?.focus({ preventScroll: true });
-  }, []);
+    if (active) rootRef.current?.focus({ preventScroll: true });
+  }, [active]);
 
-  const done = async () => {
-    if (busy) return;
-    const t = textNow.current;
-    const list = t?.value.trim() ? [...marks, { kind: 'text' as const, color, width, points: [t.at], text: t.value.trim() }] : marks;
-    textNow.current = null;
-    setText(null);
-    if (!list.length && !allowEmpty) return;
-    setBusy(true);
-    setError('');
-    try {
-      await onDone(list);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
+  // Layer: the toggle going off ends a text being typed (it stays as a mark).
+  useEffect(() => {
+    if (!active && textNow.current) commitText();
+  }, [active, commitText]);
+  const onMarks = layer.onMarks;
+  useEffect(() => {
+    onMarks?.(marks);
+  }, [onMarks, marks]);
+  const onState = layer.onState;
+  useEffect(() => {
+    onState?.({ canUndo: hist.canUndo, canRedo: hist.canRedo, marks: marks.length, zoom: zoom.s });
+  }, [onState, hist.canUndo, hist.canRedo, marks.length, zoom.s]);
+  layer.handle.current = {
+    undo: hist.undo,
+    redo: hist.redo,
+    zoomBy,
+    resetZoom: () => applyZoom({ s: 1, x: 0, y: 0 }),
+    bake: async () => {
+      const t = textNow.current;
+      const list = t?.value.trim() ? [...marks, { kind: 'text' as const, color, width, points: [t.at], text: t.value.trim() }] : marks;
+      if (!list.length) return null;
+      return { blob: await bakePng(base, w, h, list), note: buildLegend(list, { source: title, width: w, height: h, extra: layer.legendExtra }) };
+    },
   };
-
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Layer with the toggle off: the viewer handles the keys.
+    if (!active) return;
     const typing = (e.target as HTMLElement).closest('textarea, input');
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
+      // The marks stay, so Esc always just leaves edit mode (or drops the text being typed).
       if (text) setText(null);
-      else if (!marks.length) onCancel();
+      else layer.onExit();
       return;
     }
     if (typing) return;
@@ -566,11 +685,6 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
       hist.redo();
       return;
     }
-    if (cmd && e.key === 'Enter') {
-      e.preventDefault();
-      void done();
-      return;
-    }
     if (cmd || e.altKey) return;
     if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
       e.preventDefault();
@@ -582,59 +696,10 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
     if (t) setTool(t.id);
   };
 
-  const canDone = !busy && (allowEmpty || marks.length > 0 || Boolean(text?.value.trim()));
   const textPos = text && box ? toScreenPoint(text.at, { width: box.w, height: box.h }, w, h) : null;
 
-  return (
-    <Sheet
-      ref={rootRef}
-      className="an-root"
-      sheetClassName="an-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Mark up ${title}`}
-      tabIndex={-1}
-      data-testid="annotator"
-      data-tool={tool}
-      data-marks={marks.length}
-      onKeyDown={onKeyDown}
-    >
-      <div className="sheet-bar an-bar">
-        <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={onCancel}>
-          <X size={17} />
-        </button>
-        <div className="an-title">
-          <span className="ellipsis an-name">{title}</span>
-          {hint && <span className="ellipsis an-hint">{hint}</span>}
-        </div>
-        <button type="button" className="an-icon an-zoom-out" title="Zoom out (−)" aria-label="Zoom out" data-testid="an-zoom-out" disabled={zoom.s <= 1} onClick={() => zoomBy(1 / ZOOM_STEP)}>
-          <ZoomOut size={16} />
-        </button>
-        {zoom.s !== 1 && (
-          <button type="button" className="an-icon an-zoom-pct mono" title="Reset zoom (0)" data-testid="an-zoom-reset" onClick={() => applyZoom({ s: 1, x: 0, y: 0 })}>
-            {Math.round(zoom.s * 100)}%
-          </button>
-        )}
-        <button type="button" className="an-icon" title="Zoom in (+) — or pinch on the trackpad" aria-label="Zoom in" data-testid="an-zoom-in" disabled={zoom.s >= ZOOM_MAX} onClick={() => zoomBy(ZOOM_STEP)}>
-          <ZoomIn size={16} />
-        </button>
-        <span className="an-bar-sep" aria-hidden="true" />
-        <button type="button" className="an-icon" title={`Undo (${mod()}Z)`} aria-label="Undo" data-testid="an-undo" disabled={!hist.canUndo} onClick={hist.undo}>
-          <Undo2 size={16} />
-        </button>
-        <button type="button" className="an-icon" title={`Redo (${mod()}⇧Z)`} aria-label="Redo" data-testid="an-redo" disabled={!hist.canRedo} onClick={hist.redo}>
-          <Redo2 size={16} />
-        </button>
-        <button type="button" className="an-icon" title="Clear all marks" aria-label="Clear all marks" data-testid="an-clear" disabled={!marks.length} onClick={() => hist.push([])}>
-          <Trash2 size={16} />
-        </button>
-        <button type="button" className="btn primary small an-done" disabled={!canDone} title={`${doneLabel} (${mod()}Enter)`} data-testid="an-done" onClick={() => void done()}>
-          {busy ? <Loader2 size={14} className="spin" /> : null}
-          {doneLabel}
-        </button>
-      </div>
-
-      <div className="an-stage" ref={stage}>
+  const stageNode = (
+      <div className={`an-stage an-layer-stage${clear ? ' is-clear' : ''}`} ref={stage}>
         {box && (
           <div
             className="an-canvas-box"
@@ -684,8 +749,9 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
           </div>
         )}
       </div>
-
-      <div className="an-tools" role="toolbar" aria-label="Markup tools">
+  );
+  const toolsNode = (
+      <div className="an-tools an-tools-float" role="toolbar" aria-label="Markup tools">
         <div className="an-group" role="radiogroup" aria-label="Tool">
           {TOOLS.map((t) => (
             <button
@@ -744,22 +810,22 @@ function MarkEditor({ base, w, h, title, hint, doneLabel, allowEmpty, footer, on
           ))}
         </div>
       </div>
-      {(footer || error) && (
-        <div className="an-foot">
-          {footer}
-          {error && <span className="error-text small ellipsis">{error}</span>}
-        </div>
-      )}
-    </Sheet>
   );
-}
 
-function OriginalToggle({ on, onChange, label = 'Also send the original' }: { on: boolean; onChange: (v: boolean) => void; label?: string }) {
   return (
-    <label className="an-check" data-testid="an-keep-original">
-      <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} />
-      <span>{label}</span>
-    </label>
+    <div
+      ref={rootRef}
+      className={`an-layer${active ? ' is-active' : ''}`}
+      tabIndex={-1}
+      data-testid="annotator"
+      data-tool={tool}
+      data-marks={marks.length}
+      data-active={active ? 'true' : 'false'}
+      onKeyDown={onKeyDown}
+    >
+      {stageNode}
+      {active && toolsNode}
+    </div>
   );
 }
 
@@ -778,378 +844,4 @@ async function deliver(outputs: Output[], src: AnnotateSource, target: AnnotateT
   }
   if (keepOriginal) await addToMessage(src.path, { name: src.name, mime: src.mime });
   if (!addFilesToMessage(saved)) throw new Error('Open a chat to add the marked image to a message.');
-}
-
-// ---------- image / video shells ----------
-
-function useSource(src: AnnotateSource) {
-  const [state, setState] = useState<{ dataUrl?: string; error?: string }>({});
-  useEffect(() => {
-    let alive = true;
-    api
-      .preview(src.path)
-      .then((d) => {
-        if (!alive) return;
-        if (d.kind === 'too-large') setState({ error: `${src.name} is too large to mark up here.` });
-        else if (d.kind === 'missing') setState({ error: `${src.name} no longer exists.` });
-        else if (!d.dataUrl) setState({ error: `Can't open ${src.name} here.` });
-        else setState({ dataUrl: d.dataUrl });
-      })
-      .catch((e: unknown) => alive && setState({ error: e instanceof Error ? e.message : String(e) }));
-    return () => {
-      alive = false;
-    };
-  }, [src.path, src.name]);
-  return state;
-}
-
-function Shell({ title, children, onClose }: { title: string; children?: React.ReactNode; onClose: () => void }) {
-  return (
-    <Sheet
-      className="an-root"
-      sheetClassName="an-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Mark up ${title}`}
-      tabIndex={-1}
-      data-testid="annotator"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      <div className="sheet-bar an-bar">
-        <button type="button" className="an-icon" title="Close (Esc)" aria-label="Close" data-testid="an-cancel" onClick={onClose}>
-          <X size={17} />
-        </button>
-        <div className="an-title">
-          <span className="ellipsis an-name">{title}</span>
-        </div>
-      </div>
-      <div className="an-stage an-center">{children ?? <Loader2 size={20} className="spin muted" />}</div>
-    </Sheet>
-  );
-}
-
-function Annotator({ src, target }: { src: AnnotateSource; target: AnnotateTarget }) {
-  return src.mime.startsWith('video/') ? <VideoAnnotator src={src} target={target} /> : <ImageAnnotator src={src} target={target} />;
-}
-
-function ImageAnnotator({ src, target }: { src: AnnotateSource; target: AnnotateTarget }) {
-  const { dataUrl, error } = useSource(src);
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const [loadError, setLoadError] = useState('');
-  // Off by default: people mark up a picture to replace it; they tick the box when the agent should see both.
-  const [keep, setKeep] = useState(false);
-  useEffect(() => {
-    if (!dataUrl) return;
-    const i = new Image();
-    i.onload = () => setImg(i);
-    i.onerror = () => setLoadError(`Can't read ${src.name} as an image.`);
-    i.src = dataUrl;
-  }, [dataUrl, src.name]);
-  if (error || loadError) return <Shell title={src.name} onClose={closeAnnotator}><div className="an-error">{error || loadError}</div></Shell>;
-  if (!img) return <Shell title={src.name} onClose={closeAnnotator} />;
-  const w = img.naturalWidth || 1;
-  const h = img.naturalHeight || 1;
-  return (
-    <MarkEditor
-      base={img}
-      w={w}
-      h={h}
-      title={src.name}
-      doneLabel="Done"
-      footer={<OriginalToggle on={keep} onChange={setKeep} />}
-      onCancel={closeAnnotator}
-      onDone={async (marks) => {
-        const blob = await bakePng(img, w, h, marks);
-        await deliver([{ name: markedName(src.name), note: buildLegend(marks, { source: src.name, width: w, height: h }), blob }], src, target, keep);
-        closeAnnotator();
-      }}
-    />
-  );
-}
-
-/** Makes a WebM from MediaRecorder report its real duration (it says Infinity until the end has been seen). */
-async function settleDuration(v: HTMLVideoElement): Promise<number> {
-  if (Number.isFinite(v.duration)) return v.duration;
-  await new Promise<void>((resolve) => {
-    const on = () => {
-      if (!Number.isFinite(v.duration)) return;
-      v.removeEventListener('durationchange', on);
-      v.removeEventListener('seeked', on);
-      resolve();
-    };
-    v.addEventListener('durationchange', on);
-    v.addEventListener('seeked', on);
-    v.currentTime = 1e7;
-    setTimeout(resolve, 3000);
-  });
-  await seek(v, 0);
-  return Number.isFinite(v.duration) ? v.duration : 0;
-}
-
-type VideoMode = { kind: 'pick' } | { kind: 'frame'; frame: HTMLCanvasElement; t: number } | { kind: 'range'; frame: HTMLCanvasElement; start: number; end: number };
-
-function VideoAnnotator({ src, target }: { src: AnnotateSource; target: AnnotateTarget }) {
-  const { dataUrl, error } = useSource(src);
-  const video = useRef<HTMLVideoElement>(null);
-  const [duration, setDuration] = useState(0);
-  const [t, setT] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [range, setRange] = useState<{ start?: number; end?: number }>({});
-  const [mode, setMode] = useState<VideoMode>({ kind: 'pick' });
-  const [outputs, setOutputs] = useState<Output[]>([]);
-  // Off by default: people mark up a picture to replace it; they tick the box when the agent should see both.
-  const [keep, setKeep] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (mode.kind === 'pick') rootRef.current?.focus({ preventScroll: true });
-  }, [mode.kind]);
-
-  const onMeta = async () => {
-    const v = video.current;
-    if (!v) return;
-    const d = await settleDuration(v);
-    setDuration(d);
-    setT(v.currentTime);
-  };
-
-  const scrub = (to: number) => {
-    const v = video.current;
-    if (!v) return;
-    v.pause();
-    v.currentTime = Math.max(0, Math.min(duration || 0, to));
-    setT(v.currentTime);
-  };
-
-  const start = range.start;
-  const end = range.end;
-  const hasRange = start !== undefined && end !== undefined && Math.abs(end - start) >= 0.2;
-  const lo = hasRange ? Math.min(start!, end!) : 0;
-  const hi = hasRange ? Math.max(start!, end!) : 0;
-  const times = hasRange ? frameTimes(lo, hi, duration) : [];
-
-  const markFrame = () => {
-    const v = video.current;
-    if (!v || !v.videoWidth) return;
-    v.pause();
-    setMode({ kind: 'frame', frame: grabFrame(v), t: v.currentTime });
-  };
-  const markRange = async () => {
-    const v = video.current;
-    if (!v || !hasRange) return;
-    v.pause();
-    await seek(v, lo);
-    setT(v.currentTime);
-    setMode({ kind: 'range', frame: grabFrame(v), start: lo, end: hi });
-  };
-
-  const finish = async () => {
-    if (!outputs.length || busy) return;
-    setBusy(true);
-    setNote('');
-    try {
-      await deliver(outputs, src, target, keep);
-      closeAnnotator();
-    } catch (e: unknown) {
-      setNote(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    }
-  };
-
-  if (error) return <Shell title={src.name} onClose={closeAnnotator}><div className="an-error">{error}</div></Shell>;
-
-  const v = video.current;
-  const vw = v?.videoWidth ?? 0;
-  const vh = v?.videoHeight ?? 0;
-  const pct = (x: number) => (duration ? `${(x / duration) * 100}%` : '0%');
-
-  return (
-    <>
-      <Sheet
-        ref={rootRef}
-        className="an-root an-video"
-        sheetClassName="an-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Mark up ${src.name}`}
-        tabIndex={-1}
-        data-testid="annotator"
-        data-mode="video"
-        data-duration={duration}
-        data-time={t}
-        data-ready={outputs.length}
-        hidden={mode.kind !== 'pick'}
-        onKeyDown={(e) => {
-          if (mode.kind !== 'pick') return;
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!outputs.length) closeAnnotator();
-          } else if (e.key === ' ' && !(e.target as HTMLElement).closest('button, input')) {
-            e.preventDefault();
-            if (v?.paused) void v.play();
-            else v?.pause();
-          }
-        }}
-      >
-        <div className="sheet-bar an-bar">
-          <button type="button" className="an-icon" title="Cancel (Esc)" aria-label="Cancel" data-testid="an-cancel" onClick={closeAnnotator}>
-            <X size={17} />
-          </button>
-          <div className="an-title">
-            <span className="ellipsis an-name">{src.name}</span>
-            <span className="ellipsis an-hint">Agents can't watch video — marked frames go as images</span>
-          </div>
-          <button type="button" className="btn primary small an-done" disabled={!outputs.length || busy} data-testid="an-video-done" onClick={() => void finish()}>
-            {busy ? <Loader2 size={14} className="spin" /> : null}
-            {outputs.length ? `Add ${outputs.length} image${outputs.length > 1 ? 's' : ''}` : 'Done'}
-          </button>
-        </div>
-        <div className="an-stage an-center">
-          {!dataUrl ? (
-            <Loader2 size={20} className="spin muted" />
-          ) : (
-            <video
-              ref={video}
-              className="an-player"
-              src={dataUrl}
-              playsInline
-              preload="auto"
-              muted
-              data-testid="an-video"
-              onLoadedMetadata={() => void onMeta()}
-              onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onClick={(e) => (e.currentTarget.paused ? void e.currentTarget.play() : e.currentTarget.pause())}
-            />
-          )}
-        </div>
-        <div className="an-scrub">
-          <button
-            type="button"
-            className="an-icon"
-            title={playing ? 'Pause (Space)' : 'Play (Space)'}
-            aria-label={playing ? 'Pause' : 'Play'}
-            disabled={!duration}
-            onClick={() => (v?.paused ? void v.play() : v?.pause())}
-          >
-            {playing ? <Pause size={16} /> : <Play size={16} />}
-          </button>
-          <div className="an-track">
-            {hasRange && <span className="an-range-band" style={{ left: pct(lo), width: pct(hi - lo) }} />}
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={t}
-              disabled={!duration}
-              aria-label="Video position"
-              data-testid="an-scrubber"
-              onChange={(e) => scrub(Number(e.target.value))}
-            />
-          </div>
-          <span className="an-time mono" data-testid="an-time">
-            {fmtTime(t)} <span className="muted">/ {fmtTime(duration)}</span>
-          </span>
-        </div>
-        <div className="an-video-actions">
-          <div className="an-range-set">
-            <button type="button" className="btn small" disabled={!duration} data-testid="an-set-start" onClick={() => setRange((r) => ({ ...r, start: t }))}>
-              Start {start !== undefined ? fmtTime(start) : '—'}
-            </button>
-            <button type="button" className="btn small" disabled={!duration} data-testid="an-set-end" onClick={() => setRange((r) => ({ ...r, end: t }))}>
-              End {end !== undefined ? fmtTime(end) : '—'}
-            </button>
-            {(start !== undefined || end !== undefined) && (
-              <button type="button" className="an-icon" title="Clear the range" aria-label="Clear the range" onClick={() => setRange({})}>
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          <div className="spacer" />
-          <button type="button" className="btn small" disabled={!vw} data-testid="an-mark-frame" onClick={markFrame}>
-            <Pen size={13} /> Mark this frame
-          </button>
-          <button
-            type="button"
-            className="btn small"
-            disabled={!hasRange}
-            title={hasRange ? `One image with ${times.length} frames from ${fmtTime(lo)} to ${fmtTime(hi)}` : 'Set a start and an end first'}
-            data-testid="an-mark-range"
-            onClick={() => void markRange()}
-          >
-            <Film size={13} /> Mark range{hasRange ? ` · ${times.length} frames` : ''}
-          </button>
-        </div>
-        <div className="an-foot">
-          <OriginalToggle on={keep} onChange={setKeep} label="Also send the video" />
-          {outputs.length > 0 && (
-            <div className="an-outputs" data-testid="an-outputs">
-              {outputs.map((o, i) => (
-                <span key={`${o.name}-${i}`} className="an-output">
-                  <span className="ellipsis">{o.name.replace(/\.png$/, '')}</span>
-                  <button type="button" title="Remove" aria-label={`Remove ${o.name}`} onClick={() => setOutputs((l) => l.filter((_, j) => j !== i))}>
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          {note && <span className="error-text small ellipsis">{note}</span>}
-        </div>
-      </Sheet>
-      {mode.kind === 'frame' && (
-        <MarkEditor
-          base={mode.frame}
-          w={mode.frame.width}
-          h={mode.frame.height}
-          title={`${src.name} · frame ${fmtTime(mode.t)}`}
-          doneLabel="Save frame"
-          allowEmpty
-          onCancel={() => setMode({ kind: 'pick' })}
-          onDone={async (marks) => {
-            const at = fmtTime(mode.t);
-            const blob = await bakePng(mode.frame, mode.frame.width, mode.frame.height, marks);
-            const note = buildLegend(marks, { source: `${src.name} at ${at}`, width: mode.frame.width, height: mode.frame.height, extra: 'The marked video frame is the image that follows' });
-            setOutputs((l) => [...l, { name: markedName(src.name, `frame ${at}`), note, blob }]);
-            setMode({ kind: 'pick' });
-          }}
-        />
-      )}
-      {mode.kind === 'range' && (
-        <MarkEditor
-          base={mode.frame}
-          w={mode.frame.width}
-          h={mode.frame.height}
-          title={`${src.name} · ${fmtTime(mode.start)}–${fmtTime(mode.end)}`}
-          hint={`Your marks are drawn on ${frameTimes(mode.start, mode.end, duration).length} frames across this range`}
-          doneLabel="Make sheet"
-          onCancel={() => setMode({ kind: 'pick' })}
-          onDone={async (marks) => {
-            const el = video.current!;
-            const ts = frameTimes(mode.start, mode.end, duration);
-            const blob = await bakeSheet(el, ts, marks);
-            const span = `${fmtTime(mode.start)}–${fmtTime(mode.end)}`;
-            const note = buildLegend(marks, {
-              source: `${src.name}, ${span}`,
-              width: el.videoWidth,
-              height: el.videoHeight,
-              extra: `The image that follows is a contact sheet of ${ts.length} evenly spaced frames (${ts.map(fmtTime).join(', ')}), left to right and top to bottom, each with its timestamp under it; the same marks are drawn on every frame and the coordinates are video-frame pixels`,
-            });
-            setOutputs((l) => [...l, { name: markedName(src.name, `range ${span}`), note, blob }]);
-            setMode({ kind: 'pick' });
-          }}
-        />
-      )}
-    </>
-  );
 }
