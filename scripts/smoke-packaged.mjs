@@ -233,12 +233,12 @@ try {
 }
 
 /**
- * MSIX only, in the app's own terminal (a child of the packaged app, so it runs in the package too):
- * 1. it has package identity (proves the launch really was a Store-style packaged launch);
- * 2. a NEW file it writes under %APPDATA% is visible at the real %APPDATA% (build/appxmanifest.xml turns write
- *    virtualization off, so `npm install -g` from the app lands where the user's own terminal finds it).
- * The command runs in Windows PowerShell whatever the terminal's shell is, and has no `$` so no outer shell
- * expands anything; the markers are split ('OLY_PK'+'G_') so the echoed input never matches.
+ * MSIX only:
+ * 1. a NEW file the app's terminal writes under %APPDATA% is visible at the real %APPDATA%, so `npm install -g`
+ *    from the app ("Install agent") lands where the user's own terminal finds it;
+ * 2. the app's processes run with the package's identity, like a Store install (checked from outside with
+ *    tasklist /apps; the terminal's own identity is only logged, see below).
+ * The probe runs in Windows PowerShell via -EncodedCommand, whatever the terminal's shell is.
  */
 async function msixTerminalChecks(page, ptyId) {
   const probe = `oly-msix-probe-${process.pid}-${Date.now()}.txt`;
@@ -264,18 +264,24 @@ async function msixTerminalChecks(page, ptyId) {
     const b = await page.evaluate(`window.desk.invoke('pty.buffer', ${JSON.stringify(ptyId)})`);
     buf = (b?.data || '').replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').replace(/\r?\n/g, '\n');
   }
+  // Measured on windows-latest (2026-11-27): the terminal's shell has NO package identity (15700), because
+  // node-pty/ConPTY starts it outside the package, while the app's own processes do (tasklist below). Logged only.
   const pfn = /OLY_PKG_([A-Za-z0-9._-]+?)_END/.exec(buf)?.[1];
-  check('MSIX: the app (and its terminal) runs with package identity', pfn === MSIX_PFN, pfn ? `family name ${pfn}` : JSON.stringify(buf.trim().slice(-200)));
+  console.log(`INFO  terminal shell package identity: ${pfn ?? JSON.stringify(buf.trim().slice(-200))}`);
   const wrote = /OLY_WROTE_END/.test(buf);
-  check('MSIX: a new %APPDATA% file written inside the package is visible outside it (no write virtualization)', wrote && existsSync(real), wrote ? real : 'the probe command did not finish');
+  check('MSIX: a new %APPDATA% file written from the app\'s terminal is visible to the user\'s own shell', wrote && existsSync(real), wrote ? real : 'the probe command did not finish');
   rmSync(real, { force: true });
-  // Diagnostic only (not a check): which package Windows itself lists for the app's processes.
+  // The app itself must run inside its package (the way the Store starts it): Windows lists each packaged process
+  // with its package full name, "<Name>_<Version>_<Arch>__<PublisherId>".
+  let rows = [];
   try {
-    const rows = execFileSync('tasklist', ['/apps', '/fo', 'csv', '/nh'], { encoding: 'utf8' }).split(/\r?\n/).filter((l) => /Olympus/i.test(l));
-    console.log(`INFO  tasklist /apps: ${rows.length ? rows.join(' | ') : 'no Olympus process listed'}`);
+    rows = execFileSync('tasklist', ['/apps', '/fo', 'csv', '/nh'], { encoding: 'utf8' }).split(/\r?\n/).filter((l) => /Olympus Coder\.exe/i.test(l));
   } catch (e) {
-    console.log(`INFO  tasklist /apps failed: ${e.message}`);
+    rows = [`tasklist /apps failed: ${e.message}`];
   }
+  const [idName, idPublisher] = [MSIX_PFN.slice(0, MSIX_PFN.lastIndexOf('_')), MSIX_PFN.slice(MSIX_PFN.lastIndexOf('_') + 1)];
+  const inPackage = rows.some((l) => l.includes(`"${idName}_`) && l.includes(`__${idPublisher}"`));
+  check('MSIX: the app runs with its package identity (tasklist /apps)', inPackage, rows.slice(0, 2).join(' | ') || 'no Olympus Coder.exe listed');
 }
 
 // 1. First run, fresh profile.
