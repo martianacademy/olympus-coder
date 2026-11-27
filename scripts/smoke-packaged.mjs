@@ -244,10 +244,20 @@ async function msixTerminalChecks(page, ptyId) {
   const probe = `oly-msix-probe-${process.pid}-${Date.now()}.txt`;
   const real = join(process.env.APPDATA || '', probe);
   rmSync(real, { force: true });
-  const ps =
-    `try { 'OLY_PK'+'G_'+[Windows.ApplicationModel.Package,Windows.ApplicationModel,ContentType=WindowsRuntime]::Current.Id.FamilyName+'_END' } catch { 'OLY_PK'+'G_NONE_END' }; ` +
-    `Set-Content -LiteralPath (Join-Path ([Environment]::GetFolderPath('ApplicationData')) '${probe}') -Value ok; 'OLY_WR'+'OTE_END'`;
-  await page.evaluate(`window.desk.invoke('pty.write', ${JSON.stringify(ptyId)}, ${JSON.stringify(`powershell -NoProfile -Command "${ps}"\r`)})`);
+  // Package identity straight from the Win32 API (GetCurrentPackageFamilyName): 0 = identity, 15700 =
+  // APPMODEL_ERROR_NO_PACKAGE; any other code is printed so a broken probe can't pass for "no identity".
+  const script = [
+    `Add-Type -Namespace Oly -Name Pkg -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern int GetCurrentPackageFamilyName(ref uint length, System.Text.StringBuilder name);'`,
+    `$len = [uint32]0; $sb = $null`,
+    `$rc = [Oly.Pkg]::GetCurrentPackageFamilyName([ref]$len, $sb)`,
+    `if ($rc -eq 122) { $sb = New-Object System.Text.StringBuilder ([int]$len); $rc = [Oly.Pkg]::GetCurrentPackageFamilyName([ref]$len, $sb) }`,
+    `if ($rc -eq 0) { 'OLY_PK' + 'G_' + $sb.ToString() + '_END' } else { 'OLY_PK' + 'G_NONE' + $rc + '_END' }`,
+    `Set-Content -LiteralPath (Join-Path ([Environment]::GetFolderPath('ApplicationData')) '${probe}') -Value ok`,
+    `'OLY_WR' + 'OTE_END'`,
+  ].join('\n');
+  // -EncodedCommand (UTF-16LE base64): no quoting or `$` expansion by whatever shell the terminal runs.
+  const enc = Buffer.from(script, 'utf16le').toString('base64');
+  await page.evaluate(`window.desk.invoke('pty.write', ${JSON.stringify(ptyId)}, ${JSON.stringify(`powershell -NoProfile -EncodedCommand ${enc}\r`)})`);
   let buf = '';
   for (let i = 0; i < 60 && !/OLY_WROTE_END/.test(buf); i++) {
     await sleep(500);
@@ -259,6 +269,13 @@ async function msixTerminalChecks(page, ptyId) {
   const wrote = /OLY_WROTE_END/.test(buf);
   check('MSIX: a new %APPDATA% file written inside the package is visible outside it (no write virtualization)', wrote && existsSync(real), wrote ? real : 'the probe command did not finish');
   rmSync(real, { force: true });
+  // Diagnostic only (not a check): which package Windows itself lists for the app's processes.
+  try {
+    const rows = execFileSync('tasklist', ['/apps', '/fo', 'csv', '/nh'], { encoding: 'utf8' }).split(/\r?\n/).filter((l) => /Olympus/i.test(l));
+    console.log(`INFO  tasklist /apps: ${rows.length ? rows.join(' | ') : 'no Olympus process listed'}`);
+  } catch (e) {
+    console.log(`INFO  tasklist /apps failed: ${e.message}`);
+  }
 }
 
 // 1. First run, fresh profile.
