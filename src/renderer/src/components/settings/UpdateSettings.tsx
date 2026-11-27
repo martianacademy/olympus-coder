@@ -10,7 +10,8 @@ const MODES: { id: UpdateMode; label: string; line: string }[] = [
   { id: 'off', label: 'Off', line: 'Olympus never asks GitHub about new versions.' },
 ];
 
-/** Settings → General → Updates: how new versions arrive (src/main/updates.ts), and "Check now". */
+/** Settings → General → Updates: how new versions arrive (src/main/updates.ts), and "Check now". A Microsoft Store
+ *  copy shows only "This copy updates through the Microsoft Store." (the main process sends it as `managed: 'store'`). */
 export function UpdateSettings(props: { settings: Settings; platform: string; update: (patch: Partial<Settings>) => Promise<void> }) {
   const mode = props.settings.updateMode ?? 'notify';
   const [last, setLast] = useState<UpdateCheck | null>(null);
@@ -29,7 +30,12 @@ export function UpdateSettings(props: { settings: Settings; platform: string; up
   return (
     <div className="field" data-testid="update-settings">
       <label>Updates</label>
-      {remote ? (
+      {last?.managed === 'store' ? (
+        // A Microsoft Store copy: the Store installs new versions, so there is nothing to choose here.
+        <span className="small muted" data-testid="update-store">
+          {last.text}
+        </span>
+      ) : remote ? (
         <span className="small muted">Updates are managed on your Mac ({MODES.find((m) => m.id === mode)?.label}).</span>
       ) : (
         <>

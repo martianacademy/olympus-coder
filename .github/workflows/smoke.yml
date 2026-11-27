@@ -1,5 +1,5 @@
-# Installs the installers from a "Build installers" run on real Windows / Linux / Intel-Mac runners, launches the
-# app with a scratch profile and checks it over CDP (UI renders, no uncaught errors, a node-pty terminal runs).
+# Installs the installers from a "Build installers" run on real Windows / Linux / Intel-Mac runners (and the
+# Microsoft Store .appx, test-signed, on Windows), launches the app with a scratch profile and checks it over CDP (UI renders, no uncaught errors, a node-pty terminal runs).
 # Screenshots + results are uploaded as artifacts. Run: gh workflow run smoke.yml -f run_id=<build run id>
 name: Smoke test installers
 
@@ -48,6 +48,64 @@ jobs:
         if: always()
         with:
           name: smoke-windows
+          path: smoke-out
+
+  # The Microsoft Store package (artifact store-msix-windows): signed here with a throwaway self-signed certificate
+  # whose subject equals build.appx.publisher (the Store re-signs the real one), installed with Add-AppxPackage and
+  # started INSIDE its package so it has package identity, like an install from the Store.
+  windows-msix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: store-msix-windows
+          path: art
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sign with a self-signed test certificate and trust it
+        shell: pwsh
+        run: |
+          $appx = Get-ChildItem art -Filter *.appx | Select-Object -First 1
+          if (-not $appx) { throw 'no .appx in the store-msix-windows artifact' }
+          $publisher = node -p "require('./package.json').build.appx.publisher"
+          Write-Host "package: $($appx.Name)  publisher: $publisher"
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
+            -FriendlyName 'Olympus Coder MSIX smoke test' -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pfxPass = ConvertTo-SecureString -String 'smoke-test-only' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath "$env:RUNNER_TEMP\msix-test.pfx" -Password $pfxPass | Out-Null
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\msix-test.cer" | Out-Null
+          # Newest x64 signtool.exe from the Windows SDK on the runner.
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found under Windows Kits\10\bin' }
+          Write-Host "signtool: $($signtool.FullName)"
+          & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP\msix-test.pfx" /p 'smoke-test-only' $appx.FullName
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
+          Import-Certificate -FilePath "$env:RUNNER_TEMP\msix-test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          "APPX=$($appx.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Install the package (Add-AppxPackage)
+        shell: powershell
+        run: |
+          Add-AppxPackage -Path $env:APPX
+          $name = node -p "require('./package.json').build.appx.identityName"
+          $pkg = Get-AppxPackage -Name $name
+          if (-not $pkg) { throw "package $name is not installed" }
+          $appId = (Get-AppxPackageManifest $pkg).Package.Applications.Application.Id
+          $bin = Join-Path $pkg.InstallLocation 'app\Olympus Coder.exe'
+          Write-Host "family: $($pkg.PackageFamilyName)  app id: $appId  exe: $bin"
+          "MSIX_APP=$($pkg.PackageFamilyName)!$appId" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "APP_BIN=$bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Smoke test inside the package
+        run: node scripts/smoke-packaged.mjs --bin "${{ env.APP_BIN }}" --msix "${{ env.MSIX_APP }}" --out smoke-out --label windows-msix
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-windows-msix
           path: smoke-out
 
   linux:

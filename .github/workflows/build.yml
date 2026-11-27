@@ -69,6 +69,24 @@ jobs:
             dist/olympus-server-*.tar.gz
           if-no-files-found: error
 
+      # Microsoft Store package (MSIX/.appx), packed from the win-unpacked folder the NSIS build just made. It is
+      # unsigned: the Store signs it on submission. Built after the NSIS upload so a Store-only problem (for example
+      # the Partner Center identity placeholders in package.json `build.appx`) never blocks the .exe installer.
+      - name: Build Microsoft Store package (.appx)
+        if: runner.os == 'Windows'
+        run: npm run dist:win:store
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # Its own artifact, never part of the public GitHub Release (the release job downloads only olympus-coder-*).
+      # Test it with the windows-msix job in smoke.yml; upload it to Partner Center by hand.
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: store-msix-windows
+          path: dist/*.appx
+          if-no-files-found: error
+
   # A pushed `v*` tag publishes the installers from every platform as one GitHub Release, for direct download.
   release:
     needs: build
@@ -79,9 +97,11 @@ jobs:
     if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
+      # Only the installer artifacts: the unsigned Store package (store-msix-windows) must never be published here.
       - uses: actions/download-artifact@v4
         with:
           path: installers
+          pattern: olympus-coder-*
           merge-multiple: true
 
       - uses: softprops/action-gh-release@v2

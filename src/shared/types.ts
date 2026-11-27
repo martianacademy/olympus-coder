@@ -970,6 +970,8 @@ export type UpdateMode = 'notify' | 'auto' | 'off';
 export interface UpdateCheck {
   at: number;
   text: string;
+  /** 'store': a Microsoft Store copy; the Store updates it, so Settings shows only `text` (no update modes). */
+  managed?: 'store';
 }
 
 // ---------- code mode: files, git, terminals ----------

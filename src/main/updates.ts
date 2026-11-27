@@ -14,12 +14,16 @@ import { bundleOf, download, onWifi, parseSums, pickInstallAsset, sha256File, st
  *   "Restart to update". The swap happens after the app quits, in a detached helper (updateInstall.ts). Nothing is
  *   installed unless the user presses Restart, or quits with "Install when I quit" on.
  * - 'off': never asks GitHub.
+ * A copy installed from the Microsoft Store (`process.windowsStore`) never asks GitHub, downloads or installs
+ * anything: the Store updates it, and the GitHub installer would replace it with a second, unpackaged copy.
  */
 
 const REPO = 'martianacademy/olympus-coder';
 export const RELEASES_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const FIRST_CHECK_MS = 30_000;
 const EVERY_MS = 24 * 60 * 60 * 1000;
+/** The one line Settings shows in a Microsoft Store copy. */
+export const STORE_UPDATE_TEXT = 'This copy updates through the Microsoft Store.';
 
 export interface Release {
   tag_name?: string;
@@ -67,6 +71,8 @@ export interface CheckDeps {
   settings: Pick<Settings, 'updateMode' | 'skippedUpdate'>;
   fetch: typeof fetch;
   url?: string;
+  /** Installed from the Microsoft Store (`process.windowsStore`): the Store updates it, so GitHub is never asked. */
+  store?: boolean;
 }
 
 export interface CheckResult {
@@ -75,10 +81,13 @@ export interface CheckResult {
   release?: Release;
   /** One line for Settings ("Up to date", "Could not reach GitHub"…). */
   text: string;
+  /** Set when something else updates this copy (the Microsoft Store): Settings hides the update modes. */
+  managed?: UpdateCheck['managed'];
 }
 
 /** Ask GitHub for the latest release (nothing at all when updates are off) and say what it means for this app. */
 export async function checkRelease(d: CheckDeps): Promise<CheckResult> {
+  if (d.store) return { info: null, text: STORE_UPDATE_TEXT, managed: 'store' };
   if (d.settings.updateMode === 'off') return { info: null, text: 'Updates are off.' };
   let r: Release;
   try {
@@ -126,6 +135,10 @@ let installOnExit: { relaunch: boolean } | undefined;
 
 export const updatesDir = () => join(sharedRoot(), 'updates');
 const mode = () => getSettings().updateMode ?? 'notify';
+/** Running from the Microsoft Store package (Electron sets this for apps installed under WindowsApps). */
+const fromStore = () => process.platform === 'win32' && process.windowsStore === true;
+/** What Settings shows in a Store copy, even before the first check ran. */
+const storeCheck = (): UpdateCheck => ({ at: Date.now(), text: STORE_UPDATE_TEXT, managed: 'store' });
 
 function show(next: UpdateInfo | null) {
   if (JSON.stringify(next) === JSON.stringify(latest)) return;
@@ -135,6 +148,7 @@ function show(next: UpdateInfo | null) {
 
 /** The app to replace: the running bundle (macOS), the AppImage (Linux); Windows runs the installer. Test: OLYMPUS_UPDATE_TARGET. */
 function installTarget(): string | undefined {
+  if (fromStore()) return undefined; // the Store owns this copy: never run the GitHub installer over it
   if (process.env.OLYMPUS_UPDATE_TARGET) return process.env.OLYMPUS_UPDATE_TARGET;
   if (!app.isPackaged) return undefined; // a dev run is Electron.app in node_modules: never replace that
   if (process.platform === 'darwin') return bundleOf(process.execPath);
@@ -147,8 +161,8 @@ async function check(manual = false): Promise<UpdateCheck> {
   if (manual) noAuto = undefined;
   const s = getSettings();
   // Test-only: a local fake releases server (the E2E sets it; normal runs use GitHub).
-  const r = await checkRelease({ current: app.getVersion(), platform: process.platform, arch: process.arch, settings: { ...s, updateMode: mode() }, fetch, url: process.env.OLYMPUS_UPDATE_URL });
-  lastCheck = { at: Date.now(), text: r.text };
+  const r = await checkRelease({ current: app.getVersion(), platform: process.platform, arch: process.arch, settings: { ...s, updateMode: mode() }, fetch, url: process.env.OLYMPUS_UPDATE_URL, store: fromStore() });
+  lastCheck = { at: Date.now(), text: r.text, ...(r.managed ? { managed: r.managed } : {}) };
   if (!r.info) {
     if (!job && !ready) show(null);
   } else if (ready?.version === r.info.version) show({ ...r.info, state: 'ready' });
@@ -168,7 +182,7 @@ function stop(info: UpdateInfo, problem: string) {
 }
 
 async function autoDownload(info: UpdateInfo, release: Release) {
-  if (noAuto === info.version || job) return;
+  if (noAuto === info.version || job || fromStore()) return;
   const s = getSettings();
   const dir = join(updatesDir(), info.version);
   // Downloaded and checked in an earlier run.
@@ -243,6 +257,10 @@ function cleanUp(all = false) {
 export function startUpdateChecker(fn: Emit) {
   emit = fn;
   cleanUp();
+  if (fromStore()) {
+    lastCheck = storeCheck(); // no timer: the Store updates this copy
+    return;
+  }
   const first = Number(process.env.OLYMPUS_UPDATE_DELAY_MS) || FIRST_CHECK_MS;
   timer = setTimeout(function tick() {
     void check();
@@ -252,11 +270,11 @@ export function startUpdateChecker(fn: Emit) {
 }
 
 /** What the window shows now (a reload, or a phone that just connected). */
-export const currentUpdate = () => (mode() === 'off' ? null : latest);
+export const currentUpdate = () => (mode() === 'off' || fromStore() ? null : latest);
 
 /** Settings → "Check now": the result line. */
 export const checkNow = () => check(true);
-export const lastUpdateCheck = () => lastCheck ?? null;
+export const lastUpdateCheck = () => lastCheck ?? (fromStore() ? storeCheck() : null);
 
 /** "Not now" on the notice: this version is not shown again; a later one is. */
 export function skipUpdate(version: string) {
@@ -276,6 +294,7 @@ export function cancelDownload() {
 
 /** Restart on "ready": quit, and the helper installs and relaunches once the app has exited. */
 export function installAndRestart() {
+  if (fromStore()) throw new Error(STORE_UPDATE_TEXT);
   if (!ready) throw new Error('No update is ready to install.');
   installOnExit = { relaunch: true };
   app.quit();
@@ -284,7 +303,7 @@ export function installAndRestart() {
 /** Called on `will-quit` (the quit is certain): start the install helper when Restart was pressed, or on a plain
  *  quit in auto mode with "Install when I quit" on. Returns true when the helper was started. */
 export function onAppWillQuit(): boolean {
-  if (!ready) return false;
+  if (!ready || fromStore()) return false;
   const s = getSettings();
   const plan = installOnExit ?? (mode() === 'auto' && s.updateInstallOnQuit !== false ? { relaunch: false } : undefined);
   if (!plan) return false;

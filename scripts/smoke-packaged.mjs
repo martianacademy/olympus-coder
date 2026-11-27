@@ -3,11 +3,15 @@
 //   1. fresh profile  → first-run screen renders, no uncaught renderer errors
 //   2. onboarded + one project → main UI renders, a real terminal (node-pty) runs a command
 // Usage: node smoke.mjs --bin <app executable> --out <dir> [-- extra electron args]
+// Microsoft Store package (Windows): add --msix <PackageFamilyName>!<AppId>. The app is then started INSIDE its
+// package (Invoke-CommandInDesktopPackage, so it has package identity like a Store install) instead of as a child
+// process, its liveness is read over CDP, and extra checks run: the Store update line, package identity and
+// unvirtualized %APPDATA% writes from the app's own terminal.
 // Needs Node 22+ (global WebSocket/fetch). No npm deps.
-import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2);
 const sep = argv.indexOf('--');
@@ -19,6 +23,14 @@ const opt = (k) => {
 const BIN = opt('--bin');
 const OUT = opt('--out') || join(process.cwd(), 'smoke-out');
 const LABEL = opt('--label') || process.platform;
+/** "<PackageFamilyName>!<AppId>" of an installed MSIX package (Windows only). */
+const MSIX = opt('--msix');
+const [MSIX_PFN, MSIX_APP] = (MSIX || '').split('!');
+if (MSIX && (process.platform !== 'win32' || !MSIX_PFN || !MSIX_APP)) {
+  console.error(`--msix needs Windows and "<PackageFamilyName>!<AppId>", got: ${MSIX}`);
+  process.exit(2);
+}
+const STORE_UPDATE_TEXT = 'This copy updates through the Microsoft Store.';
 if (!BIN || !existsSync(BIN)) {
   console.error(`--bin missing or not found: ${BIN}`);
   process.exit(2);
@@ -104,20 +116,45 @@ async function launch(tag, { settings, projects }) {
   const shared = join(root, 'shared');
   mkdirSync(ud, { recursive: true });
   mkdirSync(shared, { recursive: true });
-  if (settings) writeFileSync(join(ud, 'settings.json'), JSON.stringify(settings, null, 2));
+  // A packaged launch may not inherit this process's environment: the scratch shared folder also goes in settings.
+  if (settings || MSIX) writeFileSync(join(ud, 'settings.json'), JSON.stringify(MSIX ? { ...settings, sharedRoot: shared } : settings, null, 2));
   if (projects) writeFileSync(join(shared, 'projects.json'), JSON.stringify(projects, null, 2));
   const port = 9300 + Math.floor(Math.random() * 500);
   const env = { ...process.env, AGENTDESK_SHARED_ROOT: shared };
   delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(BIN, [`--remote-debugging-port=${port}`, `--user-data-dir=${ud}`, ...extra], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   const log = [];
-  child.stdout.on('data', (d) => log.push(String(d)));
-  child.stderr.on('data', (d) => log.push(String(d)));
-  const app = { child, log, root, port, page: null };
+  let child;
+  let alive;
+  if (MSIX) {
+    // Start it inside its package, the way Windows starts a Store app; the PowerShell launcher exits at once.
+    const logFile = join(root, 'electron.log');
+    const args = `--remote-debugging-port=${port} "--user-data-dir=${ud}" --enable-logging=file "--log-file=${logFile}" ${extra.join(' ')}`.trim();
+    const ps = `Invoke-CommandInDesktopPackage -PackageFamilyName '${MSIX_PFN}' -AppId '${MSIX_APP}' -Command '${BIN.replace(/'/g, "''")}' -Args '${args.replace(/'/g, "''")}'`;
+    log.push(`launch: ${ps}\n`);
+    try {
+      log.push(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { env, encoding: 'utf8', timeout: 60_000 }));
+    } catch (e) {
+      log.push(`launcher failed: ${e.message}\n${e.stdout ?? ''}${e.stderr ?? ''}`);
+    }
+    child = { exitCode: null, logFile };
+    alive = async () => {
+      try {
+        return (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000) })).ok;
+      } catch {
+        return false;
+      }
+    };
+  } else {
+    child = spawn(BIN, [`--remote-debugging-port=${port}`, `--user-data-dir=${ud}`, ...extra], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.on('data', (d) => log.push(String(d)));
+    child.stderr.on('data', (d) => log.push(String(d)));
+    alive = async () => child.exitCode === null;
+  }
+  const app = { child, log, root, port, page: null, alive };
   let target;
   const t0 = Date.now();
   while (!target && Date.now() - t0 < 120_000) {
-    if (child.exitCode !== null) break;
+    if (!MSIX && child.exitCode !== null) break;
     try {
       const list = await waitJson(`http://127.0.0.1:${port}/json`, 5_000);
       target = list.find((t) => t.type === 'page' && /index\.html/.test(t.url));
@@ -142,9 +179,24 @@ async function quit(app, tag) {
   } catch {
     /* closed */
   }
-  app.child.kill();
-  await sleep(1500);
-  if (app.child.exitCode === null) app.child.kill('SIGKILL');
+  if (MSIX) {
+    // Not our child process: end the packaged app (and the shells/agents it started) by image name.
+    try {
+      execFileSync('taskkill', ['/F', '/T', '/IM', basename(BIN)], { stdio: 'ignore' });
+    } catch {
+      /* already gone */
+    }
+    await sleep(1500);
+    try {
+      copyFileSync(app.child.logFile, join(OUT, `${LABEL}-${tag}-electron.log`));
+    } catch {
+      /* no log written */
+    }
+  } else {
+    app.child.kill();
+    await sleep(1500);
+    if (app.child.exitCode === null) app.child.kill('SIGKILL');
+  }
   writeFileSync(join(OUT, `${LABEL}-${tag}-app.log`), app.log.join(''));
 }
 
@@ -180,13 +232,42 @@ try {
   check('no proprietary Claude Agent SDK in the installer', left.length === 0, left.join(', '));
 }
 
+/**
+ * MSIX only, in the app's own terminal (a child of the packaged app, so it runs in the package too):
+ * 1. it has package identity (proves the launch really was a Store-style packaged launch);
+ * 2. a NEW file it writes under %APPDATA% is visible at the real %APPDATA% (build/appxmanifest.xml turns write
+ *    virtualization off, so `npm install -g` from the app lands where the user's own terminal finds it).
+ * The command runs in Windows PowerShell whatever the terminal's shell is, and has no `$` so no outer shell
+ * expands anything; the markers are split ('OLY_PK'+'G_') so the echoed input never matches.
+ */
+async function msixTerminalChecks(page, ptyId) {
+  const probe = `oly-msix-probe-${process.pid}-${Date.now()}.txt`;
+  const real = join(process.env.APPDATA || '', probe);
+  rmSync(real, { force: true });
+  const ps =
+    `try { 'OLY_PK'+'G_'+[Windows.ApplicationModel.Package,Windows.ApplicationModel,ContentType=WindowsRuntime]::Current.Id.FamilyName+'_END' } catch { 'OLY_PK'+'G_NONE_END' }; ` +
+    `Set-Content -LiteralPath (Join-Path ([Environment]::GetFolderPath('ApplicationData')) '${probe}') -Value ok; 'OLY_WR'+'OTE_END'`;
+  await page.evaluate(`window.desk.invoke('pty.write', ${JSON.stringify(ptyId)}, ${JSON.stringify(`powershell -NoProfile -Command "${ps}"\r`)})`);
+  let buf = '';
+  for (let i = 0; i < 60 && !/OLY_WROTE_END/.test(buf); i++) {
+    await sleep(500);
+    const b = await page.evaluate(`window.desk.invoke('pty.buffer', ${JSON.stringify(ptyId)})`);
+    buf = (b?.data || '').replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').replace(/\r?\n/g, '\n');
+  }
+  const pfn = /OLY_PKG_([A-Za-z0-9._-]+?)_END/.exec(buf)?.[1];
+  check('MSIX: the app (and its terminal) runs with package identity', pfn === MSIX_PFN, pfn ? `family name ${pfn}` : JSON.stringify(buf.trim().slice(-200)));
+  const wrote = /OLY_WROTE_END/.test(buf);
+  check('MSIX: a new %APPDATA% file written inside the package is visible outside it (no write virtualization)', wrote && existsSync(real), wrote ? real : 'the probe command did not finish');
+  rmSync(real, { force: true });
+}
+
 // 1. First run, fresh profile.
 try {
   const app = await launch('firstrun', {});
   const text = await waitRendered(app.page);
   check('first run: window renders UI', text.trim().length > 20, JSON.stringify(text.trim().slice(0, 120)));
   await sleep(4000);
-  check('first run: main process still alive after render', app.child.exitCode === null);
+  check('first run: main process still alive after render', await app.alive());
   const errs = errorsOf(app.page);
   check('first run: no uncaught renderer exceptions', !errs.some((e) => e.startsWith('exception')), errs.slice(0, 5).join(' | '));
   console.log(`      screenshot: ${await shot(app.page, 'firstrun')}`);
@@ -229,6 +310,7 @@ try {
     }
     const hit = buf.match(want)?.[0];
     check('terminal: shell ran a command (node-pty works)', !!hit, hit ? `matched ${hit}` : JSON.stringify(buf.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim().slice(-160)));
+    if (MSIX) await msixTerminalChecks(app.page, ptyId);
   }
   console.log(`      screenshot: ${await shot(app.page, 'main-after-terminal')}`);
   // Claude Code: ready where it is installed (SDK downloaded on demand), else "not installed" with the install command.
@@ -240,9 +322,17 @@ try {
   if (process.env.OLY_SMOKE_EXPECT_CLAUDE === 'installed') {
     check('Claude Code installed by the user is detected and its adapter starts (SDK on demand)', ['ready', 'needs-login'].includes(claude.state), `${claude.state}: ${claude.detail.slice(0, 160)}`);
   }
+  if (MSIX) {
+    // A Store copy never offers the GitHub installer: Settings shows one line and "Check now" asks nobody.
+    const last = await app.page.evaluate(`window.desk.invoke('updates.lastCheck')`);
+    check('Store copy: Settings says it updates through the Microsoft Store', last?.managed === 'store' && last?.text === STORE_UPDATE_TEXT, JSON.stringify(last));
+    const now = await app.page.evaluate(`window.desk.invoke('updates.check')`);
+    check('Store copy: "Check now" answers with the Store line', now?.managed === 'store' && now?.text === STORE_UPDATE_TEXT, JSON.stringify(now));
+    check('Store copy: no update notice', (await app.page.evaluate(`window.desk.invoke('updates.current')`)) == null);
+  }
   const errs = errorsOf(app.page);
   check('main UI: no uncaught renderer exceptions', !errs.some((e) => e.startsWith('exception')), errs.slice(0, 5).join(' | '));
-  check('main UI: main process still alive', app.child.exitCode === null);
+  check('main UI: main process still alive', await app.alive());
   await quit(app, 'main');
 } catch (e) {
   check('main UI', false, e.message);

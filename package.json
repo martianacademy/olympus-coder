@@ -20,6 +20,7 @@
     "dist": "electron-vite build && electron-builder --publish never",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:win:store": "electron-builder --win appx --x64 --prepackaged dist/win-unpacked --publish never",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never"
   },
   "dependencies": {
@@ -145,6 +146,26 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "shortcutName": "Olympus Coder"
+    },
+    "appx": {
+      "identityName": "MartianAcademy.OlympusCoder",
+      "publisher": "CN=7EB60DA7-2113-470C-96E1-32281CC9AA1D",
+      "publisherDisplayName": "Martian Academy",
+      "applicationId": "OlympusCoder",
+      "displayName": "Olympus Coder",
+      "backgroundColor": "#181110",
+      "languages": [
+        "en-US"
+      ],
+      "capabilities": [
+        "runFullTrust",
+        "unvirtualizedResources"
+      ],
+      "customManifestPath": "appxmanifest.xml",
+      "minVersion": "10.0.18362.0",
+      "maxVersionTested": "10.0.22621.0",
+      "addAutoLaunchExtension": false,
+      "artifactName": "${name}-${version}-store-${arch}.${ext}"
     },
     "linux": {
       "target": [
